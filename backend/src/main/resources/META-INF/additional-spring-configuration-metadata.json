@@ -1,0 +1,15 @@
+{
+  "properties": [
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "description": "Secret usado para firmar JWT con HS256."
+    },
+    {
+      "name": "app.jwt.expiration-minutes",
+      "type": "java.lang.Long",
+      "defaultValue": 480,
+      "description": "Minutos de expiracion del token JWT."
+    }
+  ]
+}
