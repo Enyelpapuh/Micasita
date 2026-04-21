@@ -15,10 +15,53 @@ type AuthContextValue = {
   isAuthenticated: boolean
   isReady: boolean
   login: (email: string, password: string) => Promise<AuthUser>
+  refreshUser: () => Promise<AuthUser>
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+
+const API_MESSAGE_MAP: Record<string, string> = {
+  AUTH_VALIDATION_REQUIRED_CREDENTIALS: 'Debes ingresar correo y contraseña.',
+  AUTH_INVALID_CREDENTIALS: 'Credenciales inválidas.',
+  AUTH_USER_INACTIVE: 'Tu usuario está inactivo. Contacta a un administrador.',
+  AUTH_SESSION_INVALID: 'La sesión no es válida. Inicia sesión de nuevo.',
+  AUTH_PHONE_INVALID: 'El teléfono debe tener exactamente 8 dígitos.',
+  AUTH_CEDULA_INVALID: 'Cédula inválida. Usa formato ###-######-####L o sin guiones.',
+  AUTH_CEDULA_ALREADY_USED: 'La cédula ya está registrada por otro usuario.',
+  AUTH_PASSWORD_FIELDS_REQUIRED: 'Debes indicar la contraseña actual y la nueva contraseña.',
+  AUTH_PASSWORD_SAME_AS_CURRENT: 'La nueva contraseña debe ser diferente a la actual.',
+  AUTH_CURRENT_PASSWORD_INVALID: 'La contraseña actual no coincide.',
+  PASSWORD_REQUIRED: 'La contraseña es obligatoria.',
+  PASSWORD_LENGTH_INVALID: 'La contraseña debe tener entre 10 y 64 caracteres.',
+  PASSWORD_UPPERCASE_REQUIRED: 'La contraseña debe incluir al menos una letra mayúscula.',
+  PASSWORD_LOWERCASE_REQUIRED: 'La contraseña debe incluir al menos una letra minúscula.',
+  PASSWORD_DIGIT_REQUIRED: 'La contraseña debe incluir al menos un número.',
+  PASSWORD_SPECIAL_REQUIRED: 'La contraseña debe incluir al menos un caracter especial.',
+  PASSWORD_CONTAINS_PERSONAL_DATA: 'La contraseña no debe incluir datos personales.',
+  AUTH_AVATAR_FILE_REQUIRED: 'Debes seleccionar un archivo de imagen.',
+  AUTH_AVATAR_TOO_LARGE: 'La imagen supera el tamaño máximo permitido.',
+  AUTH_AVATAR_INVALID_TYPE: 'Solo se permiten archivos de imagen.',
+  ADMISION_TIPO_DOCUMENTO_NOMBRE_REQUERIDO: 'El nombre del tipo de documento es obligatorio.',
+  ADMISION_TIPO_DOCUMENTO_YA_EXISTE: 'Ya existe un tipo de documento con ese nombre.',
+  ADMISION_TIPO_DOCUMENTO_NO_ENCONTRADO: 'El tipo de documento no existe o ya fue eliminado.',
+  ADMISION_TIPO_DOCUMENTO_REQUEST_INVALIDO: 'La solicitud para tipo de documento es inválida.',
+  ADMISION_TIPO_DOCUMENTO_EN_USO: 'No se puede eliminar este tipo de documento porque ya está en uso.',
+}
+
+export function normalizeApiError(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) {
+    return fallback
+  }
+
+  const payload = error.response?.data as { message?: string } | undefined
+  const raw = payload?.message
+  if (!raw) {
+    return fallback
+  }
+
+  return API_MESSAGE_MAP[raw] ?? raw
+}
 
 function decodeJwtPayload(token: string): { exp?: number } | null {
   try {
@@ -124,12 +167,32 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setAuthState(nextAuthState)
       return data.user
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        const message = (error.response?.data as { message?: string } | undefined)?.message
-        throw new Error(message || 'No fue posible iniciar sesion')
+      throw new Error(normalizeApiError(error, 'No fue posible iniciar sesión'))
+    }
+  }
+
+  const refreshUser = async () => {
+    if (!authState?.token) {
+      throw new Error('Sesion no valida')
+    }
+
+    try {
+      const response = await api.get<AuthUser>('/auth/me', {
+        headers: {
+          Authorization: `Bearer ${authState.token}`,
+        },
+      })
+
+      const nextAuthState = {
+        token: authState.token,
+        user: response.data,
       }
 
-      throw new Error('No fue posible iniciar sesion')
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuthState))
+      setAuthState(nextAuthState)
+      return response.data
+    } catch (error) {
+      throw new Error(normalizeApiError(error, 'No fue posible actualizar los datos de la sesión'))
     }
   }
 
@@ -144,6 +207,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     isAuthenticated: Boolean(authState),
     isReady,
     login,
+    refreshUser,
     logout,
   }), [authState, isReady])
 

@@ -27,7 +27,22 @@ import lombok.ToString;
 public class Participante extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ID_persona", nullable = false)
+    @JoinColumn(name = "ID_persona")
     @ToString.Exclude
     private Persona persona;
+
+    @Column(name = "Nombre_tmp", length = 100)
+    private String nombreTmp;
+
+    @Column(name = "Fecha_Nacimiento_tmp")
+    private java.time.LocalDate fechaNacimientoTmp;
+
+    @Column(name = "Nombre_responsable", length = 100)
+    private String nombreResponsable;
+
+    @Column(name = "Telefono_de_contacto", length = 20)
+    private String telefonoDeContacto;
+
+    @Column(name = "Activo")
+    private Boolean activo;
 }

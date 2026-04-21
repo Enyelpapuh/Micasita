@@ -16,6 +16,7 @@ import logo from '../../../assets/MiCASITALOGO-cropped.svg'
 
 export type DashboardView =
   | 'overview'
+  | 'identityAccess'
   | 'workshops'
   | 'students'
   | 'people'
@@ -153,6 +154,7 @@ export function DashboardSidebar({
 
 export const dashboardMenuConfig: DashboardMenuItem[] = [
   { icon: LayoutDashboard, label: 'Resumen', view: 'overview', permission: 'DASHBOARD_OVERVIEW' },
+  { icon: ShieldCheck, label: 'Identidad y Acceso', view: 'identityAccess', permission: 'USUARIOS_MANAGE' },
   { icon: Zap, label: 'Talleres', view: 'workshops', permission: 'DASHBOARD_ACADEMICO' },
   { icon: Users, label: 'Estudiantes', view: 'students', permission: 'DASHBOARD_ACADEMICO' },
   { icon: Users, label: 'Lista General', view: 'people', permission: 'DASHBOARD_USUARIOS' },

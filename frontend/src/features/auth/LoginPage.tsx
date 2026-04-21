@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, LockKeyhole, Mail } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { useAuth } from './AuthContext'
 
 export function LoginPage() {
@@ -8,6 +8,7 @@ export function LoginPage() {
   const { login, isAuthenticated, isReady } = useAuth()
   const [email, setEmail] = useState('foo@gmail.com')
   const [password, setPassword] = useState('123')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -95,7 +96,7 @@ export function LoginPage() {
               <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 focus-within:border-teal-400/60">
                 <LockKeyhole className="h-5 w-5 text-teal-200" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
@@ -103,6 +104,9 @@ export function LoginPage() {
                   autoComplete="current-password"
                   required
                 />
+                <button type="button" onClick={() => setShowPassword((prev) => !prev)} className="text-teal-200 hover:text-white">
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </label>
 

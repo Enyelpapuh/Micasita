@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router-dom'
 import { BaseLayout } from './components/layout/BaseLayout'
 import { EquipoPage } from './features/equipo/components/EquipoPage'
 import { LandingPage } from './features/landing/components/LandingPage'
+import MatriculasSection from './features/landing/components/matriculas-section'
 import { LoginPage } from './features/auth/LoginPage'
 import { RequireAuth } from './features/auth/RequireAuth'
 import { DashboardPage } from './features/dashboard/DashboardPage.tsx'
@@ -21,6 +22,7 @@ function App() {
     <Routes>
       <Route path="/" element={<BaseLayout><LandingPage /></BaseLayout>} />
       <Route path="/equipo" element={<BaseLayout><EquipoPage /></BaseLayout>} />
+      <Route path="/admisiones/solicitud" element={<BaseLayout><MatriculasSection /></BaseLayout>} />
       <Route path="/login" element={<BaseLayout><LoginPage /></BaseLayout>} />
       <Route
         path="/dashboard"

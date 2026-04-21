@@ -8,6 +8,10 @@ public record AuthUserResponse(
         String email,
         String nombre,
         String apellido,
+        String telefono,
+        String identificador,
+        String pathAvatar,
+        Boolean activo,
         List<String> roles,
         List<String> permisos
 ) {

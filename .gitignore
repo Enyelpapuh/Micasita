@@ -70,3 +70,11 @@ Desktop.ini
 *.temp
 *.swp
 *.swo
+
+# =========================
+# Project-specific files
+# =========================
+requerimientos_modulares_y_gap_taller.txt
+/.github/
+/uploads/
+/backend/uploads/

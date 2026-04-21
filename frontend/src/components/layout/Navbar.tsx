@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LogOut, ShieldCheck, X } from 'lucide-react'
 import { FiMenu } from 'react-icons/fi'
 import logo from '../../assets/MiCASITALOGO-cropped.svg'
 import { useAuth } from '../../features/auth/AuthContext'
+import { getLandingAdmisionConfig } from '../../features/admision/admision.api'
 
-const navLinks = [
+const baseNavLinks = [
   { label: 'Inicio', to: '/' },
   { label: 'Servicios', to: '/#servicios' },
   { label: 'Nosotros', to: '/#nosotros' },
@@ -15,8 +16,36 @@ const navLinks = [
 
 export function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [admissionLinkVisible, setAdmissionLinkVisible] = useState(false)
   const navigate = useNavigate()
   const { isAuthenticated, user, logout } = useAuth()
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadAdmissionStatus = async () => {
+      try {
+        const config = await getLandingAdmisionConfig()
+        if (!cancelled) {
+          setAdmissionLinkVisible(config.formularioActivo)
+        }
+      } catch {
+        if (!cancelled) {
+          setAdmissionLinkVisible(false)
+        }
+      }
+    }
+
+    loadAdmissionStatus()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const navLinks = admissionLinkVisible
+    ? [...baseNavLinks, { label: 'Admisión', to: '/admisiones/solicitud' }]
+    : baseNavLinks
 
   const handleToggleMenu = () => {
     setIsMobileMenuOpen((previous) => !previous)

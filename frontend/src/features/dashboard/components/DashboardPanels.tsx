@@ -1,7 +1,14 @@
-import type { ReactNode } from 'react'
-import { BadgeCheck, Inbox, LayoutDashboard, Mail, Settings, ShieldCheck, Sparkles, Users } from 'lucide-react'
+import { useState, type ChangeEvent, type ReactNode } from 'react'
+import toast from 'react-hot-toast'
+import { BadgeCheck, Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Mail, Users } from 'lucide-react'
 import type { AuthUser } from '../../auth/auth.types'
 import type { DashboardView } from './DashboardSidebar'
+import { TalleresView } from '../../talleres/components/TalleresView'
+import { IdentityAccessPanel } from './IdentityAccessPanel'
+import { AdmisionDashboardPanel } from '../../admision/components/AdmisionDashboardPanel'
+import { AcademicoAsistenciaNotasPanel, AcademicoGestionPanel } from './AcademicoPanels'
+import { useAuth } from '../../auth/AuthContext'
+import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar } from './settings.api'
 
 type DashboardPanelProps = {
   user?: AuthUser | null
@@ -87,25 +94,15 @@ function GenericModulePanel({
 }
 
 export function WorkshopsPanel() {
-  return (
-    <GenericModulePanel
-      title="Talleres"
-      subtitle="Listado y gestión de talleres, cupos y calendario de actividades."
-      icon={Sparkles}
-      accent="from-amber-50 via-orange-50 to-white"
-    />
-  )
+  return <TalleresView />
+}
+
+export function IdentityAccessDashboardPanel() {
+  return <IdentityAccessPanel />
 }
 
 export function StudentsPanel() {
-  return (
-    <GenericModulePanel
-      title="Estudiantes"
-      subtitle="Registro, consulta y seguimiento de estudiantes matriculados."
-      icon={Users}
-      accent="from-sky-50 via-cyan-50 to-white"
-    />
-  )
+  return <AcademicoGestionPanel />
 }
 
 export function PeoplePanel() {
@@ -120,14 +117,7 @@ export function PeoplePanel() {
 }
 
 export function AttendancePanel() {
-  return (
-    <GenericModulePanel
-      title="Asistencia"
-      subtitle="Control de asistencia por estudiante, estado y observaciones."
-      icon={ShieldCheck}
-      accent="from-emerald-50 via-teal-50 to-white"
-    />
-  )
+  return <AcademicoAsistenciaNotasPanel />
 }
 
 export function TalleresPanel() {
@@ -142,14 +132,7 @@ export function TalleresPanel() {
 }
 
 export function RecepcionPanel() {
-  return (
-    <GenericModulePanel
-      title="Bandeja de Solicitudes"
-      subtitle="Solicitudes de admisión, revisión y estados del proceso."
-      icon={Inbox}
-      accent="from-rose-50 via-pink-50 to-white"
-    />
-  )
+  return <AdmisionDashboardPanel />
 }
 
 export function MensajesPanel() {
@@ -164,13 +147,234 @@ export function MensajesPanel() {
 }
 
 export function SettingsPanel() {
+  const { token, user, refreshUser } = useAuth()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [telefono, setTelefono] = useState(user?.telefono ?? '')
+  const [identificador, setIdentificador] = useState(user?.identificador ?? '')
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
+
+  const validateStrongPassword = (password: string) => {
+    if (password.length < 10 || password.length > 64) {
+      return 'La contraseña debe tener entre 10 y 64 caracteres.'
+    }
+    if (!/[A-Z]/.test(password)) {
+      return 'La contraseña debe incluir al menos una letra mayúscula.'
+    }
+    if (!/[a-z]/.test(password)) {
+      return 'La contraseña debe incluir al menos una letra minúscula.'
+    }
+    if (!/\d/.test(password)) {
+      return 'La contraseña debe incluir al menos un número.'
+    }
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      return 'La contraseña debe incluir al menos un caracter especial.'
+    }
+    return null
+  }
+
+  const submitPasswordChange = async () => {
+    if (!currentPassword.trim() || !newPassword.trim() || !confirmPassword.trim()) {
+      toast.error('Completa todos los campos de contraseña')
+      return
+    }
+
+    const passwordValidation = validateStrongPassword(newPassword.trim())
+    if (passwordValidation) {
+      toast.error(passwordValidation)
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('La confirmación no coincide con la nueva contraseña')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await changeMyPassword(token, currentPassword, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.success('Contraseña actualizada correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar la contraseña')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const submitProfileUpdate = async () => {
+    const nextTelefono = telefono.trim()
+    const nextIdentificador = identificador.trim()
+
+    if (nextTelefono && !/^\d{8}$/.test(nextTelefono)) {
+      toast.error('El teléfono debe tener exactamente 8 dígitos.')
+      return
+    }
+
+    if (nextIdentificador && !/^(\d{3}-\d{6}-\d{4}[A-Za-z]|\d{13}[A-Za-z])$/.test(nextIdentificador)) {
+      toast.error('Cédula inválida. Usa formato nicaragüense ###-######-####L o sin guiones.')
+      return
+    }
+
+    setIsSavingProfile(true)
+    try {
+      await updateMyProfile(token, {
+        telefono: nextTelefono || null,
+        identificador: nextIdentificador || null,
+      })
+      await refreshUser()
+      toast.success('Perfil actualizado correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar el perfil')
+    } finally {
+      setIsSavingProfile(false)
+    }
+  }
+
+  const handleUploadAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.currentTarget.value = ''
+    if (!file) {
+      return
+    }
+
+    setIsUploadingAvatar(true)
+    try {
+      await uploadMyAvatar(token, file)
+      await refreshUser()
+      toast.success('Avatar actualizado correctamente')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo actualizar el avatar')
+    } finally {
+      setIsUploadingAvatar(false)
+    }
+  }
+
   return (
-    <GenericModulePanel
+    <PanelShell
       title="Configuración"
-      subtitle="Catálogos, parámetros y ajustes generales del sistema."
-      icon={Settings}
-      accent="from-slate-50 via-zinc-50 to-white"
-    />
+      subtitle="Autogestión de datos sensibles de tu cuenta: teléfono, cédula, avatar y contraseña."
+    >
+      <div className="max-w-2xl rounded-2xl border border-slate-200 bg-white p-5">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.12em] text-slate-700">Seguridad de la cuenta</p>
+
+        <div className="space-y-3">
+          <div className="mb-3 flex items-center gap-3">
+            {user?.pathAvatar ? (
+              <img src={resolveMyAvatarUrl(user.pathAvatar)} alt="Avatar" className="h-14 w-14 rounded-full border border-slate-200 object-cover" />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-700">
+                {(user?.nombre?.[0] ?? 'U').toUpperCase()}
+                {(user?.apellido?.[0] ?? '').toUpperCase()}
+              </div>
+            )}
+            <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+              {isUploadingAvatar ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Camera className="mr-2 h-3.5 w-3.5" />}
+              Cambiar avatar
+              <input type="file" accept="image/*" className="hidden" onChange={handleUploadAvatar} />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-slate-600">Teléfono</span>
+            <input
+              value={telefono}
+              onChange={(event) => setTelefono(event.target.value)}
+              placeholder="8 dígitos"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-slate-600">Cédula</span>
+            <input
+              value={identificador}
+              onChange={(event) => setIdentificador(event.target.value)}
+              placeholder="Ej. ###-######-####L o sin guiones"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+            />
+          </label>
+
+          <button
+            type="button"
+            onClick={submitProfileUpdate}
+            disabled={isSavingProfile}
+            className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
+          >
+            {isSavingProfile ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Guardar perfil
+          </button>
+
+          <div className="my-3 h-px bg-slate-200" />
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-slate-600">Contraseña actual</span>
+            <div className="flex items-center rounded-xl border border-slate-300 px-3 py-2">
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(event) => setCurrentPassword(event.target.value)}
+                className="w-full text-sm outline-none"
+                placeholder="Escribe tu contraseña actual"
+              />
+              <button type="button" onClick={() => setShowCurrentPassword((prev) => !prev)} className="text-slate-500 hover:text-slate-700">
+                {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-slate-600">Nueva contraseña</span>
+            <div className="flex items-center rounded-xl border border-slate-300 px-3 py-2">
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                className="w-full text-sm outline-none"
+                placeholder="10-64, mayúscula, minúscula, número y símbolo"
+              />
+              <button type="button" onClick={() => setShowNewPassword((prev) => !prev)} className="text-slate-500 hover:text-slate-700">
+                {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-sm text-slate-600">Confirmar nueva contraseña</span>
+            <div className="flex items-center rounded-xl border border-slate-300 px-3 py-2">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                className="w-full text-sm outline-none"
+                placeholder="Repite la nueva contraseña"
+              />
+              <button type="button" onClick={() => setShowConfirmPassword((prev) => !prev)} className="text-slate-500 hover:text-slate-700">
+                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </label>
+
+          <button
+            type="button"
+            onClick={submitPasswordChange}
+            disabled={isSaving}
+            className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
+          >
+            {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Guardar nueva contraseña
+          </button>
+        </div>
+      </div>
+    </PanelShell>
   )
 }
 
@@ -178,6 +382,8 @@ export function getDashboardPanel(view: DashboardView, user?: AuthUser | null) {
   switch (view) {
     case 'overview':
       return <OverviewPanel user={user} />
+    case 'identityAccess':
+      return <IdentityAccessDashboardPanel />
     case 'workshops':
       return <WorkshopsPanel />
     case 'students':

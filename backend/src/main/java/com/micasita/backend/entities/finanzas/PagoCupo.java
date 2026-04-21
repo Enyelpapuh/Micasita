@@ -1,17 +1,33 @@
 package com.micasita.backend.entities.finanzas;
 
-import jakarta.persistence.*;
-import lombok.*;
+import com.micasita.backend.entities.core.Usuario;
+import com.micasita.backend.entities.talleres.CupoTaller;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
 @Table(name = "Pago_cupo")
-@Data
+@Getter
+@Setter
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
+@AllArgsConstructor
 public class PagoCupo {
 
     @Id
@@ -19,10 +35,21 @@ public class PagoCupo {
     @Column(name = "ID_pago_cupo")
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_cupo", nullable = false)
     @ToString.Exclude
     private CupoTaller cupo;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_usuario", nullable = false)
+    @ToString.Exclude
+    private Usuario usuario;
+
+    @Column(name = "Numero_Recibo", length = 20, unique = true, nullable = false)
+    private String numeroRecibo;
+
+    @Column(name = "Monto", precision = 10, scale = 2)
+    private BigDecimal monto;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_metodo_pago", nullable = false)
@@ -34,11 +61,11 @@ public class PagoCupo {
     @ToString.Exclude
     private EstadoPago estadoPago;
 
-    @Column(name = "Monto", precision = 10, scale = 2)
-    private BigDecimal monto;
+    @Column(name = "Es_Anulado", columnDefinition = "BOOLEAN DEFAULT false")
+    private Boolean esAnulado;
 
-    @Column(name = "Detalle", length = 200)
-    private String detalle;
+    @Column(name = "Motivo_Anulacion", length = 255)
+    private String motivoAnulacion;
 
     @Column(name = "Fecha_de_pago")
     private LocalDate fechaDePago;

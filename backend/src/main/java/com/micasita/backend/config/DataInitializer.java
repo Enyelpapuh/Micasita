@@ -9,7 +9,9 @@ import com.micasita.backend.entities.core.PersonaRoles;
 import com.micasita.backend.entities.core.Roles;
 import com.micasita.backend.entities.core.Usuario;
 import com.micasita.backend.entities.finanzas.EstadoPago;
+import com.micasita.backend.entities.finanzas.EstadoMatricula;
 import com.micasita.backend.entities.finanzas.MetodoPago;
+import com.micasita.backend.entities.talleres.TipoPublicoTaller;
 import com.micasita.backend.repositories.academico.PuestoRepository;
 import com.micasita.backend.repositories.academico.EstadoAsistenciaRepository;
 import com.micasita.backend.repositories.admision.EstadoSolicitudRepository;
@@ -19,13 +21,16 @@ import com.micasita.backend.repositories.core.PersonaRolesRepository;
 import com.micasita.backend.repositories.core.RolesRepository;
 import com.micasita.backend.repositories.core.UsuarioRepository;
 import com.micasita.backend.repositories.finanzas.EstadoPagoRepository;
+import com.micasita.backend.repositories.finanzas.EstadoMatriculaRepository;
 import com.micasita.backend.repositories.finanzas.MetodoPagoRepository;
+import com.micasita.backend.repositories.talleres.TipoPublicoTallerRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Objects;
+import java.time.LocalDate;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -37,9 +42,11 @@ public class DataInitializer implements CommandLineRunner {
     private final EstadoSolicitudRepository estadoSolicitudRepository;
     private final TipoDocumentoRepository tipoDocumentoRepository;
     private final EstadoPagoRepository estadoPagoRepository;
+    private final EstadoMatriculaRepository estadoMatriculaRepository;
     private final MetodoPagoRepository metodoPagoRepository;
     private final PuestoRepository puestoRepository;
     private final EstadoAsistenciaRepository estadoAsistenciaRepository;
+    private final TipoPublicoTallerRepository tipoPublicoTallerRepository;
     private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(
@@ -50,9 +57,11 @@ public class DataInitializer implements CommandLineRunner {
             EstadoSolicitudRepository estadoSolicitudRepository,
             TipoDocumentoRepository tipoDocumentoRepository,
             EstadoPagoRepository estadoPagoRepository,
+            EstadoMatriculaRepository estadoMatriculaRepository,
             MetodoPagoRepository metodoPagoRepository,
                 PuestoRepository puestoRepository,
                 EstadoAsistenciaRepository estadoAsistenciaRepository,
+                TipoPublicoTallerRepository tipoPublicoTallerRepository,
                 PasswordEncoder passwordEncoder
     ) {
         this.personaRepository = personaRepository;
@@ -62,9 +71,11 @@ public class DataInitializer implements CommandLineRunner {
         this.estadoSolicitudRepository = estadoSolicitudRepository;
         this.tipoDocumentoRepository = tipoDocumentoRepository;
         this.estadoPagoRepository = estadoPagoRepository;
+        this.estadoMatriculaRepository = estadoMatriculaRepository;
         this.metodoPagoRepository = metodoPagoRepository;
         this.puestoRepository = puestoRepository;
         this.estadoAsistenciaRepository = estadoAsistenciaRepository;
+        this.tipoPublicoTallerRepository = tipoPublicoTallerRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -76,12 +87,19 @@ public class DataInitializer implements CommandLineRunner {
         seedEstadosSolicitud();
         seedTiposDocumento();
         seedEstadosPago();
+        seedEstadosMatricula();
         seedMetodosPago();
         seedPuestos();
         seedEstadosAsistencia();
+        seedTiposPublicoTaller();
     }
 
     private void seedRoles() {
+        createRoleIfNotExists("DEVELOPER");
+        createRoleIfNotExists("ADMIN_DIRECCION");
+        createRoleIfNotExists("ADMINISTRACION");
+        createRoleIfNotExists("CAJA");
+        createRoleIfNotExists("PROFESOR");
         createRoleIfNotExists("ADMIN");
         createRoleIfNotExists("USER");
     }
@@ -95,8 +113,9 @@ public class DataInitializer implements CommandLineRunner {
                     Persona persona = personaRepository.save(Persona.builder()
                             .nombre("admin")
                             .apellido("user")
-                            .edad(30)
+                            .fechaNacimiento(LocalDate.of(1995, 1, 1))
                             .telefono("0000000000")
+                            .activo(true)
                             .build());
 
                     return usuarioRepository.save(Usuario.builder()
@@ -149,6 +168,12 @@ public class DataInitializer implements CommandLineRunner {
         createMetodoPagoIfNotExists("DEPOSITO");
     }
 
+    private void seedEstadosMatricula() {
+        createEstadoMatriculaIfNotExists("PENDIENTE");
+        createEstadoMatriculaIfNotExists("ADMITIDO");
+        createEstadoMatriculaIfNotExists("OFICIAL");
+    }
+
     private void seedPuestos() {
         createPuestoIfNotExists("DOCENTE", "Docente titular de aula", "OPERATIVO");
         createPuestoIfNotExists("COORDINADOR", "Coordinacion academica", "MANDO_MEDIO");
@@ -159,6 +184,12 @@ public class DataInitializer implements CommandLineRunner {
         createEstadoAsistenciaIfNotExists("PRESENTE");
         createEstadoAsistenciaIfNotExists("AUSENTE");
         createEstadoAsistenciaIfNotExists("JUSTIFICADO");
+    }
+
+    private void seedTiposPublicoTaller() {
+        createTipoPublicoTallerIfNotExists("NINO");
+        createTipoPublicoTallerIfNotExists("ADULTO");
+        createTipoPublicoTallerIfNotExists("GENERAL");
     }
 
     private void createRoleIfNotExists(String name) {
@@ -200,6 +231,16 @@ public class DataInitializer implements CommandLineRunner {
     private void createEstadoAsistenciaIfNotExists(String name) {
         estadoAsistenciaRepository.findByNombre(name)
                 .orElseGet(() -> estadoAsistenciaRepository.save(EstadoAsistencia.builder().nombre(name).build()));
+    }
+
+    private void createTipoPublicoTallerIfNotExists(String name) {
+        tipoPublicoTallerRepository.findByNombre(name)
+                .orElseGet(() -> tipoPublicoTallerRepository.save(TipoPublicoTaller.builder().nombre(name).build()));
+    }
+
+    private void createEstadoMatriculaIfNotExists(String name) {
+        estadoMatriculaRepository.findByNombreEstado(name)
+                .orElseGet(() -> estadoMatriculaRepository.save(EstadoMatricula.builder().nombreEstado(name).build()));
     }
 }
 

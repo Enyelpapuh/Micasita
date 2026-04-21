@@ -41,6 +41,12 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/admin/usuarios/avatar/**", "/api/admin/usuarios/avatar/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/admision/documentos/**", "/api/admision/documentos/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/talleres", "/talleres/**", "/api/talleres", "/api/talleres/**").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/talleres/*/inscripciones", "/api/talleres/*/inscripciones").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/admision/config", "/api/admision/config").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/admision/solicitudes", "/api/admision/solicitudes").permitAll()
                     .requestMatchers("/auth/**", "/api/auth/**", "/db-status", "/api/db-status").permitAll()
                         .anyRequest().authenticated()
                 )

@@ -30,6 +30,8 @@ public class Matricula {
     @Column(name = "Anio_lectivo", length = 20)
     private String anioLectivo;
 
-    @Column(name = "Estado", length = 50)
-    private String estado;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_estado_matricula", nullable = false)
+    @ToString.Exclude
+    private EstadoMatricula estadoMatricula;
 }

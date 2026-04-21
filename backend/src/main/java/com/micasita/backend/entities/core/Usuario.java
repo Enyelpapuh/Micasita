@@ -21,12 +21,15 @@ public class Usuario {
     @ToString.Exclude
     private Persona persona;
 
-    @Column(name = "Email", unique = true, length = 100)
+    @Column(name = "Email", unique = true, nullable = false, length = 100)
     private String email;
 
-    @Column(name = "Password_hash", length = 255)
+    @Column(name = "Password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(name = "Activo", columnDefinition = "BOOLEAN DEFAULT true")
+    @Column(name = "Path_avatar", length = 255)
+    private String pathAvatar;
+
+    @Column(name = "Activo", nullable = false, columnDefinition = "BOOLEAN DEFAULT true")
     private Boolean activo;
 }

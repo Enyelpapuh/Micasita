@@ -9,4 +9,6 @@ public interface PersonaRolesRepository extends JpaRepository<PersonaRoles, Long
     boolean existsByPersonaIdAndRolId(Long personaId, Long rolId);
 
     List<PersonaRoles> findAllByPersonaId(Long personaId);
+
+    void deleteByPersonaId(Long personaId);
 }
