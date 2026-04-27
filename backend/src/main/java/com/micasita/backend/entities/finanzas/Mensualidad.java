@@ -35,15 +35,37 @@ public class Mensualidad {
     @ToString.Exclude
     private EstadoPago estadoPago;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_usuario", nullable = false)
+    @ToString.Exclude
+    private com.micasita.backend.entities.core.Usuario usuario;
+
     @Column(name = "fecha_de_pago")
     private LocalDate fechaDePago;
 
-    @Column(name = "Monto", precision = 10, scale = 2)
-    private BigDecimal monto;
+    @Column(name = "Monto_Base", precision = 10, scale = 2)
+    private BigDecimal montoBase;
+
+    @Column(name = "Monto_Mora", precision = 10, scale = 2)
+    private BigDecimal montoMora;
 
     @Column(name = "Detalle", length = 200)
     private String detalle;
 
-    @Column(name = "Mes_de_pago", length = 20)
-    private String mesDePago;
+    @Column(name = "Mes_de_pago")
+    private Integer mesDePago;
+
+    @Column(name = "Numero_Recibo", length = 20, unique = true, nullable = false)
+    private String numeroRecibo;
+
+    @Column(name = "Es_Anulado", columnDefinition = "BOOLEAN DEFAULT false")
+    private Boolean esAnulado;
+
+    @Column(name = "Motivo_Anulacion", length = 255)
+    private String motivoAnulacion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_caja_sesion")
+    @ToString.Exclude
+    private CajaSesion cajaSesion;
 }

@@ -34,6 +34,11 @@ public class PagoMatricula {
     @ToString.Exclude
     private EstadoPago estadoPago;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_usuario", nullable = false)
+    @ToString.Exclude
+    private com.micasita.backend.entities.core.Usuario usuario;
+
     @Column(name = "fecha_de_pago")
     private LocalDate fechaDePago;
 
@@ -42,4 +47,18 @@ public class PagoMatricula {
 
     @Column(name = "Detalle", length = 200)
     private String detalle;
+
+    @Column(name = "Numero_Recibo", length = 20, unique = true, nullable = false)
+    private String numeroRecibo;
+
+    @Column(name = "Es_Anulado", columnDefinition = "BOOLEAN DEFAULT false")
+    private Boolean esAnulado;
+
+    @Column(name = "Motivo_Anulacion", length = 255)
+    private String motivoAnulacion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_caja_sesion")
+    @ToString.Exclude
+    private CajaSesion cajaSesion;
 }

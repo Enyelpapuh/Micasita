@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import {
+  BookOpen,
   ClipboardList,
   Inbox,
   LayoutDashboard,
@@ -21,6 +22,8 @@ export type DashboardView =
   | 'students'
   | 'people'
   | 'attendance'
+  | 'grades'
+  | 'cashier'
   | 'talleres'
   | 'recepcion'
   | 'mensajes'
@@ -159,7 +162,8 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
   { icon: Users, label: 'Estudiantes', view: 'students', permission: 'DASHBOARD_ACADEMICO' },
   { icon: Users, label: 'Lista General', view: 'people', permission: 'DASHBOARD_USUARIOS' },
   { icon: ShieldCheck, label: 'Asistencia', view: 'attendance', permission: 'DASHBOARD_ACADEMICO' },
-  { icon: ClipboardList, label: 'Matrículas Talleres', view: 'talleres', permission: 'DASHBOARD_FINANZAS' },
+  { icon: BookOpen, label: 'Notas', view: 'grades', permission: 'DASHBOARD_ACADEMICO' },
+  { icon: ClipboardList, label: 'Caja', view: 'cashier', permission: 'DASHBOARD_FINANZAS' },
   { icon: Inbox, label: 'Bandeja de Solicitudes', view: 'recepcion', permission: 'DASHBOARD_ADMISION' },
   { icon: Mail, label: 'Mensajes', view: 'mensajes', permission: 'DASHBOARD_ADMISION' },
   { icon: Settings, label: 'Configuración', view: 'settings', permission: 'DASHBOARD_CONFIGURACION' },

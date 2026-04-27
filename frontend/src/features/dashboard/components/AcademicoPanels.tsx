@@ -224,7 +224,19 @@ export function AcademicoGestionPanel() {
   const [selectedProfesorId, setSelectedProfesorId] = useState<number | null>(null)
   const [selectedEstudianteId, setSelectedEstudianteId] = useState<number | null>(null)
   const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null)
+  const [studentsSearch, setStudentsSearch] = useState('')
   const [savingAction, setSavingAction] = useState<string | null>(null)
+
+  const filteredStudents = useMemo(() => {
+    const term = studentsSearch.trim().toLocaleLowerCase('es-NI')
+    if (!term) {
+      return estudiantes
+    }
+    return estudiantes.filter((item) => {
+      const name = `${item.nombre ?? ''} ${item.apellido ?? ''}`.toLocaleLowerCase('es-NI')
+      return name.includes(term)
+    })
+  }, [estudiantes, studentsSearch])
 
   useEffect(() => {
     let cancelled = false
@@ -311,6 +323,36 @@ export function AcademicoGestionPanel() {
         </div>
       ) : (
         <div className="mt-6 grid gap-4 xl:grid-cols-2">
+          <SectionCard title="Listado de estudiantes" subtitle="Vista separada para consulta rápida">
+            <div className="grid gap-2">
+              <input
+                value={studentsSearch}
+                onChange={(event) => setStudentsSearch(event.target.value)}
+                placeholder="Buscar estudiante por nombre"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              />
+              <FieldHint>
+                Mostrando {filteredStudents.length} de {estudiantes.length} estudiantes cargados.
+              </FieldHint>
+
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200">
+                <ul className="divide-y divide-slate-100 text-sm">
+                  {filteredStudents.map((item) => (
+                    <li key={item.id} className="px-3 py-2">
+                      <p className="font-semibold text-slate-800">{item.nombre} {item.apellido}</p>
+                      <p className="text-xs text-slate-500">ID estudiante: {item.id}</p>
+                    </li>
+                  ))}
+                  {filteredStudents.length === 0 ? (
+                    <li className="px-3 py-6 text-center text-xs text-slate-500">
+                      No hay estudiantes que coincidan con la búsqueda.
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            </div>
+          </SectionCard>
+
           <SectionCard title="Crear grupo" subtitle="RF-AC-01">
             <div className="grid gap-2">
               <label className="text-xs font-semibold text-slate-700">Nombre del grupo</label>
@@ -512,9 +554,21 @@ export function AcademicoGestionPanel() {
   )
 }
 
-export function AcademicoAsistenciaNotasPanel() {
+type AcademicoAsistenciaNotasPanelProps = {
+  initialSegment?: 'asistencia' | 'notas'
+  lockSegment?: boolean
+  title?: string
+  subtitle?: string
+}
+
+export function AcademicoAsistenciaNotasPanel({
+  initialSegment = 'asistencia',
+  lockSegment = false,
+  title = 'Asistencia y notas',
+  subtitle = 'Vista intuitiva para docentes: selecciona grupo, asignatura y fecha, marca estados rápidos y registra notas.',
+}: AcademicoAsistenciaNotasPanelProps = {}) {
   const { token } = useAuth()
-  const [activeSegment, setActiveSegment] = useState<'asistencia' | 'notas'>('asistencia')
+  const [activeSegment, setActiveSegment] = useState<'asistencia' | 'notas'>(initialSegment)
   const [loading, setLoading] = useState(true)
   const [grupos, setGrupos] = useState<GrupoItem[]>([])
   const [asignaturas, setAsignaturas] = useState<AsignaturaItem[]>([])
@@ -676,8 +730,8 @@ export function AcademicoAsistenciaNotasPanel() {
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Académico</p>
-      <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Asistencia y notas</h2>
-      <p className="mt-2 text-sm text-slate-600">Vista intuitiva para docentes: selecciona grupo, asignatura y fecha, marca estados rápidos y registra notas.</p>
+      <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{title}</h2>
+      <p className="mt-2 text-sm text-slate-600">{subtitle}</p>
 
       {loading ? (
         <div className="mt-6 flex items-center text-slate-600">
@@ -723,22 +777,24 @@ export function AcademicoAsistenciaNotasPanel() {
             </div>
           </div>
 
-          <div className="mt-4 inline-flex rounded-xl border border-slate-200 bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setActiveSegment('asistencia')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${activeSegment === 'asistencia' ? 'bg-teal-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-            >
-              Segmento: Asistencia
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSegment('notas')}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${activeSegment === 'notas' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
-            >
-              Segmento: Notas
-            </button>
-          </div>
+          {!lockSegment ? (
+            <div className="mt-4 inline-flex rounded-xl border border-slate-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setActiveSegment('asistencia')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${activeSegment === 'asistencia' ? 'bg-teal-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                Segmento: Asistencia
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveSegment('notas')}
+                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${activeSegment === 'notas' ? 'bg-indigo-600 text-white' : 'text-slate-700 hover:bg-slate-100'}`}
+              >
+                Segmento: Notas
+              </button>
+            </div>
+          ) : null}
 
           {activeSegment === 'asistencia' ? (
             <AcademicoAsistenciaSegment
@@ -768,5 +824,27 @@ export function AcademicoAsistenciaNotasPanel() {
         </>
       )}
     </section>
+  )
+}
+
+export function AcademicoAsistenciaPanel() {
+  return (
+    <AcademicoAsistenciaNotasPanel
+      initialSegment="asistencia"
+      lockSegment
+      title="Control de asistencia"
+      subtitle="Vista exclusiva para pasar asistencia del día por grupo y asignatura."
+    />
+  )
+}
+
+export function AcademicoNotasPanel() {
+  return (
+    <AcademicoAsistenciaNotasPanel
+      initialSegment="notas"
+      lockSegment
+      title="Registro de notas"
+      subtitle="Vista exclusiva para notas de trabajo y actualización de nota final por estudiante."
+    />
   )
 }

@@ -275,7 +275,7 @@ public class AuthService {
     private List<String> resolvePermissions(List<String> roles) {
         Set<String> permissions = new LinkedHashSet<>();
 
-        if (roles.contains("DEVELOPER") || roles.contains("ADMIN") || roles.contains("ADMIN_DIRECCION")) {
+        if (roles.contains("DEVELOPER") || roles.contains("ADMIN") || roles.contains("ADMIN_DIRECCION") || roles.contains("ADMINISTRACION")) {
             permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ADMISION");
             permissions.add("DASHBOARD_ACADEMICO");
@@ -289,6 +289,7 @@ public class AuthService {
             permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ADMISION");
             permissions.add("DASHBOARD_ACADEMICO");
+            permissions.add("DASHBOARD_FINANZAS");
         }
 
         if (roles.contains("CAJA")) {

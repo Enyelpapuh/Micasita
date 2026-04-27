@@ -17,7 +17,7 @@ export function BaseLayout({ children }: PropsWithChildren) {
         }}
       />
       <Navbar />
-      <main>{children}</main>
+      <div>{children}</div>
     </div>
   )
 }

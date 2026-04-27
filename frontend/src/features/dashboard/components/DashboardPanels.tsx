@@ -1,14 +1,30 @@
 import { useState, type ChangeEvent, type ReactNode } from 'react'
 import toast from 'react-hot-toast'
-import { BadgeCheck, Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Mail, Users } from 'lucide-react'
+import { Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Mail, Users } from 'lucide-react'
+import { Bar, Doughnut, Line } from 'react-chartjs-2'
+import {
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LineElement,
+  LinearScale,
+  PointElement,
+  Tooltip,
+} from 'chart.js'
 import type { AuthUser } from '../../auth/auth.types'
 import type { DashboardView } from './DashboardSidebar'
 import { TalleresView } from '../../talleres/components/TalleresView'
 import { IdentityAccessPanel } from './IdentityAccessPanel'
 import { AdmisionDashboardPanel } from '../../admision/components/AdmisionDashboardPanel'
-import { AcademicoAsistenciaNotasPanel, AcademicoGestionPanel } from './AcademicoPanels'
+import { AcademicoAsistenciaPanel, AcademicoGestionPanel, AcademicoNotasPanel } from './AcademicoPanels'
 import { useAuth } from '../../auth/AuthContext'
 import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar } from './settings.api'
+import { CajaDashboardPanel } from './CajaDashboardPanel'
+
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
 
 type DashboardPanelProps = {
   user?: AuthUser | null
@@ -38,20 +54,148 @@ function MetricCard({ label, value, detail }: { label: string; value: string; de
 }
 
 export function OverviewPanel({ user }: DashboardPanelProps) {
+  const permissions = user?.permisos ?? []
+  const roles = user?.roles ?? []
+  const dashboardAccess = permissions.filter((perm) => perm.startsWith('DASHBOARD_')).length
+
+  const areaCounts = {
+    academico: permissions.filter((perm) => /ACADEMICO|WORKSHOPS|TALLERES/i.test(perm)).length,
+    admision: permissions.filter((perm) => /ADMISION|SOLICITUD|RECEPCION|MENSAJ/i.test(perm)).length,
+    finanzas: permissions.filter((perm) => /FINANZAS|CAJA|PAGO|MATRICULA/i.test(perm)).length,
+    identidad: permissions.filter((perm) => /USUARIO|IDENTITY|ACCESS/i.test(perm)).length,
+    configuracion: permissions.filter((perm) => /CONFIGURACION|SETTINGS/i.test(perm)).length,
+  }
+
+  const topPermissions = permissions.slice(0, 5)
+
+  const roleChartData = {
+    labels: roles.length ? roles : ['Sin roles'],
+    datasets: [
+      {
+        label: 'Peso por rol',
+        data: roles.length ? roles.map(() => 1) : [1],
+        backgroundColor: ['#0f766e', '#0ea5e9', '#f59e0b', '#8b5cf6', '#ef4444', '#14b8a6'],
+        borderWidth: 0,
+      },
+    ],
+  }
+
+  const areaChartData = {
+    labels: ['Académico', 'Admisión', 'Finanzas', 'Identidad', 'Configuración'],
+    datasets: [
+      {
+        label: 'Permisos por área',
+        data: [
+          areaCounts.academico,
+          areaCounts.admision,
+          areaCounts.finanzas,
+          areaCounts.identidad,
+          areaCounts.configuracion,
+        ],
+        backgroundColor: ['#14b8a6', '#06b6d4', '#f59e0b', '#6366f1', '#ef4444'],
+        borderRadius: 10,
+      },
+    ],
+  }
+
+  const trendChartData = {
+    labels: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'],
+    datasets: [
+      {
+        label: 'Cobertura operativa (estimada)',
+        data: [2, 3, 4, 5, Math.max(5, dashboardAccess), dashboardAccess + 1],
+        fill: true,
+        borderColor: '#0f766e',
+        backgroundColor: 'rgba(15, 118, 110, 0.12)',
+        tension: 0.35,
+        pointRadius: 3,
+      },
+    ],
+  }
+
   return (
     <PanelShell
       title={`Bienvenido, ${user?.nombre ?? 'usuario'}`}
-      subtitle="Desde aquí puedes entrar a cada módulo según tus permisos. Esta vista sirve como punto de entrada y resumen general del sistema."
+      subtitle="Resumen ejecutivo para dirección y administración: estado de acceso, distribución por áreas y señales operativas del panel."
     >
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Usuario activo" value={user?.email ?? 'sin correo'} detail="Sesión autenticada con JWT" />
-        <MetricCard label="Roles" value={user?.roles.length?.toString() ?? '0'} detail="Roles cargados desde el backend" />
-        <MetricCard label="Permisos" value={user?.permisos.length?.toString() ?? '0'} detail="Accesos visibles en la sidebar" />
+        <MetricCard label="Roles asignados" value={roles.length.toString()} detail="Perfiles de responsabilidad" />
+        <MetricCard label="Permisos totales" value={permissions.length.toString()} detail="Capacidades activas en sesión" />
+        <MetricCard label="Módulos habilitados" value={dashboardAccess.toString()} detail="Accesos con prefijo DASHBOARD" />
       </div>
 
-      <div className="mt-6 rounded-2xl border border-dashed border-teal-300 bg-[linear-gradient(135deg,_rgba(20,184,166,0.08),_rgba(2,132,199,0.05),_rgba(255,255,255,1))] p-5 text-sm leading-7 text-slate-600">
-        El panel lateral centraliza el acceso a talleres, estudiantes, asistencia, matrículas, solicitudes y mensajes.
-        Cuando conectes los CRUD reales, solo tienes que reemplazar el contenido de cada módulo.
+      <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Permisos Por Área</p>
+          <p className="mt-1 text-sm text-slate-600">Ayuda a identificar dónde hay más cobertura funcional para el administrador.</p>
+          <div className="mt-4 h-[280px]">
+            <Bar
+              data={areaChartData}
+              options={{
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: { beginAtZero: true, ticks: { precision: 0 } },
+                  x: { grid: { display: false } },
+                },
+              }}
+            />
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Distribución De Roles</p>
+          <p className="mt-1 text-sm text-slate-600">Composición de la cuenta actual para toma de decisiones rápidas.</p>
+          <div className="mt-4 h-[280px]">
+            <Doughnut
+              data={roleChartData}
+              options={{
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: 'bottom' },
+                },
+                cutout: '62%',
+              }}
+            />
+          </div>
+        </article>
+      </div>
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <article className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tendencia Operativa</p>
+          <p className="mt-1 text-sm text-slate-600">Lectura visual rápida del crecimiento de cobertura del panel.</p>
+          <div className="mt-4 h-[220px]">
+            <Line
+              data={trendChartData}
+              options={{
+                maintainAspectRatio: false,
+                plugins: { legend: { display: true, position: 'bottom' } },
+                scales: {
+                  y: { beginAtZero: true, ticks: { precision: 0 } },
+                  x: { grid: { display: false } },
+                },
+              }}
+            />
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-dashed border-teal-300 bg-[linear-gradient(135deg,_rgba(20,184,166,0.08),_rgba(2,132,199,0.05),_rgba(255,255,255,1))] p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Permisos Prioritarios</p>
+          <p className="mt-1 text-sm text-slate-600">Top de permisos detectados en la sesión actual.</p>
+          <ul className="mt-4 space-y-2 text-sm text-slate-700">
+            {topPermissions.length > 0 ? (
+              topPermissions.map((perm) => (
+                <li key={perm} className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 font-medium">
+                  {perm}
+                </li>
+              ))
+            ) : (
+              <li className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2">Sin permisos cargados</li>
+            )}
+          </ul>
+        </article>
       </div>
     </PanelShell>
   )
@@ -117,18 +261,19 @@ export function PeoplePanel() {
 }
 
 export function AttendancePanel() {
-  return <AcademicoAsistenciaNotasPanel />
+  return <AcademicoAsistenciaPanel />
+}
+
+export function GradesPanel() {
+  return <AcademicoNotasPanel />
 }
 
 export function TalleresPanel() {
-  return (
-    <GenericModulePanel
-      title="Matrículas Talleres"
-      subtitle="Cupos, matrículas, pagos y seguimiento financiero de talleres."
-      icon={BadgeCheck}
-      accent="from-indigo-50 via-blue-50 to-white"
-    />
-  )
+  return <CajaDashboardPanel />
+}
+
+export function CashierPanel() {
+  return <CajaDashboardPanel />
 }
 
 export function RecepcionPanel() {
@@ -392,6 +537,10 @@ export function getDashboardPanel(view: DashboardView, user?: AuthUser | null) {
       return <PeoplePanel />
     case 'attendance':
       return <AttendancePanel />
+    case 'grades':
+      return <GradesPanel />
+    case 'cashier':
+      return <CashierPanel />
     case 'talleres':
       return <TalleresPanel />
     case 'recepcion':

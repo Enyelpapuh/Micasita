@@ -69,4 +69,9 @@ public class PagoCupo {
 
     @Column(name = "Fecha_de_pago")
     private LocalDate fechaDePago;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "ID_caja_sesion")
+    @ToString.Exclude
+    private CajaSesion cajaSesion;
 }

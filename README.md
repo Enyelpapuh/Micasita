@@ -1,7 +1,7 @@
 # Micasita - Guia de ejecucion
 
 Proyecto dividido en dos partes:
-- Backend: Spring Boot + Maven + MySQL
+- Backend: Spring Boot + Maven + SQL Server + Flyway
 - Frontend: React + Vite + TypeScript
 
 ## Requisitos
@@ -10,7 +10,7 @@ Proyecto dividido en dos partes:
 - Maven 3.9+ (o usar el wrapper incluido)
 - Node.js 20+
 - npm 10+
-- MySQL 8+
+- SQL Server 2019+
 
 ## 1) Configurar variables del backend
 
@@ -22,6 +22,12 @@ Edita ese archivo con tus valores reales, especialmente:
 - DB_PASSWORD
 - JWT_SECRET
 - Cualquier API key personalizada (OPENAI_API_KEY, GOOGLE_MAPS_API_KEY, etc.)
+
+Notas de base de datos:
+- Flyway ejecuta automaticamente scripts en backend/src/main/resources/db/migration.
+- Para SQL Server local, usa una cadena JDBC similar a:
+	jdbc:sqlserver://localhost:1433;databaseName=micasita;encrypt=true;trustServerCertificate=true
+- Si ya tienes un esquema existente, FLYWAY_BASELINE_ON_MIGRATE=true evita que falle el primer arranque.
 
 ## 2) Levantar backend
 
