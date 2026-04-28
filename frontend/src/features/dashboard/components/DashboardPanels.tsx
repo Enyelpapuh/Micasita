@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type ReactNode } from 'react'
 import toast from 'react-hot-toast'
-import { Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Mail, Users } from 'lucide-react'
+import { Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Mail } from 'lucide-react'
 import { Bar, Doughnut, Line } from 'react-chartjs-2'
 import {
   ArcElement,
@@ -20,6 +20,7 @@ import { TalleresView } from '../../talleres/components/TalleresView'
 import { IdentityAccessPanel } from './IdentityAccessPanel'
 import { AdmisionDashboardPanel } from '../../admision/components/AdmisionDashboardPanel'
 import { AcademicoAsistenciaPanel, AcademicoGestionPanel, AcademicoNotasPanel } from './AcademicoPanels'
+import { StudentDirectoryPanel } from './StudentDirectoryPanel'
 import { useAuth } from '../../auth/AuthContext'
 import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar } from './settings.api'
 import { CajaDashboardPanel } from './CajaDashboardPanel'
@@ -250,14 +251,7 @@ export function StudentsPanel() {
 }
 
 export function PeoplePanel() {
-  return (
-    <GenericModulePanel
-      title="Lista General"
-      subtitle="Personas, usuarios, padres, tutores y demás registros compartidos."
-      icon={Users}
-      accent="from-violet-50 via-fuchsia-50 to-white"
-    />
-  )
+  return <StudentDirectoryPanel />
 }
 
 export function AttendancePanel() {

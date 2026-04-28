@@ -27,7 +27,8 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 m.estadoPago.nombre as estado,
                 m.metodoPago.nombre as metodoPago,
                 m.detalle as detalle,
-                coalesce(m.esAnulado, false) as anulado
+                coalesce(m.esAnulado, false) as anulado,
+                m.motivoAnulacion as motivoAnulacion
             from Mensualidad m
             join m.estudiante e
             join e.persona p
@@ -45,5 +46,6 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         String getMetodoPago();
         String getDetalle();
         Boolean getAnulado();
+        String getMotivoAnulacion();
     }
 }

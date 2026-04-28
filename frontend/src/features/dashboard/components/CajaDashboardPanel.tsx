@@ -259,6 +259,46 @@ function TalleresTab({
   metodosPago: MetodoPagoOption[]
   busy: boolean
 }) {
+  const [selectedPendiente, setSelectedPendiente] = useState<CajaTallerPendienteItem | null>(null)
+  const [selectedPago, setSelectedPago] = useState<CajaPagoTallerItem | null>(null)
+  const [montoCobro, setMontoCobro] = useState('')
+  const [montoRecibido, setMontoRecibido] = useState('')
+
+  const montoCobroNumber = Number(montoCobro) || 0
+  const montoRecibidoNumber = Number(montoRecibido) || 0
+  const vuelto = montoRecibidoNumber - montoCobroNumber
+  const puedeCobrar = !!selectedPendiente && montoCobroNumber > 0 && !!metodoPagoId && vuelto >= 0 && !busy
+
+  const abrirModal = (item: CajaTallerPendienteItem) => {
+    setSelectedPago(null)
+    setSelectedPendiente(item)
+    setMontoCobro(String(Number(item.montoEsperado ?? 0)))
+    setMontoRecibido('')
+  }
+
+  const abrirDetallePago = (item: CajaPagoTallerItem) => {
+    setSelectedPendiente(null)
+    setMontoCobro('')
+    setMontoRecibido('')
+    setSelectedPago(item)
+  }
+
+  const cerrarModal = () => {
+    setSelectedPendiente(null)
+    setSelectedPago(null)
+    setMontoCobro('')
+    setMontoRecibido('')
+  }
+
+  const confirmarCobro = async () => {
+    if (!selectedPendiente) {
+      return
+    }
+
+    await onPay(selectedPendiente.cupoId, montoCobroNumber)
+    cerrarModal()
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-2">
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -277,20 +317,167 @@ function TalleresTab({
                   <p className="text-slate-600">Monto esperado: {formatMoney(item.montoEsperado)}</p>
                   <p className="text-slate-500">Fecha inscripción: {formatDate(item.fechaInscripcion)}</p>
                 </div>
-                <button
-                  type="button"
-                  disabled={busy || !metodoPagoId}
-                  onClick={() => onPay(item.cupoId, Number(item.montoEsperado ?? 0))}
-                  className="rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Cobrar
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => abrirModal(item)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                  >
+                    Ver
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !metodoPagoId}
+                    onClick={() => abrirModal(item)}
+                    className="rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cobrar
+                  </button>
+                </div>
               </div>
             </article>
           ))}
           {pendientes.length === 0 ? <EmptyState message="No hay inscripciones de talleres pendientes de pago." /> : null}
         </div>
       </section>
+
+      {selectedPendiente ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Cobro de taller</h4>
+                <p className="text-sm text-slate-600">{selectedPendiente.taller} | {selectedPendiente.participante || 'Sin nombre'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={cerrarModal}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
+                <p className="text-slate-500">Taller</p>
+                <p className="font-semibold text-slate-900">{selectedPendiente.taller}</p>
+                <p className="mt-1 text-slate-600">Participante: {selectedPendiente.participante || 'Sin nombre'}</p>
+                <p className="mt-1 text-slate-600">Fecha inscripción: {formatDate(selectedPendiente.fechaInscripcion)}</p>
+                <p className="mt-1 text-slate-600">Monto esperado: {formatMoney(selectedPendiente.montoEsperado)}</p>
+              </div>
+              <input
+                value={montoCobro}
+                readOnly
+                placeholder="Monto a cobrar"
+                type="number"
+                step="0.01"
+                min="0"
+                className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm outline-none"
+              />
+              <input
+                value={montoRecibido}
+                onChange={(event) => setMontoRecibido(event.target.value)}
+                placeholder="Monto recibido"
+                type="number"
+                step="0.01"
+                min="0"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+              />
+              <div className="sm:col-span-2">
+                <MetodoPagoSelect value={metodoPagoId} onChange={onMetodoPagoChange} metodosPago={metodosPago} />
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="text-slate-700">Total a pagar: <span className="font-semibold">{formatMoney(montoCobroNumber)}</span></p>
+              <p className="text-slate-700">Monto recibido: <span className="font-semibold">{formatMoney(montoRecibidoNumber)}</span></p>
+              {vuelto >= 0 ? (
+                <p className="text-emerald-700">Vuelto: <span className="font-semibold">{formatMoney(vuelto)}</span></p>
+              ) : (
+                <p className="text-rose-700">Faltante: <span className="font-semibold">{formatMoney(Math.abs(vuelto))}</span></p>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cerrarModal}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={!puedeCobrar}
+                onClick={confirmarCobro}
+                className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busy ? 'Procesando...' : 'Confirmar cobro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedPago ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Detalle de pago de taller</h4>
+                <p className="text-sm text-slate-600">{selectedPago.taller} | {selectedPago.participante || 'Sin nombre'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={cerrarModal}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Recibo</p>
+                <p className="font-semibold text-slate-900">{selectedPago.numeroRecibo || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Monto</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedPago.monto)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Método de pago</p>
+                <p className="font-semibold text-slate-900">{selectedPago.metodoPago || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Fecha de pago</p>
+                <p className="font-semibold text-slate-900">{formatDate(selectedPago.fechaPago)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
+                <p className="text-slate-500">Estado</p>
+                <p className="font-semibold text-slate-900">{selectedPago.estado || '-'}</p>
+              </div>
+              {selectedPago.anulado && selectedPago.motivoAnulacion ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm sm:col-span-2">
+                  <p className="text-slate-500">Motivo de anulación</p>
+                  <p className="font-semibold text-rose-800">{selectedPago.motivoAnulacion}</p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cerrarModal}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Pagos de talleres recientes</h3>
@@ -305,17 +492,26 @@ function TalleresTab({
                   <p className="text-slate-600">Monto: {formatMoney(item.monto)}</p>
                   <p className="text-slate-500">{item.metodoPago || '-'} | {formatDate(item.fechaPago)} | {item.estado || '-'}</p>
                 </div>
-                {!item.anulado ? (
+                <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo)}
-                    className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    onClick={() => abrirDetallePago(item)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
-                    Anular
+                    Ver
                   </button>
-                ) : (
-                  <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
-                )}
+                  {!item.anulado ? (
+                    <button
+                      type="button"
+                      onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo)}
+                      className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    >
+                      Anular
+                    </button>
+                  ) : (
+                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
+                  )}
+                </div>
               </div>
             </article>
           ))}
@@ -343,6 +539,7 @@ function MatriculaTab({
 }) {
   const [busqueda, setBusqueda] = useState('')
   const [selectedMatricula, setSelectedMatricula] = useState<CajaMatriculaPendienteItem | null>(null)
+  const [selectedPagoMatricula, setSelectedPagoMatricula] = useState<CajaPagoMatriculaItem | null>(null)
   const [montoCobro, setMontoCobro] = useState('')
   const [montoRecibido, setMontoRecibido] = useState('')
   const [metodoPagoId, setMetodoPagoId] = useState('')
@@ -371,13 +568,20 @@ function MatriculaTab({
 
   const abrirModal = (item: CajaMatriculaPendienteItem) => {
     setSelectedMatricula(item)
+    setSelectedPagoMatricula(null)
     setMontoCobro((current) => (current.trim() ? current : '0'))
     setMontoRecibido('')
     setDetalle(`Cobro matrícula ${item.anioLectivo || ''}`.trim())
   }
 
+  const abrirDetallePago = (item: CajaPagoMatriculaItem) => {
+    setSelectedMatricula(null)
+    setSelectedPagoMatricula(item)
+  }
+
   const cerrarModal = () => {
     setSelectedMatricula(null)
+    setSelectedPagoMatricula(null)
     setMontoRecibido('')
   }
 
@@ -441,17 +645,26 @@ function MatriculaTab({
                   <p className="text-slate-600">Monto: {formatMoney(item.monto)}</p>
                   <p className="text-slate-500">{item.metodoPago || '-'} | {formatDate(item.fechaPago)} | {item.estado || '-'}</p>
                 </div>
-                {!item.anulado ? (
+                <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => onAnnul(item.pagoMatriculaId)}
-                    className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    onClick={() => abrirDetallePago(item)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
-                    Anular
+                    Ver
                   </button>
-                ) : (
-                  <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
-                )}
+                  {!item.anulado ? (
+                    <button
+                      type="button"
+                      onClick={() => onAnnul(item.pagoMatriculaId)}
+                      className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    >
+                      Anular
+                    </button>
+                  ) : (
+                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
+                  )}
+                </div>
               </div>
             </article>
           ))}
@@ -534,6 +747,65 @@ function MatriculaTab({
           </div>
         </div>
       ) : null}
+
+      {selectedPagoMatricula ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Detalle de pago de matrícula</h4>
+                <p className="text-sm text-slate-600">{selectedPagoMatricula.estudiante || 'Sin nombre'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={cerrarModal}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Monto</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedPagoMatricula.monto)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Método de pago</p>
+                <p className="font-semibold text-slate-900">{selectedPagoMatricula.metodoPago || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Fecha de pago</p>
+                <p className="font-semibold text-slate-900">{formatDate(selectedPagoMatricula.fechaPago)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Estado</p>
+                <p className="font-semibold text-slate-900">{selectedPagoMatricula.estado || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
+                <p className="text-slate-500">Detalle</p>
+                <p className="font-semibold text-slate-900">{selectedPagoMatricula.detalle || '-'}</p>
+              </div>
+              {selectedPagoMatricula.anulado && selectedPagoMatricula.motivoAnulacion ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm sm:col-span-2">
+                  <p className="text-slate-500">Motivo de anulación</p>
+                  <p className="font-semibold text-rose-800">{selectedPagoMatricula.motivoAnulacion}</p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cerrarModal}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -597,6 +869,8 @@ function MensualidadTab({
   metodosPago: MetodoPagoOption[]
   busy: boolean
 }) {
+  const [selectedMensualidad, setSelectedMensualidad] = useState<CajaMensualidadItem | null>(null)
+
   const periods = calculateMoraPeriods(mesDePago, diaLimitePago)
   const moraSugerida = periods * (Number(moraPorPeriodo) || 0)
   const moraAplicada = moraAutomatica ? moraSugerida : Number(montoMora || 0)
@@ -615,6 +889,14 @@ function MensualidadTab({
   const mensualidadesActivas = mensualidades.filter((item) => !item.anulado)
   const cobradoMensualidades = sumPaid(mensualidades)
   const anuladasMensualidad = countAnnulled(mensualidades)
+
+  const abrirDetalleMensualidad = (item: CajaMensualidadItem) => {
+    setSelectedMensualidad(item)
+  }
+
+  const cerrarDetalleMensualidad = () => {
+    setSelectedMensualidad(null)
+  }
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -715,23 +997,95 @@ function MensualidadTab({
                   <p className="text-slate-600">Mes: {item.mes || '-'} | Monto: {formatMoney(item.monto)}</p>
                   <p className="text-slate-500">{item.metodoPago || '-'} | {formatDate(item.fechaPago)} | {item.estado || '-'}</p>
                 </div>
-                {!item.anulado ? (
+                <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => onAnnul(item.mensualidadId)}
-                    className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    onClick={() => abrirDetalleMensualidad(item)}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
                   >
-                    Anular
+                    Ver
                   </button>
-                ) : (
-                  <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
-                )}
+                  {!item.anulado ? (
+                    <button
+                      type="button"
+                      onClick={() => onAnnul(item.mensualidadId)}
+                      className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                    >
+                      Anular
+                    </button>
+                  ) : (
+                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
+                  )}
+                </div>
               </div>
             </article>
           ))}
           {mensualidadesFiltradas.length === 0 ? <EmptyState message="No hay mensualidades con los filtros seleccionados." /> : null}
         </div>
       </section>
+
+      {selectedMensualidad ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-lg font-semibold text-slate-900">Detalle de mensualidad</h4>
+                <p className="text-sm text-slate-600">{selectedMensualidad.estudiante || 'Sin nombre'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={cerrarDetalleMensualidad}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Mes</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad.mes || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Monto</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedMensualidad.monto)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Método de pago</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad.metodoPago || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Fecha de pago</p>
+                <p className="font-semibold text-slate-900">{formatDate(selectedMensualidad.fechaPago)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
+                <p className="text-slate-500">Estado</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad.estado || '-'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
+                <p className="text-slate-500">Detalle</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad.detalle || '-'}</p>
+              </div>
+              {selectedMensualidad.anulado && selectedMensualidad.motivoAnulacion ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm sm:col-span-2">
+                  <p className="text-slate-500">Motivo de anulación</p>
+                  <p className="font-semibold text-rose-800">{selectedMensualidad.motivoAnulacion}</p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cerrarDetalleMensualidad}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

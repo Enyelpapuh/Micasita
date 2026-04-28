@@ -7,6 +7,8 @@ public record CupoTallerResponse(
         Long id,
         LocalDate fecha,
         BigDecimal costo,
-        Long idParticipante
+        Long idParticipante,
+        String participanteNombre,
+        String participanteApellido
 ) {
 }

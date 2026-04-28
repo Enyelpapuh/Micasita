@@ -33,8 +33,25 @@ export type DashboardMenuItem = {
   icon: LucideIcon
   label: string
   view: DashboardView
+  category: DashboardCategoryKey
   permission?: string
 }
+
+export type DashboardCategoryKey = 'general' | 'academico' | 'administrativo' | 'finanzas' | 'sistema'
+
+type DashboardCategory = {
+  key: DashboardCategoryKey
+  label: string
+  description: string
+}
+
+export const dashboardCategories: DashboardCategory[] = [
+  { key: 'general', label: 'General', description: 'Resumen y acceso rápido' },
+  { key: 'academico', label: 'Académico', description: 'Estudiantes, talleres y asistencia' },
+  { key: 'administrativo', label: 'Administrativo', description: 'Admisión y gestión interna' },
+  { key: 'finanzas', label: 'Finanzas', description: 'Caja y control financiero' },
+  { key: 'sistema', label: 'Sistema', description: 'Seguridad y configuración' },
+]
 
 type DashboardSidebarProps = {
   isOpen: boolean
@@ -56,7 +73,16 @@ export function DashboardSidebar({
   items,
   userName,
 }: DashboardSidebarProps) {
-  const menuItems = useMemo(() => items, [items])
+  const groupedMenuItems = useMemo(
+    () =>
+      dashboardCategories
+        .map((category) => ({
+          ...category,
+          items: items.filter((item) => item.category === category.key),
+        }))
+        .filter((category) => category.items.length > 0),
+    [items],
+  )
 
   const handleNavClick = (view: DashboardView) => {
     onViewChange(view)
@@ -101,33 +127,52 @@ export function DashboardSidebar({
 
         <nav className="flex-1 overflow-y-auto px-4 py-5">
           <div className="mb-4 px-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-            Menú principal
+            Menú por categorías
           </div>
-          <div className="space-y-2">
-            {menuItems.map((item) => {
-              const Icon = item.icon
-              const isActive = currentView === item.view
 
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => handleNavClick(item.view)}
-                  className={`group flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors ${
-                    isActive
-                      ? 'bg-white text-slate-950 shadow-lg shadow-black/20'
-                      : 'text-white/80 hover:bg-white/8'
-                  }`}
-                >
-                  <span className={`rounded-xl p-2 ${isActive ? 'bg-slate-950/10' : 'bg-white/10'}`}>
-                    <Icon className="h-5 w-5" />
-                  </span>
-                  <span className={`text-sm font-medium ${isActive ? '' : defaultGradientClasses}`}>
-                    {item.label}
-                  </span>
-                </button>
-              )
-            })}
+          <div className="space-y-4">
+            {groupedMenuItems.map((category) => (
+              <section key={category.key} className="rounded-3xl border border-white/10 bg-white/5 p-3">
+                <div className="px-2 pb-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">{category.label}</p>
+                      <p className="text-xs text-white/55">{category.description}</p>
+                    </div>
+                    <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                      {category.items.length}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  {category.items.map((item) => {
+                    const Icon = item.icon
+                    const isActive = currentView === item.view
+
+                    return (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => handleNavClick(item.view)}
+                        className={`group flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
+                          isActive
+                            ? 'bg-white text-slate-950 shadow-lg shadow-black/20 ring-1 ring-white/80'
+                            : 'text-white/82 hover:-translate-y-[1px] hover:bg-white/8'
+                        }`}
+                      >
+                        <span className={`rounded-xl p-2 ${isActive ? 'bg-slate-950/10' : 'bg-white/10'}`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className={`text-sm font-medium ${isActive ? '' : defaultGradientClasses}`}>
+                          {item.label}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            ))}
           </div>
         </nav>
 
@@ -156,15 +201,15 @@ export function DashboardSidebar({
 }
 
 export const dashboardMenuConfig: DashboardMenuItem[] = [
-  { icon: LayoutDashboard, label: 'Resumen', view: 'overview', permission: 'DASHBOARD_OVERVIEW' },
-  { icon: ShieldCheck, label: 'Identidad y Acceso', view: 'identityAccess', permission: 'USUARIOS_MANAGE' },
-  { icon: Zap, label: 'Talleres', view: 'workshops', permission: 'DASHBOARD_ACADEMICO' },
-  { icon: Users, label: 'Estudiantes', view: 'students', permission: 'DASHBOARD_ACADEMICO' },
-  { icon: Users, label: 'Lista General', view: 'people', permission: 'DASHBOARD_USUARIOS' },
-  { icon: ShieldCheck, label: 'Asistencia', view: 'attendance', permission: 'DASHBOARD_ACADEMICO' },
-  { icon: BookOpen, label: 'Notas', view: 'grades', permission: 'DASHBOARD_ACADEMICO' },
-  { icon: ClipboardList, label: 'Caja', view: 'cashier', permission: 'DASHBOARD_FINANZAS' },
-  { icon: Inbox, label: 'Bandeja de Solicitudes', view: 'recepcion', permission: 'DASHBOARD_ADMISION' },
-  { icon: Mail, label: 'Mensajes', view: 'mensajes', permission: 'DASHBOARD_ADMISION' },
-  { icon: Settings, label: 'Configuración', view: 'settings', permission: 'DASHBOARD_CONFIGURACION' },
+  { icon: LayoutDashboard, label: 'Resumen', view: 'overview', category: 'general', permission: 'DASHBOARD_OVERVIEW' },
+  { icon: ShieldCheck, label: 'Identidad y Acceso', view: 'identityAccess', category: 'sistema', permission: 'USUARIOS_MANAGE' },
+  { icon: Zap, label: 'Talleres', view: 'workshops', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
+  { icon: Users, label: 'Estudiantes', view: 'students', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
+  { icon: Users, label: 'Lista General', view: 'people', category: 'general', permission: 'DASHBOARD_USUARIOS' },
+  { icon: ShieldCheck, label: 'Asistencia', view: 'attendance', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
+  { icon: BookOpen, label: 'Notas', view: 'grades', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
+  { icon: ClipboardList, label: 'Caja', view: 'cashier', category: 'finanzas', permission: 'DASHBOARD_FINANZAS' },
+  { icon: Inbox, label: 'Bandeja de Solicitudes', view: 'recepcion', category: 'administrativo', permission: 'DASHBOARD_ADMISION' },
+  { icon: Mail, label: 'Mensajes', view: 'mensajes', category: 'administrativo', permission: 'DASHBOARD_ADMISION' },
+  { icon: Settings, label: 'Configuración', view: 'settings', category: 'sistema', permission: 'DASHBOARD_CONFIGURACION' },
 ]

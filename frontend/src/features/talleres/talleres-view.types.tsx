@@ -3,6 +3,8 @@ export type CupoTaller = {
   fecha: string
   costo: number
   idParticipante?: number
+  participanteNombre?: string | null
+  participanteApellido?: string | null
 }
 
 export type Taller = {
@@ -40,7 +42,7 @@ export type SaveTallerPayload = TallerFormValues
 export type InscripcionTallerPayload = {
   nombre: string
   apellido: string
-  edad: number
+  fechaNacimiento: string
   telefono?: string
   correo?: string
   identificador?: string

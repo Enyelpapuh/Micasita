@@ -138,6 +138,7 @@ export function TalleresView() {
   const [talleres, setTalleres] = useState<Taller[]>(initialTalleres)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(initialTalleres[0]?.id ?? null)
+  const [inscritosTaller, setInscritosTaller] = useState<Taller | null>(null)
   const [editing, setEditing] = useState<EditingState>(null)
   const [form, setForm] = useState<TallerFormValues>(emptyTallerForm)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -246,12 +247,34 @@ export function TalleresView() {
     setFormErrors({})
   }
 
+  const openInscritos = (taller: Taller) => {
+    setInscritosTaller(taller)
+  }
+
   const closeEditor = () => {
     setEditing(null)
     setForm(emptyTallerForm)
     setImageFile(null)
     setImagePreviewUrl('')
     setFormErrors({})
+  }
+
+  const closeInscritos = () => {
+    setInscritosTaller(null)
+  }
+
+  const formatInscrito = (cupo: Taller['cupos'][number]) => {
+    const nombre = [cupo.participanteNombre, cupo.participanteApellido].filter(Boolean).join(' ').trim()
+
+    if (nombre) {
+      return nombre
+    }
+
+    if (cupo.idParticipante) {
+      return `Participante #${cupo.idParticipante}`
+    }
+
+    return 'Sin nombre'
   }
 
   useEffect(() => {
@@ -427,6 +450,16 @@ export function TalleresView() {
                     </span>
                   </div>
 
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openInscritos(taller)}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Ver inscritos
+                    </button>
+                  </div>
+
                   <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-600">
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
@@ -514,6 +547,14 @@ export function TalleresView() {
                     Editar
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => openInscritos(selectedTaller)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
+                >
+                  <Users className="h-4 w-4" />
+                  Ver inscritos
+                </button>
               </div>
             </>
           ) : (
@@ -765,6 +806,55 @@ export function TalleresView() {
               >
                 {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {inscritosTaller ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Inscritos</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-900">{inscritosTaller.nombre}</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  {inscritosTaller.cupos.length} inscrito(s) de {inscritosTaller.cuposMaximos} cupos
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeInscritos}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-4 max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+              {inscritosTaller.cupos.length > 0 ? (
+                inscritosTaller.cupos.map((cupo) => (
+                  <article key={cupo.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <p className="font-semibold text-slate-900">{formatInscrito(cupo)}</p>
+                    <p className="text-slate-600">Participante ID: {cupo.idParticipante ?? '-'}</p>
+                    <p className="text-slate-500">Fecha inscripción: {cupo.fecha || 'Sin fecha'}</p>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  Este taller todavía no tiene participantes inscritos.
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={closeInscritos}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cerrar
               </button>
             </div>
           </div>

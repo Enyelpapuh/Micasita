@@ -43,6 +43,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
@@ -142,14 +143,16 @@ public class TallerController {
 
         validateInscripcionRequest(request);
 
-        if (taller.getEdadMinima() != null && request.edad() < taller.getEdadMinima()) {
+        int edad = calculateAge(request.fechaNacimiento());
+
+        if (taller.getEdadMinima() != null && edad < taller.getEdadMinima()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "La edad del participante es menor al rango permitido para este taller"
             );
         }
 
-        if (taller.getEdadMaxima() != null && request.edad() > taller.getEdadMaxima()) {
+        if (taller.getEdadMaxima() != null && edad > taller.getEdadMaxima()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "La edad del participante es mayor al rango permitido para este taller"
@@ -413,7 +416,7 @@ public class TallerController {
             temporal.setNombreTmp(trimToNull(request.nombre()));
             temporal.setNombreResponsable(trimToNull(request.apellido()));
             temporal.setTelefonoDeContacto(trimToNull(request.telefono()));
-            temporal.setFechaNacimientoTmp(toBirthDate(request.edad()));
+            temporal.setFechaNacimientoTmp(request.fechaNacimiento());
             temporal.setActivo(true);
             return participanteRepository.save(temporal);
         }
@@ -424,7 +427,7 @@ public class TallerController {
                     Persona nueva = new Persona();
                     nueva.setNombre(trimToNull(request.nombre()));
                     nueva.setApellido(trimToNull(request.apellido()));
-                    nueva.setFechaNacimiento(toBirthDate(request.edad()));
+                    nueva.setFechaNacimiento(request.fechaNacimiento());
                     nueva.setTelefono(trimToNull(request.telefono()));
                     nueva.setCorreo(correo);
                     nueva.setIdentificador(identificador);
@@ -448,17 +451,14 @@ public class TallerController {
         participante.setNombreTmp(trimToNull(request.nombre()));
         participante.setNombreResponsable(trimToNull(request.apellido()));
         participante.setTelefonoDeContacto(trimToNull(request.telefono()));
-        participante.setFechaNacimientoTmp(toBirthDate(request.edad()));
+        participante.setFechaNacimientoTmp(request.fechaNacimiento());
         participante.setActivo(true);
 
         return participanteRepository.save(participante);
     }
 
-    private LocalDate toBirthDate(Integer edad) {
-        if (edad == null || edad < 0) {
-            return null;
-        }
-        return LocalDate.now().minusYears(edad);
+    private int calculateAge(LocalDate fechaNacimiento) {
+        return Period.between(fechaNacimiento, LocalDate.now()).getYears();
     }
 
     private void validateInscripcionRequest(InscripcionRequest request) {
@@ -474,8 +474,12 @@ public class TallerController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "apellido es requerido");
         }
 
-        if (request.edad() == null || request.edad() < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "edad es requerida y debe ser valida");
+        if (request.fechaNacimiento() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fechaNacimiento es requerida y debe ser valida");
+        }
+
+        if (request.fechaNacimiento().isAfter(LocalDate.now())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fechaNacimiento no puede ser futura");
         }
 
         String correo = trimToNull(request.correo());
@@ -483,11 +487,31 @@ public class TallerController {
     }
 
     private CupoTallerResponse toCupoResponse(CupoTaller cupo) {
+        String participanteNombre = null;
+        String participanteApellido = null;
+
+        if (cupo.getParticipante() != null) {
+            if (cupo.getParticipante().getPersona() != null) {
+                participanteNombre = trimToNull(cupo.getParticipante().getPersona().getNombre());
+                participanteApellido = trimToNull(cupo.getParticipante().getPersona().getApellido());
+            }
+
+            if (participanteNombre == null) {
+                participanteNombre = trimToNull(cupo.getParticipante().getNombreTmp());
+            }
+
+            if (participanteApellido == null) {
+                participanteApellido = trimToNull(cupo.getParticipante().getNombreResponsable());
+            }
+        }
+
         return new CupoTallerResponse(
                 cupo.getId(),
                 cupo.getFecha(),
                 cupo.getCosto(),
-                cupo.getParticipante() != null ? cupo.getParticipante().getId() : null
+                cupo.getParticipante() != null ? cupo.getParticipante().getId() : null,
+                participanteNombre,
+                participanteApellido
         );
     }
 

@@ -27,7 +27,8 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
                 pm.estadoPago.nombre as estado,
                 pm.metodoPago.nombre as metodoPago,
                 pm.detalle as detalle,
-                coalesce(pm.esAnulado, false) as anulado
+                coalesce(pm.esAnulado, false) as anulado,
+                pm.motivoAnulacion as motivoAnulacion
             from PagoMatricula pm
             join pm.matricula m
             join m.estudiante e
@@ -46,5 +47,6 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
         String getMetodoPago();
         String getDetalle();
         Boolean getAnulado();
+        String getMotivoAnulacion();
     }
 }

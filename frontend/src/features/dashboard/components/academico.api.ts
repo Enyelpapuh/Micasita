@@ -32,6 +32,37 @@ export type EstudianteItem = {
   apellido?: string | null
 }
 
+export type EstudianteDetailTutorItem = {
+  id: number
+  nombre?: string | null
+  apellido?: string | null
+  correo?: string | null
+  telefono?: string | null
+}
+
+export type EstudianteDetailGrupoItem = {
+  id: number
+  nombre?: string | null
+  codigoFuncion?: number | null
+  fechaInscripcion?: string | null
+  profesorId?: number | null
+  profesorNombre?: string | null
+  profesorApellido?: string | null
+}
+
+export type EstudianteDetailItem = {
+  id: number
+  personaId?: number | null
+  nombre?: string | null
+  apellido?: string | null
+  fechaNacimiento?: string | null
+  telefono?: string | null
+  correo?: string | null
+  identificador?: string | null
+  tutores: EstudianteDetailTutorItem[]
+  grupos: EstudianteDetailGrupoItem[]
+}
+
 export type ProfesorItem = {
   id: number
   nombre?: string | null
@@ -103,6 +134,13 @@ export async function createAsignatura(token: string | null, payload: { nombre: 
 
 export async function listEstudiantes(token: string | null): Promise<EstudianteItem[]> {
   const response = await adminApi.get<EstudianteItem[]>('/academico/catalogos/estudiantes', { headers: authHeaders(token) })
+  return response.data
+}
+
+export async function getEstudianteDetail(token: string | null, estudianteId: number): Promise<EstudianteDetailItem> {
+  const response = await adminApi.get<EstudianteDetailItem>(`/academico/catalogos/estudiantes/${estudianteId}/detalle`, {
+    headers: authHeaders(token),
+  })
   return response.data
 }
 

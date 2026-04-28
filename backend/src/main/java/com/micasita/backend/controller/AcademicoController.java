@@ -97,6 +97,11 @@ public class AcademicoController {
         return ResponseEntity.ok(academicoService.listEstudiantes());
     }
 
+    @GetMapping("/catalogos/estudiantes/{estudianteId}/detalle")
+    public ResponseEntity<AcademicoService.EstudianteDetailItem> getEstudianteDetalle(@PathVariable Long estudianteId) {
+        return ResponseEntity.ok(academicoService.getEstudianteDetail(estudianteId));
+    }
+
     @GetMapping("/catalogos/profesores")
     public ResponseEntity<List<AcademicoService.ProfesorSimpleItem>> listProfesores() {
         return ResponseEntity.ok(academicoService.listProfesores());

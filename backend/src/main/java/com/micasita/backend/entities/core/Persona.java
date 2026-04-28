@@ -1,6 +1,8 @@
 package com.micasita.backend.entities.core;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Id;
 import jakarta.persistence.GeneratedValue;
@@ -9,6 +11,7 @@ import jakarta.persistence.Column;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "Persona")
@@ -42,4 +45,16 @@ public class Persona {
 
     @Column(name = "Activo")
     private Boolean activo;
+
+    @PrePersist
+    @PreUpdate
+    private void ensureUniqueOptionalFields() {
+        if (correo == null || correo.isBlank()) {
+            correo = "anon." + UUID.randomUUID() + "@micasita.local";
+        }
+
+        if (identificador == null || identificador.isBlank()) {
+            identificador = UUID.randomUUID().toString();
+        }
+    }
 }

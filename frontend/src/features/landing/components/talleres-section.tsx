@@ -32,7 +32,7 @@ function formatDate(value: string) {
 type InscripcionFormValues = {
   nombre: string
   apellido: string
-  edad: number
+  fechaNacimiento: string
   telefono: string
   correo: string
   identificador: string
@@ -41,10 +41,51 @@ type InscripcionFormValues = {
 const emptyInscripcionForm: InscripcionFormValues = {
   nombre: '',
   apellido: '',
-  edad: 0,
+  fechaNacimiento: '',
   telefono: '',
   correo: '',
   identificador: '',
+}
+
+function calculateAgeFromBirthDate(value: string): number | null {
+  if (!value) {
+    return null
+  }
+
+  const [yearText, monthText, dayText] = value.split('-')
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null
+  }
+
+  const birthDate = new Date(year, month - 1, day)
+  if (
+    birthDate.getFullYear() !== year ||
+    birthDate.getMonth() !== month - 1 ||
+    birthDate.getDate() !== day
+  ) {
+    return null
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  if (birthDate > today) {
+    return null
+  }
+
+  let age = today.getFullYear() - year
+  const hasHadBirthdayThisYear =
+    today.getMonth() > month - 1 || (today.getMonth() === month - 1 && today.getDate() >= day)
+
+  if (!hasHadBirthdayThisYear) {
+    age -= 1
+  }
+
+  return age
 }
 
 export default function TalleresSection() {
@@ -144,15 +185,16 @@ export default function TalleresSection() {
       return 'Nombre y apellido son requeridos.'
     }
 
-    if (!Number.isFinite(form.edad) || form.edad < 0) {
-      return 'La edad debe ser valida.'
+    const edadCalculada = calculateAgeFromBirthDate(form.fechaNacimiento)
+    if (edadCalculada === null) {
+      return 'La fecha de nacimiento debe ser valida.'
     }
 
-    if (tallerSeleccionado && form.edad < tallerSeleccionado.edadMinima) {
+    if (tallerSeleccionado && edadCalculada < tallerSeleccionado.edadMinima) {
       return `La edad minima permitida es ${tallerSeleccionado.edadMinima} anos.`
     }
 
-    if (tallerSeleccionado && form.edad > tallerSeleccionado.edadMaxima) {
+    if (tallerSeleccionado && edadCalculada > tallerSeleccionado.edadMaxima) {
       return `La edad maxima permitida es ${tallerSeleccionado.edadMaxima} anos.`
     }
 
@@ -182,7 +224,7 @@ export default function TalleresSection() {
       const result = await inscribirEnTaller(tallerSeleccionado.id, {
         nombre: form.nombre.trim(),
         apellido: form.apellido.trim(),
-        edad: form.edad,
+        fechaNacimiento: form.fechaNacimiento,
         telefono: form.telefono.trim() || undefined,
         correo: form.correo.trim() || undefined,
         identificador: form.identificador.trim() || undefined,
@@ -379,11 +421,11 @@ export default function TalleresSection() {
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
                 />
                 <input
-                  type="number"
-                  min={0}
-                  value={form.edad}
-                  onChange={(event) => setForm((prev) => ({ ...prev, edad: Number(event.target.value) || 0 }))}
-                  placeholder="Edad"
+                  type="date"
+                  value={form.fechaNacimiento}
+                  onChange={(event) => setForm((prev) => ({ ...prev, fechaNacimiento: event.target.value }))}
+                  placeholder="Fecha de nacimiento"
+                  max={new Date().toISOString().split('T')[0]}
                   className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
                 />
                 <input

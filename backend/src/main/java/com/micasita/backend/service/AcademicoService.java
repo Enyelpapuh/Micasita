@@ -289,6 +289,69 @@ public class AcademicoService {
     }
 
     @Transactional(readOnly = true)
+    public EstudianteDetailItem getEstudianteDetail(Long estudianteId) {
+        if (estudianteId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_ESTUDIANTE_INVALIDO");
+        }
+
+        Estudiante estudiante = estudianteRepository.findById(estudianteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_ESTUDIANTE_INVALIDO"));
+
+        List<TutorResumenItem> tutores = estudianteTutorRepository.findByEstudianteIdOrderByIdAsc(estudianteId).stream()
+                .map(relacion -> {
+                    Tutor tutor = relacion.getTutor();
+                    if (tutor == null || tutor.getPersona() == null) {
+                        return null;
+                    }
+
+                    return new TutorResumenItem(
+                            tutor.getId(),
+                            tutor.getPersona().getNombre(),
+                            tutor.getPersona().getApellido(),
+                            tutor.getPersona().getCorreo(),
+                            tutor.getPersona().getTelefono());
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        List<GrupoResumenItem> grupos = estudianteGrupoRepository.findByEstudianteIdOrderByIdAsc(estudianteId).stream()
+                .map(relacion -> {
+                    Grupo grupo = relacion.getGrupo();
+                    if (grupo == null) {
+                        return null;
+                    }
+
+                    ProfesorGrupo profesorGrupo = profesorGrupoRepository.findByGrupoIdOrderByIdAsc(grupo.getId()).stream()
+                            .findFirst()
+                            .orElse(null);
+                    Profesor profesor = profesorGrupo != null ? profesorGrupo.getProfesor() : null;
+
+                    return new GrupoResumenItem(
+                            grupo.getId(),
+                            grupo.getNombre(),
+                            grupo.getCodigoFuncion(),
+                            relacion.getFechaInscripcion(),
+                            profesor != null ? profesor.getId() : null,
+                            profesor != null && profesor.getPersona() != null ? profesor.getPersona().getNombre() : null,
+                            profesor != null && profesor.getPersona() != null ? profesor.getPersona().getApellido() : null);
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        return new EstudianteDetailItem(
+                estudiante.getId(),
+                estudiante.getPersona() != null ? estudiante.getPersona().getId() : null,
+                estudiante.getPersona() != null ? estudiante.getPersona().getNombre() : null,
+                estudiante.getPersona() != null ? estudiante.getPersona().getApellido() : null,
+                estudiante.getPersona() != null ? estudiante.getPersona().getFechaNacimiento() : null,
+                estudiante.getPersona() != null ? estudiante.getPersona().getTelefono() : null,
+                estudiante.getPersona() != null ? estudiante.getPersona().getCorreo() : null,
+                estudiante.getPersona() != null ? estudiante.getPersona().getIdentificador() : null,
+                tutores,
+                grupos);
+    }
+
+    @Transactional(readOnly = true)
     public List<ProfesorSimpleItem> listProfesores() {
         return profesorRepository.findAll().stream()
                 .sorted(Comparator.comparing(Profesor::getId))
@@ -529,6 +592,31 @@ public class AcademicoService {
     public record HojaAsignaturaItem(Long id, Long asignaturaId, String asignaturaNombre, String nombre) {}
 
     public record EstudianteSimpleItem(Long id, Long personaId, String nombre, String apellido) {}
+
+    public record EstudianteDetailItem(
+            Long id,
+            Long personaId,
+            String nombre,
+            String apellido,
+            LocalDate fechaNacimiento,
+            String telefono,
+            String correo,
+            String identificador,
+            List<TutorResumenItem> tutores,
+            List<GrupoResumenItem> grupos
+    ) {}
+
+    public record TutorResumenItem(Long id, String nombre, String apellido, String correo, String telefono) {}
+
+    public record GrupoResumenItem(
+            Long id,
+            String nombre,
+            Integer codigoFuncion,
+            LocalDate fechaInscripcion,
+            Long profesorId,
+            String profesorNombre,
+            String profesorApellido
+    ) {}
 
     public record ProfesorSimpleItem(Long id, String nombre, String apellido) {}
 

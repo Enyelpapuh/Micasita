@@ -190,7 +190,8 @@ public class FinanzasCajaController {
                         clean(v.getEstado()),
                         clean(v.getMetodoPago()),
                         clean(v.getDetalle()),
-                        Boolean.TRUE.equals(v.getAnulado())
+                        Boolean.TRUE.equals(v.getAnulado()),
+                        clean(v.getMotivoAnulacion())
                 ))
                 .toList();
 
@@ -205,7 +206,8 @@ public class FinanzasCajaController {
                         clean(v.getEstado()),
                         clean(v.getMetodoPago()),
                         clean(v.getDetalle()),
-                        Boolean.TRUE.equals(v.getAnulado())
+                        Boolean.TRUE.equals(v.getAnulado()),
+                        clean(v.getMotivoAnulacion())
                 ))
                 .toList();
 
@@ -221,7 +223,8 @@ public class FinanzasCajaController {
                         v.getFechaPago(),
                         clean(v.getEstado()),
                         clean(v.getMetodoPago()),
-                        Boolean.TRUE.equals(v.getAnulado())
+                        Boolean.TRUE.equals(v.getAnulado()),
+                        clean(v.getMotivoAnulacion())
                 ))
                 .toList();
 
@@ -294,7 +297,8 @@ public class FinanzasCajaController {
             LocalDate fechaPago,
             String estado,
             String metodoPago,
-            boolean anulado
+            boolean anulado,
+            String motivoAnulacion
     ) {}
 
     public record PagoMatriculaItem(
@@ -306,7 +310,8 @@ public class FinanzasCajaController {
             String estado,
             String metodoPago,
             String detalle,
-            boolean anulado
+            boolean anulado,
+            String motivoAnulacion
     ) {}
 
     public record MensualidadItem(
@@ -318,7 +323,8 @@ public class FinanzasCajaController {
             String estado,
             String metodoPago,
             String detalle,
-            boolean anulado
+            boolean anulado,
+            String motivoAnulacion
     ) {}
 
     public record CajaDashboardResponse(

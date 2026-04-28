@@ -53,6 +53,7 @@ export type CajaPagoTallerItem = {
   estado: string
   metodoPago: string
   anulado: boolean
+  motivoAnulacion?: string | null
 }
 
 export type CajaPagoMatriculaItem = {
@@ -65,6 +66,7 @@ export type CajaPagoMatriculaItem = {
   metodoPago: string
   detalle: string
   anulado: boolean
+  motivoAnulacion?: string | null
 }
 
 export type CajaMensualidadItem = {
@@ -77,6 +79,7 @@ export type CajaMensualidadItem = {
   metodoPago: string
   detalle: string
   anulado: boolean
+  motivoAnulacion?: string | null
 }
 
 export type CajaDashboardResponse = {

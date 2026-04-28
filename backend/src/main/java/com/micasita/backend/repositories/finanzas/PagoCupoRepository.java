@@ -29,7 +29,8 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.fechaDePago as fechaPago,
                 pc.estadoPago.nombre as estado,
                 pc.metodoPago.nombre as metodoPago,
-                pc.esAnulado as anulado
+                pc.esAnulado as anulado,
+                pc.motivoAnulacion as motivoAnulacion
             from PagoCupo pc
             join pc.cupo c
             join c.participante part
@@ -49,5 +50,6 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
         String getEstado();
         String getMetodoPago();
         Boolean getAnulado();
+        String getMotivoAnulacion();
     }
 }

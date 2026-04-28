@@ -28,8 +28,9 @@ public class ProfesorGrupo {
     @ToString.Exclude
     private Grupo grupo;
 
-    @Column(name = "Cantidad_Alumnos")
+    @Column(name = "Cantidad_Alumnos", insertable = false, updatable = false)
     private Integer cantidadAlumnos;
+
 
     @Column(name = "Fecha_Inicio")
     private LocalDate fechaInicio;

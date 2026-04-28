@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Transient;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,7 +42,7 @@ public class CupoTaller extends BaseEntity {
 	@Column(name = "Fecha")
 	private LocalDate fecha;
 
-	@Column(name = "Descripcion", length = 200)
+	@Transient
 	private String descripcion;
 
 	@Column(name = "Costo", precision = 10, scale = 2)

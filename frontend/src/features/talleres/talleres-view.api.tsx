@@ -21,6 +21,8 @@ type ApiCupoTaller = {
   participante?: {
     id: number
   } | null
+  participanteNombre?: string | null
+  participanteApellido?: string | null
 }
 
 type ApiTaller = {
@@ -103,6 +105,8 @@ function toTallerModel(input: ApiTaller): Taller {
       fecha: cupo.fecha ?? '',
       costo: cupo.costo ?? 0,
       idParticipante: cupo.participante?.id,
+      participanteNombre: cupo.participanteNombre ?? null,
+      participanteApellido: cupo.participanteApellido ?? null,
     })),
   }
 }

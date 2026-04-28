@@ -2,6 +2,9 @@ package com.micasita.backend.config;
 
 import com.micasita.backend.entities.academico.Puesto;
 import com.micasita.backend.entities.academico.EstadoAsistencia;
+import com.micasita.backend.entities.academico.Profesor;
+import com.micasita.backend.entities.academico.Grupo;
+import com.micasita.backend.entities.academico.ProfesorGrupo;
 import com.micasita.backend.entities.admision.EstadoSolicitud;
 import com.micasita.backend.entities.admision.SolicitudAdmision;
 import com.micasita.backend.entities.admision.TipoDocumento;
@@ -19,6 +22,9 @@ import com.micasita.backend.entities.talleres.Taller;
 import com.micasita.backend.entities.talleres.TipoPublicoTaller;
 import com.micasita.backend.repositories.academico.EstudianteRepository;
 import com.micasita.backend.repositories.academico.PuestoRepository;
+import com.micasita.backend.repositories.academico.ProfesorRepository;
+import com.micasita.backend.repositories.academico.GrupoRepository;
+import com.micasita.backend.repositories.academico.ProfesorGrupoRepository;
 import com.micasita.backend.repositories.academico.EstadoAsistenciaRepository;
 import com.micasita.backend.repositories.admision.EstadoSolicitudRepository;
 import com.micasita.backend.repositories.admision.SolicitudAdmisionRepository;
@@ -63,7 +69,12 @@ public class DataInitializer implements CommandLineRunner {
     private final EstadoAsistenciaRepository estadoAsistenciaRepository;
     private final TallerRepository tallerRepository;
     private final TipoPublicoTallerRepository tipoPublicoTallerRepository;
+    private final ProfesorRepository profesorRepository;
+    private final GrupoRepository grupoRepository;
+    private final ProfesorGrupoRepository profesorGrupoRepository;
     private final PasswordEncoder passwordEncoder;
+    
+
 
     public DataInitializer(
             PersonaRepository personaRepository,
@@ -83,6 +94,9 @@ public class DataInitializer implements CommandLineRunner {
                 EstadoAsistenciaRepository estadoAsistenciaRepository,
                 TallerRepository tallerRepository,
                 TipoPublicoTallerRepository tipoPublicoTallerRepository,
+                ProfesorRepository profesorRepository,
+                GrupoRepository grupoRepository,
+                ProfesorGrupoRepository profesorGrupoRepository,
                 PasswordEncoder passwordEncoder
     ) {
         this.personaRepository = personaRepository;
@@ -102,6 +116,9 @@ public class DataInitializer implements CommandLineRunner {
         this.estadoAsistenciaRepository = estadoAsistenciaRepository;
         this.tallerRepository = tallerRepository;
         this.tipoPublicoTallerRepository = tipoPublicoTallerRepository;
+        this.profesorRepository = profesorRepository;
+        this.grupoRepository = grupoRepository;
+        this.profesorGrupoRepository = profesorGrupoRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -120,6 +137,9 @@ public class DataInitializer implements CommandLineRunner {
         seedPuestos();
         seedEstadosAsistencia();
         seedTiposPublicoTaller();
+        seedGrupos();
+        seedProfesores();
+        seedProfesorGrupos();
         seedDemoUsuariosConRoles();
         seedDemoEstudiantes();
         seedDemoSolicitudesPendientes();
@@ -510,6 +530,98 @@ public class DataInitializer implements CommandLineRunner {
     private void createTipoPublicoTallerIfNotExists(String name) {
         tipoPublicoTallerRepository.findByNombre(name)
                 .orElseGet(() -> tipoPublicoTallerRepository.save(TipoPublicoTaller.builder().nombre(name).build()));
+    }
+
+    private void seedGrupos() {
+        createGrupoIfNotExists("Grupo A", 101);
+        createGrupoIfNotExists("Grupo B", 102);
+    }
+
+    private void seedProfesores() {
+        // ensure puesto DOCENTE exists (seedPuestos runs earlier)
+        createProfesorIfNotExists("profe.a@micasita.local", "PROF-A-001", "Ana", "Garcia", "89990001", LocalDate.of(1985, 4, 1), "Artes");
+        createProfesorIfNotExists("profe.b@micasita.local", "PROF-B-001", "Luis", "Martinez", "89990002", LocalDate.of(1980, 9, 12), "Musica");
+    }
+
+    private void seedProfesorGrupos() {
+        // assign a single profesor to a single grupo (one class)
+        createProfesorGrupoIfNotExists("profe.a@micasita.local", "Grupo A", 15, LocalDate.now().plusDays(3));
+    }
+
+    private void createGrupoIfNotExists(String nombre, Integer codigoFuncion) {
+        boolean exists = grupoRepository.findAll().stream()
+                .anyMatch(g -> nombre.equalsIgnoreCase(g.getNombre()));
+
+        if (exists) {
+            return;
+        }
+
+        grupoRepository.save(Grupo.builder()
+                .nombre(nombre)
+                .codigoFuncion(codigoFuncion)
+                .build());
+    }
+
+    private void createProfesorIfNotExists(
+            String correo,
+            String identificador,
+            String nombre,
+            String apellido,
+            String telefono,
+            LocalDate nacimiento,
+            String carrera
+    ) {
+        Persona persona = personaRepository.findFirstByCorreoOrIdentificador(correo, identificador)
+                .orElseGet(() -> personaRepository.save(Persona.builder()
+                        .nombre(nombre)
+                        .apellido(apellido)
+                        .fechaNacimiento(nacimiento)
+                        .telefono(telefono)
+                        .correo(correo)
+                        .identificador(identificador)
+                        .activo(true)
+                        .build()));
+
+        boolean exists = profesorRepository.findAll().stream()
+                .anyMatch(p -> p.getPersona() != null && p.getPersona().getId().equals(persona.getId()));
+
+        if (exists) {
+            return;
+        }
+
+        Puesto puesto = puestoRepository.findByNombre("DOCENTE").orElse(null);
+
+        profesorRepository.save(Profesor.builder()
+                .persona(persona)
+                .puesto(puesto)
+                .carrera(carrera)
+                .build());
+    }
+
+    private void createProfesorGrupoIfNotExists(String profesorCorreo, String grupoNombre, Integer cantidadAlumnos, LocalDate fechaInicio) {
+        Persona persona = personaRepository.findByCorreo(profesorCorreo).orElse(null);
+        if (persona == null) return;
+
+        Profesor profesor = profesorRepository.findAll().stream()
+                .filter(p -> p.getPersona() != null && persona.getId().equals(p.getPersona().getId()))
+                .findFirst().orElse(null);
+        if (profesor == null) return;
+
+        Grupo grupo = grupoRepository.findAll().stream()
+                .filter(g -> grupoNombre.equalsIgnoreCase(g.getNombre()))
+                .findFirst().orElse(null);
+        if (grupo == null) return;
+
+        if (profesorGrupoRepository.existsByProfesorIdAndGrupoId(profesor.getId(), grupo.getId())) {
+            return;
+        }
+
+        profesorGrupoRepository.save(ProfesorGrupo.builder()
+                .profesor(profesor)
+                .grupo(grupo)
+                .cantidadAlumnos(cantidadAlumnos)
+                .fechaInicio(fechaInicio)
+                .build());
     }
 
     private void createEstadoMatriculaIfNotExists(String name) {
