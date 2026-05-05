@@ -279,6 +279,7 @@ public class AuthService {
             permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ADMISION");
             permissions.add("DASHBOARD_ACADEMICO");
+            permissions.add("TALLERES_VIEW");
             permissions.add("DASHBOARD_FINANZAS");
             permissions.add("DASHBOARD_USUARIOS");
             permissions.add("DASHBOARD_CONFIGURACION");
@@ -289,6 +290,7 @@ public class AuthService {
             permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ADMISION");
             permissions.add("DASHBOARD_ACADEMICO");
+            permissions.add("TALLERES_VIEW");
             permissions.add("DASHBOARD_FINANZAS");
         }
 
@@ -298,8 +300,9 @@ public class AuthService {
         }
 
         if (roles.contains("PROFESOR")) {
-            permissions.add("DASHBOARD_OVERVIEW");
+           // permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ACADEMICO");
+            permissions.add("DASHBOARD_CONFIGURACION");
         }
 
         if (roles.contains("USER")) {

@@ -49,14 +49,6 @@ export default function MatriculasCallToAction() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setModalOpen(true)}
-                className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-              >
-                <Layers className="mr-2 h-4 w-4" />
-                {hasDraft ? 'Continuar borrador' : 'Abrir modal'}
-              </button>
 
               <Link
                 to="/admisiones/solicitud"

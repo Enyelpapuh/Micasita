@@ -4,6 +4,7 @@ import com.micasita.backend.entities.academico.Estudiante;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Entity
@@ -29,6 +30,9 @@ public class Matricula {
 
     @Column(name = "Anio_lectivo", length = 20)
     private String anioLectivo;
+
+    @Column(name = "Monto_Base", precision = 10, scale = 2, nullable = false)
+    private BigDecimal montoBase;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_estado_matricula", nullable = false)

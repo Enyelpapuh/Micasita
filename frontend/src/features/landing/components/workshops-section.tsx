@@ -3,6 +3,10 @@ import { Clock, Users, ChevronLeft, ChevronRight, DollarSign } from 'lucide-reac
 import heroImage from '../../../assets/hero.png';
 
 const workshops = [
+
+function formatCordobas(value: number) {
+  return new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(Number.isFinite(value) ? value : 0);
+}
   {
     id: 1,
     title: 'Estimulación Sensorial',
@@ -141,7 +145,7 @@ export default function WorkshopsSection() {
                       <span className="text-sm font-semibold text-slate-600">Precio por mes:</span>
                       <div className="flex items-center gap-1">
                         <DollarSign className="h-4 w-4 text-teal-700" />
-                        <span className="text-lg font-bold text-teal-700">{(workshop.price / 1000).toFixed(0)}K</span>
+                        <span className="text-lg font-bold text-teal-700">{formatCordobas(workshop.price)}</span>
                       </div>
                     </div>
                     <p className="mt-1 text-xs text-slate-600">{workshop.duration}</p>

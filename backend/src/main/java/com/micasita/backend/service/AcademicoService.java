@@ -30,6 +30,7 @@ import com.micasita.backend.repositories.academico.ProfesorGrupoRepository;
 import com.micasita.backend.repositories.academico.ProfesorRepository;
 import com.micasita.backend.repositories.academico.TrabajoRepository;
 import com.micasita.backend.repositories.academico.TutorRepository;
+import com.micasita.backend.repositories.finanzas.MatriculaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +62,7 @@ public class AcademicoService {
     private final TrabajoRepository trabajoRepository;
     private final TutorRepository tutorRepository;
     private final EstudianteTutorRepository estudianteTutorRepository;
+        private final MatriculaRepository matriculaRepository;
 
     public AcademicoService(
             GrupoRepository grupoRepository,
@@ -77,7 +79,8 @@ public class AcademicoService {
             AsistenciaEstudianteRepository asistenciaEstudianteRepository,
             TrabajoRepository trabajoRepository,
             TutorRepository tutorRepository,
-            EstudianteTutorRepository estudianteTutorRepository
+            EstudianteTutorRepository estudianteTutorRepository,
+            MatriculaRepository matriculaRepository
     ) {
         this.grupoRepository = grupoRepository;
         this.asignaturaRepository = asignaturaRepository;
@@ -94,6 +97,7 @@ public class AcademicoService {
         this.trabajoRepository = trabajoRepository;
         this.tutorRepository = tutorRepository;
         this.estudianteTutorRepository = estudianteTutorRepository;
+                this.matriculaRepository = matriculaRepository;
     }
 
     @Transactional(readOnly = true)
@@ -285,6 +289,24 @@ public class AcademicoService {
                         estudiante.getPersona() != null ? estudiante.getPersona().getId() : null,
                         estudiante.getPersona() != null ? estudiante.getPersona().getNombre() : null,
                         estudiante.getPersona() != null ? estudiante.getPersona().getApellido() : null))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<EstudianteSimpleItem> listEstudiantesActivos(String anioLectivo) {
+        String year = (anioLectivo == null || anioLectivo.isBlank())
+                ? String.valueOf(LocalDate.now().getYear())
+                : anioLectivo.trim();
+
+        return matriculaRepository.findActivosByAnioLectivo(year).stream()
+                .map(item -> new EstudianteSimpleItem(
+                        item.getId(),
+                        item.getPersonaId(),
+                        item.getNombre(),
+                        item.getApellido()))
+                .sorted(Comparator.comparing(EstudianteSimpleItem::nombre, Comparator.nullsLast(String::compareToIgnoreCase))
+                        .thenComparing(EstudianteSimpleItem::apellido, Comparator.nullsLast(String::compareToIgnoreCase))
+                        .thenComparing(EstudianteSimpleItem::id))
                 .toList();
     }
 

@@ -33,6 +33,7 @@ import com.micasita.backend.repositories.admision.TipoDocumentoRepository;
 import com.micasita.backend.repositories.core.PersonaRepository;
 import com.micasita.backend.repositories.finanzas.EstadoMatriculaRepository;
 import com.micasita.backend.repositories.finanzas.MatriculaRepository;
+import com.micasita.backend.service.finanzas.ConfiguracionFinanzasService;
 import com.micasita.backend.service.validation.IdentityValidationUtils;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -76,6 +77,7 @@ public class AdmisionService {
     private final EstudianteTutorRepository estudianteTutorRepository;
     private final MatriculaRepository matriculaRepository;
     private final EstadoMatriculaRepository estadoMatriculaRepository;
+    private final ConfiguracionFinanzasService configuracionFinanzasService;
     private final PersonaRepository personaRepository;
     private final Path admisionUploadDirectory;
     private final long maxDocumentBytes;
@@ -93,6 +95,7 @@ public class AdmisionService {
             EstudianteTutorRepository estudianteTutorRepository,
             MatriculaRepository matriculaRepository,
             EstadoMatriculaRepository estadoMatriculaRepository,
+            ConfiguracionFinanzasService configuracionFinanzasService,
             PersonaRepository personaRepository,
             @Value("${app.upload.admision-dir:uploads/admision}") String admisionUploadDirectory,
             @Value("${app.upload.admision-max-bytes:5242880}") long maxDocumentBytes,
@@ -108,6 +111,7 @@ public class AdmisionService {
         this.estudianteTutorRepository = estudianteTutorRepository;
         this.matriculaRepository = matriculaRepository;
         this.estadoMatriculaRepository = estadoMatriculaRepository;
+        this.configuracionFinanzasService = configuracionFinanzasService;
         this.personaRepository = personaRepository;
         this.admisionUploadDirectory = Paths.get(admisionUploadDirectory).toAbsolutePath().normalize();
         this.maxDocumentBytes = maxDocumentBytes;
@@ -584,6 +588,7 @@ public class AdmisionService {
                 .estudiante(estudiante)
                 .fechaMatricula(LocalDate.now())
                 .anioLectivo(anioLectivo)
+            .montoBase(configuracionFinanzasService.resolveMontoMatricula(estudiante.getId(), null))
                 .estadoMatricula(estadoPendiente)
                 .build());
     }

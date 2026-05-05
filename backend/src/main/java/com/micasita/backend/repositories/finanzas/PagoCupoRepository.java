@@ -18,6 +18,14 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
             """)
     long countPendientesCaja();
 
+        @Query("""
+            select coalesce(sum(pc.monto), 0)
+            from PagoCupo pc
+            where upper(pc.estadoPago.nombre) = 'PAGADO'
+              and (pc.esAnulado is null or pc.esAnulado = false)
+            """)
+        BigDecimal sumCobradoCaja();
+
     @Query("""
             select
                 pc.id as pagoCupoId,

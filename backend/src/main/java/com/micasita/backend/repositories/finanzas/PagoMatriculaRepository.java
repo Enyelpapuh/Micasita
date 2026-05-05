@@ -17,6 +17,14 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
             """)
     long countPendientesCaja();
 
+        @Query("""
+            select coalesce(sum(pm.monto), 0)
+            from PagoMatricula pm
+            where upper(pm.estadoPago.nombre) = 'PAGADO'
+              and (pm.esAnulado is null or pm.esAnulado = false)
+            """)
+        BigDecimal sumCobradoCaja();
+
     @Query("""
             select
                 pm.id as pagoMatriculaId,

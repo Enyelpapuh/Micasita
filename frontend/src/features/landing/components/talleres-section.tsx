@@ -29,6 +29,10 @@ function formatDate(value: string) {
   })
 }
 
+function formatCordobas(value: number) {
+  return new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(Number.isFinite(value) ? value : 0)
+}
+
 type InscripcionFormValues = {
   nombre: string
   apellido: string
@@ -334,7 +338,7 @@ export default function TalleresSection() {
                       <span className="text-sm font-semibold text-slate-600">Costo del taller:</span>
                       <div className="flex items-center gap-1">
                         <DollarSign className="h-4 w-4 text-teal-700" />
-                        <span className="text-lg font-bold text-teal-700">{Number(taller.costo || 0).toFixed(2)}</span>
+                        <span className="text-lg font-bold text-teal-700">{formatCordobas(Number(taller.costo || 0))}</span>
                       </div>
                     </div>
                     <p className="mt-1 text-xs text-slate-600">ID taller: {taller.id}</p>

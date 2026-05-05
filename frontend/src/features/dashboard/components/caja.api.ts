@@ -36,8 +36,10 @@ export type CajaTallerPendienteItem = {
 
 export type CajaMatriculaPendienteItem = {
   matriculaId: number
+  estudianteId?: number | null
   estudiante: string
   anioLectivo: string
+  montoEsperado?: number | null
   fechaMatricula?: string | null
   estado: string
 }
@@ -84,6 +86,10 @@ export type CajaMensualidadItem = {
 
 export type CajaDashboardResponse = {
   metricas: CajaMetricas
+  totalCobradoTalleres: number
+  totalCobradoMatriculas: number
+  totalCobradoMensualidades: number
+  totalCobradoGeneral: number
   talleresPendientes: CajaTallerPendienteItem[]
   matriculasPendientes: CajaMatriculaPendienteItem[]
   pagosTaller: CajaPagoTallerItem[]
@@ -227,5 +233,91 @@ export async function annulPagoMensualidad(token: string | null, mensualidadId: 
   const response = await api.post<CajaOperacionResult>(`/finanzas/caja/payments/mensualidad/${mensualidadId}/annul`, body, {
     headers: authHeaders(token),
   })
+  return response.data
+}
+
+export type PendienteMensualidadResponse = {
+  mensualidadId: number
+  mes: number
+  monto?: number | null
+  estado: string
+  fechaPago?: string | null
+}
+
+export type ResumenPendientesMensualidadResponse = {
+  estudianteId: number
+  estudiante: string
+  mesesPagados: number
+  mesesPendientes: number
+  proximoMes?: number | null
+}
+
+export async function getPendientesMensualidades(token: string | null, estudianteId: number): Promise<PendienteMensualidadResponse[]> {
+  const response = await api.get<PendienteMensualidadResponse[]>(`/finanzas/caja/estudiantes/${estudianteId}/mensualidades/pendientes`, {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export type MensualidadMesesResumenResponse = {
+  mesesPagados: number[]
+  mesActual: number
+}
+
+export async function getMensualidadMesesResumen(token: string | null, estudianteId: number): Promise<MensualidadMesesResumenResponse> {
+  const response = await api.get<MensualidadMesesResumenResponse>(`/finanzas/caja/estudiantes/${estudianteId}/mensualidades/meses-resumen`, {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export async function getResumenPendientesMensualidad(token: string | null): Promise<ResumenPendientesMensualidadResponse[]> {
+  const response = await api.get<ResumenPendientesMensualidadResponse[]>('/finanzas/caja/mensualidades/pendientes/estudiantes', {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export type MatriculaPreviewResponse = {
+  monto?: number | null
+  montoBase?: number | null
+}
+
+export async function previewMatricula(token: string | null, estudianteId: number): Promise<MatriculaPreviewResponse> {
+  const response = await api.get<MatriculaPreviewResponse>(`/finanzas/caja/estudiantes/${estudianteId}/matricula/preview`, {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export type ConfiguracionFinanzasDto = {
+  id?: number | null
+  montoMatriculaBase?: number | null
+  montoMensualidadBase?: number | null
+  montoMoraFija?: number | null
+  porcentajeDescuentoFamiliar?: number | null
+  maximoDescuentoFamiliar?: number | null
+  aplicarMoraAutomatica?: boolean | null
+  diasLimiteMora?: number | null
+  activo?: boolean | null
+}
+
+export type CajaTarifasResponse = {
+  montoMatriculaBase?: number | null
+  montoMensualidadBase?: number | null
+}
+
+export async function getCajaTarifas(token: string | null): Promise<CajaTarifasResponse> {
+  const response = await api.get<CajaTarifasResponse>('/finanzas/caja/tarifas', { headers: authHeaders(token) })
+  return response.data
+}
+
+export async function getFinanzasConfig(token: string | null): Promise<ConfiguracionFinanzasDto> {
+  const response = await api.get<ConfiguracionFinanzasDto>('/finanzas/configuracion', { headers: authHeaders(token) })
+  return response.data
+}
+
+export async function updateFinanzasConfig(token: string | null, body: ConfiguracionFinanzasDto): Promise<ConfiguracionFinanzasDto> {
+  const response = await api.put<ConfiguracionFinanzasDto>('/finanzas/configuracion', body, { headers: authHeaders(token) })
   return response.data
 }

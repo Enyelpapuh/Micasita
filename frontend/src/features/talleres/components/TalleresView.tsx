@@ -79,6 +79,11 @@ function validateTallerForm(form: TallerFormValues, imageFile: File | null): Tal
   return errors
 }
 
+function formatCordobas(value?: number | null) {
+  const amount = Number(value ?? 0)
+  return new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(Number.isFinite(amount) ? amount : 0)
+}
+
 function occupancyLabel(taller: Taller) {
   const ocupados = taller.cupos.length
 
@@ -487,7 +492,7 @@ export function TalleresView() {
             <>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Detalle del taller</p>
               <h3 className="mt-2 text-xl font-semibold text-slate-900">{selectedTaller.nombre}</h3>
-              <p className="mt-1 text-sm text-slate-600">Costo: RD${selectedTaller.costo.toFixed(2)}</p>
+              <p className="mt-1 text-sm text-slate-600">Costo: {formatCordobas(selectedTaller.costo)}</p>
 
               <dl className="mt-4 space-y-2 text-sm text-slate-700">
                 <div className="flex justify-between gap-2">

@@ -25,6 +25,7 @@ export type DashboardView =
   | 'grades'
   | 'cashier'
   | 'talleres'
+  | 'finanzasConfig'
   | 'recepcion'
   | 'mensajes'
   | 'settings'
@@ -203,12 +204,13 @@ export function DashboardSidebar({
 export const dashboardMenuConfig: DashboardMenuItem[] = [
   { icon: LayoutDashboard, label: 'Resumen', view: 'overview', category: 'general', permission: 'DASHBOARD_OVERVIEW' },
   { icon: ShieldCheck, label: 'Identidad y Acceso', view: 'identityAccess', category: 'sistema', permission: 'USUARIOS_MANAGE' },
-  { icon: Zap, label: 'Talleres', view: 'workshops', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
+  { icon: Zap, label: 'Talleres', view: 'workshops', category: 'academico', permission: 'TALLERES_VIEW' },
   { icon: Users, label: 'Estudiantes', view: 'students', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
   { icon: Users, label: 'Lista General', view: 'people', category: 'general', permission: 'DASHBOARD_USUARIOS' },
   { icon: ShieldCheck, label: 'Asistencia', view: 'attendance', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
   { icon: BookOpen, label: 'Notas', view: 'grades', category: 'academico', permission: 'DASHBOARD_ACADEMICO' },
   { icon: ClipboardList, label: 'Caja', view: 'cashier', category: 'finanzas', permission: 'DASHBOARD_FINANZAS' },
+  { icon: Settings, label: 'Config. Precios', view: 'finanzasConfig', category: 'finanzas', permission: 'DASHBOARD_CONFIGURACION' },
   { icon: Inbox, label: 'Bandeja de Solicitudes', view: 'recepcion', category: 'administrativo', permission: 'DASHBOARD_ADMISION' },
   { icon: Mail, label: 'Mensajes', view: 'mensajes', category: 'administrativo', permission: 'DASHBOARD_ADMISION' },
   { icon: Settings, label: 'Configuración', view: 'settings', category: 'sistema', permission: 'DASHBOARD_CONFIGURACION' },

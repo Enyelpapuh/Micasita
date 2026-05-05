@@ -137,6 +137,14 @@ export async function listEstudiantes(token: string | null): Promise<EstudianteI
   return response.data
 }
 
+export async function listEstudiantesActivos(token: string | null, anioLectivo?: string): Promise<EstudianteItem[]> {
+  const response = await adminApi.get<EstudianteItem[]>('/academico/catalogos/estudiantes/activos', {
+    headers: authHeaders(token),
+    params: anioLectivo ? { anioLectivo } : undefined,
+  })
+  return response.data
+}
+
 export async function getEstudianteDetail(token: string | null, estudianteId: number): Promise<EstudianteDetailItem> {
   const response = await adminApi.get<EstudianteDetailItem>(`/academico/catalogos/estudiantes/${estudianteId}/detalle`, {
     headers: authHeaders(token),

@@ -66,6 +66,7 @@ public class CajaFinanzasService {
     private final EstudianteRepository estudianteRepository;
     private final MensualidadRepository mensualidadRepository;
     private final EstadoMatriculaRepository estadoMatriculaRepository;
+    private final ConfiguracionFinanzasService configuracionFinanzasService;
 
     public CajaFinanzasService(
             CajaSesionRepository cajaSesionRepository,
@@ -81,7 +82,8 @@ public class CajaFinanzasService {
             PagoMatriculaRepository pagoMatriculaRepository,
             EstudianteRepository estudianteRepository,
             MensualidadRepository mensualidadRepository,
-            EstadoMatriculaRepository estadoMatriculaRepository
+                EstadoMatriculaRepository estadoMatriculaRepository,
+                ConfiguracionFinanzasService configuracionFinanzasService
     ) {
         this.cajaSesionRepository = cajaSesionRepository;
         this.estadoCajaRepository = estadoCajaRepository;
@@ -97,6 +99,7 @@ public class CajaFinanzasService {
         this.estudianteRepository = estudianteRepository;
         this.mensualidadRepository = mensualidadRepository;
         this.estadoMatriculaRepository = estadoMatriculaRepository;
+        this.configuracionFinanzasService = configuracionFinanzasService;
     }
 
     public CajaSesion getActiveSession(String email) {
@@ -145,12 +148,17 @@ public class CajaFinanzasService {
         Matricula matricula = matriculaRepository.findById(matriculaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "MATRICULA_NOT_FOUND"));
 
+        BigDecimal montoMatricula = configuracionFinanzasService.resolveMontoMatricula(
+            matricula.getEstudiante() != null ? matricula.getEstudiante().getId() : null,
+            monto
+        );
+
         String receipt = nextReceipt("MAT");
         PagoMatricula pago = PagoMatricula.builder()
                 .matricula(matricula)
                 .usuario(requireUser(email))
                 .numeroRecibo(receipt)
-                .monto(safeMoney(monto))
+            .monto(montoMatricula)
                 .metodoPago(requireMetodoPago(metodoPagoId))
                 .estadoPago(requireEstadoPago(ESTADO_PAGADO))
                 .fechaDePago(LocalDate.now())
@@ -202,13 +210,16 @@ public class CajaFinanzasService {
         Estudiante estudiante = estudianteRepository.findById(estudianteId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ESTUDIANTE_NOT_FOUND"));
 
+        BigDecimal montoBaseFinal = configuracionFinanzasService.resolveMontoMensualidadBase(montoBase);
+        BigDecimal montoMoraFinal = configuracionFinanzasService.resolveMontoMora(mes, montoMora);
+
         String receipt = nextReceipt("MEN");
         Mensualidad mensualidad = Mensualidad.builder()
                 .estudiante(estudiante)
                 .usuario(requireUser(email))
                 .numeroRecibo(receipt)
-                .montoBase(safeMoney(montoBase))
-                .montoMora(safeMoney(montoMora))
+            .montoBase(montoBaseFinal)
+            .montoMora(montoMoraFinal)
                 .metodoPago(requireMetodoPago(metodoPagoId))
                 .estadoPago(requireEstadoPago(ESTADO_PAGADO))
                 .mesDePago(mes)

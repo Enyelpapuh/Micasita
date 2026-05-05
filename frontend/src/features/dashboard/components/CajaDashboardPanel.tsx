@@ -2,6 +2,7 @@
 import { CreditCard, LoaderCircle, ReceiptText } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../auth/AuthContext'
+import { listEstudiantesActivos, type EstudianteItem } from './academico.api'
 import {
   annulPagoMatricula,
   annulPagoMensualidad,
@@ -9,10 +10,14 @@ import {
   closeCajaSession,
   getActiveCajaSession,
   getCajaDashboard,
+  getCajaTarifas,
+  getMensualidadMesesResumen,
   getMetodosPago,
+  getResumenPendientesMensualidad,
   openCajaSession,
   payMatricula,
   payMensualidad,
+  previewMatricula,
   payTaller,
   type CajaSessionInfo,
   type CajaDashboardResponse,
@@ -22,10 +27,21 @@ import {
   type CajaPagoMatriculaItem,
   type CajaPagoTallerItem,
   type CajaTallerPendienteItem,
+  type MensualidadMesesResumenResponse,
   type MetodoPagoOption,
+  type ResumenPendientesMensualidadResponse,
+  type CajaTarifasResponse,
 } from './caja.api'
+import MensualidadPaymentPanel from './MensualidadPaymentPanel'
 
 type CajaTab = 'talleres' | 'matricula' | 'mensualidad'
+type AnnulTargetType = 'taller' | 'matricula' | 'mensualidad'
+
+type AnnulModalState = {
+  type: AnnulTargetType
+  id: number
+  label: string
+}
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -136,107 +152,76 @@ function countAnnulled(items: Array<{ anulado?: boolean }>) {
   return items.reduce((total, item) => total + (item.anulado ? 1 : 0), 0)
 }
 
-function SessionSection({
+function CompactSessionBar({
   session,
-  openSaldo,
-  openObservacion,
-  closeSaldo,
-  closeObservacion,
-  onOpenSaldoChange,
-  onOpenObservacionChange,
-  onCloseSaldoChange,
-  onCloseObservacionChange,
   onOpenSession,
   onCloseSession,
+  openSaldo,
+  setOpenSaldo,
+  openObservacion,
+  setOpenObservacion,
   busy,
 }: {
   session: CajaSessionInfo | null
-  openSaldo: string
-  openObservacion: string
-  closeSaldo: string
-  closeObservacion: string
-  onOpenSaldoChange: (value: string) => void
-  onOpenObservacionChange: (value: string) => void
-  onCloseSaldoChange: (value: string) => void
-  onCloseObservacionChange: (value: string) => void
   onOpenSession: () => void
   onCloseSession: () => void
+  openSaldo: string
+  setOpenSaldo: (v: string) => void
+  openObservacion: string
+  setOpenObservacion: (v: string) => void
   busy: boolean
 }) {
   return (
-    <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Sesión de caja</h3>
-          <p className="mt-1 text-sm text-slate-600">Apertura y cierre del turno físico de caja.</p>
+    <div className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-3 py-2">
+      {session ? (
+        <div className="flex items-center gap-4">
+          <div className="text-sm">
+            <div className="font-semibold text-slate-900">Caja: {session.codigo}</div>
+            <div className="text-xs text-slate-600">Estado: {session.estado}</div>
+          </div>
         </div>
-        {session ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-            <p className="font-semibold">Sesión activa: {session.codigo}</p>
-            <p>Estado: {session.estado}</p>
-            <p>Apertura: {formatDate(session.fechaApertura)}</p>
-          </div>
-        ) : (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            No hay caja abierta para este usuario.
-          </div>
-        )}
-      </div>
-
-      {!session ? (
-        <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
+      ) : (
+        <div className="flex items-center gap-3">
           <input
             value={openSaldo}
-            onChange={(event) => onOpenSaldoChange(event.target.value)}
+            onChange={(e) => setOpenSaldo(e.target.value)}
             type="number"
             min="0"
             step="0.01"
             placeholder="Saldo inicial"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            className="w-40 rounded-xl border border-slate-300 px-2 py-1 text-sm outline-none focus:border-teal-500"
           />
           <input
             value={openObservacion}
-            onChange={(event) => onOpenObservacionChange(event.target.value)}
-            placeholder="Observacion apertura"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            onChange={(e) => setOpenObservacion(e.target.value)}
+            placeholder="Obs. apertura"
+            className="w-64 rounded-xl border border-slate-300 px-2 py-1 text-sm outline-none focus:border-teal-500"
           />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onOpenSession}
-            className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? 'Procesando...' : 'Abrir caja'}
-          </button>
         </div>
-      ) : (
-        <div className="mt-4 grid gap-3 md:grid-cols-[180px_1fr_auto]">
-          <input
-            value={closeSaldo}
-            onChange={(event) => onCloseSaldoChange(event.target.value)}
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="Saldo cierre"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-          />
-          <input
-            value={closeObservacion}
-            onChange={(event) => onCloseObservacionChange(event.target.value)}
-            placeholder="Observacion cierre"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-          />
+      )}
+
+      <div className="ml-auto">
+        {session ? (
           <button
             type="button"
-            disabled={busy}
             onClick={onCloseSession}
-            className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={busy}
+            className="rounded-xl bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
             {busy ? 'Procesando...' : 'Cerrar caja'}
           </button>
-        </div>
-      )}
-    </section>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenSession}
+            disabled={busy}
+            className="rounded-xl bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy ? 'Procesando...' : 'Abrir caja'}
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -249,6 +234,7 @@ function TalleresTab({
   onMetodoPagoChange,
   metodosPago,
   busy,
+  search,
 }: {
   pendientes: CajaTallerPendienteItem[]
   pagos: CajaPagoTallerItem[]
@@ -258,6 +244,7 @@ function TalleresTab({
   onMetodoPagoChange: (value: string) => void
   metodosPago: MetodoPagoOption[]
   busy: boolean
+  search?: string
 }) {
   const [selectedPendiente, setSelectedPendiente] = useState<CajaTallerPendienteItem | null>(null)
   const [selectedPago, setSelectedPago] = useState<CajaPagoTallerItem | null>(null)
@@ -307,37 +294,44 @@ function TalleresTab({
           <MetodoPagoSelect value={metodoPagoId} onChange={onMetodoPagoChange} metodosPago={metodosPago} />
           <p className="text-xs text-slate-500">Selecciona el metodo cargado por el sistema antes de cobrar.</p>
         </div>
-        <div className="mt-3 space-y-2">
-          {pendientes.map((item) => (
-            <article key={item.cupoId} className="rounded-xl border border-slate-200 p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{item.taller}</p>
-                  <p className="text-slate-600">Participante: {item.participante || 'Sin nombre'}</p>
-                  <p className="text-slate-600">Monto esperado: {formatMoney(item.montoEsperado)}</p>
-                  <p className="text-slate-500">Fecha inscripción: {formatDate(item.fechaInscripcion)}</p>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => abrirModal(item)}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                  >
-                    Ver
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || !metodoPagoId}
-                    onClick={() => abrirModal(item)}
-                    className="rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cobrar
-                  </button>
-                </div>
-              </div>
-            </article>
-          ))}
-          {pendientes.length === 0 ? <EmptyState message="No hay inscripciones de talleres pendientes de pago." /> : null}
+        <div className="mt-3">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500">
+                  <th className="px-2 py-2">Estudiante</th>
+                  <th className="px-2 py-2">Concepto</th>
+                  <th className="px-2 py-2">Monto</th>
+                  <th className="px-2 py-2 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendientes
+                  .filter((item) => {
+                    const term = (search || '').trim().toLocaleLowerCase('es-NI')
+                    if (!term) return true
+                    return (
+                      (item.participante || '').toLocaleLowerCase('es-NI').includes(term) ||
+                      (item.taller || '').toLocaleLowerCase('es-NI').includes(term)
+                    )
+                  })
+                  .map((item) => (
+                    <tr key={item.cupoId} className="border-b border-slate-100">
+                      <td className="px-2 py-3">{item.participante || 'Sin nombre'}</td>
+                      <td className="px-2 py-3">{item.taller}</td>
+                      <td className="px-2 py-3">{formatMoney(item.montoEsperado)}</td>
+                      <td className="px-2 py-3 text-right">
+                        <div className="inline-flex gap-2">
+                          <button type="button" onClick={() => abrirModal(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Ver</button>
+                          <button type="button" disabled={busy || !metodoPagoId} onClick={() => abrirModal(item)} className="rounded-xl bg-teal-600 px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">Cobrar</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            {pendientes.length === 0 ? <div className="mt-3"><EmptyState message="No hay inscripciones de talleres pendientes de pago." /></div> : null}
+          </div>
         </div>
       </section>
 
@@ -529,6 +523,9 @@ function MatriculaTab({
   onAnnul,
   metodosPago,
   busy,
+  externalBusqueda,
+  onPreviewMatricula,
+  montoBaseSugerido,
 }: {
   pendientes: CajaMatriculaPendienteItem[]
   pagos: CajaPagoMatriculaItem[]
@@ -536,6 +533,9 @@ function MatriculaTab({
   onAnnul: (pagoMatriculaId: number) => void
   metodosPago: MetodoPagoOption[]
   busy: boolean
+  externalBusqueda?: string
+  onPreviewMatricula?: (estudianteId: number) => Promise<import('./caja.api').MatriculaPreviewResponse | null>
+  montoBaseSugerido?: number | null
 }) {
   const [busqueda, setBusqueda] = useState('')
   const [selectedMatricula, setSelectedMatricula] = useState<CajaMatriculaPendienteItem | null>(null)
@@ -554,12 +554,12 @@ function MatriculaTab({
   }, [metodosPago])
 
   const pendientesFiltradas = useMemo(() => {
-    const term = busqueda.trim().toLocaleLowerCase('es-NI')
+    const term = (externalBusqueda ?? busqueda).trim().toLocaleLowerCase('es-NI')
     if (!term) {
       return pendientes
     }
-    return pendientes.filter((item) => item.estudiante?.toLocaleLowerCase('es-NI').includes(term))
-  }, [busqueda, pendientes])
+    return pendientes.filter((item) => (item.estudiante || '').toLocaleLowerCase('es-NI').includes(term))
+  }, [busqueda, pendientes, externalBusqueda])
 
   const montoCobroNumber = Number(montoCobro) || 0
   const montoRecibidoNumber = Number(montoRecibido) || 0
@@ -569,9 +569,25 @@ function MatriculaTab({
   const abrirModal = (item: CajaMatriculaPendienteItem) => {
     setSelectedMatricula(item)
     setSelectedPagoMatricula(null)
-    setMontoCobro((current) => (current.trim() ? current : '0'))
+    setMontoCobro(String(Number(item.montoEsperado ?? montoBaseSugerido ?? 0)))
     setMontoRecibido('')
     setDetalle(`Cobro matrícula ${item.anioLectivo || ''}`.trim())
+    // fetch preview monto si contamos con estudianteId
+    if ((item as any).estudianteId && typeof onPreviewMatricula === 'function') {
+      void (async () => {
+        try {
+          const resp = await onPreviewMatricula((item as any).estudianteId)
+          if (resp) {
+            const previewMonto = resp.montoBase ?? resp.monto
+            if (previewMonto != null) {
+              setMontoCobro(String(Number(previewMonto)))
+            }
+          }
+        } catch (e) {
+          // ignore preview errors, user can enter monto manualmente
+        }
+      })()
+    }
   }
 
   const abrirDetallePago = (item: CajaPagoMatriculaItem) => {
@@ -619,6 +635,7 @@ function MatriculaTab({
                   <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
                   <p className="text-slate-600">Año lectivo: {item.anioLectivo || '-'}</p>
                   <p className="text-slate-500">Estado: {item.estado || '-'} | {formatDate(item.fechaMatricula)}</p>
+                  <p className="text-slate-500">Monto base: {formatMoney(item.montoEsperado)}</p>
                 </div>
                 <button
                   type="button"
@@ -715,6 +732,11 @@ function MatriculaTab({
                 placeholder="Detalle"
                 className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
               />
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+              <p className="text-slate-500">Precio base de matrícula consultado desde API</p>
+              <p className="text-lg font-semibold text-slate-900">{formatMoney(selectedMatricula!.montoEsperado)}</p>
             </div>
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
@@ -818,10 +840,6 @@ function MensualidadTab({
   montoBase,
   montoMora,
   metodoPagoId,
-  detalle,
-  moraAutomatica,
-  moraPorPeriodo,
-  diaLimitePago,
   buscarEstudiante,
   filtroEstado,
   onEstudianteIdChange,
@@ -829,16 +847,18 @@ function MensualidadTab({
   onMontoBaseChange,
   onMontoMoraChange,
   onMetodoPagoChange,
-  onDetalleChange,
   onMoraAutomaticaChange,
-  onMoraPorPeriodoChange,
-  onDiaLimitePagoChange,
   onBuscarEstudianteChange,
   onFiltroEstadoChange,
   onPay,
   onAnnul,
   metodosPago,
-  busy,
+  pendientesMensualidadesList,
+  mensualidadMesesPagados,
+  mensualidadMesActual,
+  estudiantesActivos,
+  estudiantesPendientesMensualidad,
+  onBuscarPendientes,
 }: {
   mensualidades: CajaMensualidadItem[]
   mensualidadesPendientes: number
@@ -847,10 +867,6 @@ function MensualidadTab({
   montoBase: string
   montoMora: string
   metodoPagoId: string
-  detalle: string
-  moraAutomatica: boolean
-  moraPorPeriodo: string
-  diaLimitePago: string
   buscarEstudiante: string
   filtroEstado: 'todos' | 'activos' | 'anulados'
   onEstudianteIdChange: (value: string) => void
@@ -858,23 +874,40 @@ function MensualidadTab({
   onMontoBaseChange: (value: string) => void
   onMontoMoraChange: (value: string) => void
   onMetodoPagoChange: (value: string) => void
-  onDetalleChange: (value: string) => void
   onMoraAutomaticaChange: (value: boolean) => void
-  onMoraPorPeriodoChange: (value: string) => void
-  onDiaLimitePagoChange: (value: string) => void
   onBuscarEstudianteChange: (value: string) => void
   onFiltroEstadoChange: (value: 'todos' | 'activos' | 'anulados') => void
   onPay: () => void
   onAnnul: (mensualidadId: number) => void
   metodosPago: MetodoPagoOption[]
-  busy: boolean
+  pendientesMensualidadesList?: Array<import('./caja.api').PendienteMensualidadResponse>
+  mensualidadMesesPagados?: number[]
+  mensualidadMesActual?: number
+  estudiantesActivos?: EstudianteItem[]
+  estudiantesPendientesMensualidad?: ResumenPendientesMensualidadResponse[]
+  onBuscarPendientes?: (estudianteId: string) => void
 }) {
   const [selectedMensualidad, setSelectedMensualidad] = useState<CajaMensualidadItem | null>(null)
+  const [showMensualidadPanel, setShowMensualidadPanel] = useState(false)
+  const [selectedEstudianteNombre, setSelectedEstudianteNombre] = useState('')
+  const [selectedMesesPendientes, setSelectedMesesPendientes] = useState(0)
 
-  const periods = calculateMoraPeriods(mesDePago, diaLimitePago)
-  const moraSugerida = periods * (Number(moraPorPeriodo) || 0)
-  const moraAplicada = moraAutomatica ? moraSugerida : Number(montoMora || 0)
-  const totalEstimado = (Number(montoBase) || 0) + moraAplicada
+  const pendientesPorEstudiante = useMemo(() => {
+    const map = new Map<number, ResumenPendientesMensualidadResponse>()
+    for (const item of estudiantesPendientesMensualidad ?? []) {
+      map.set(item.estudianteId, item)
+    }
+    return map
+  }, [estudiantesPendientesMensualidad])
+
+  const estudiantesFiltrados = (estudiantesActivos ?? []).filter((item) => {
+    const term = buscarEstudiante.trim().toLocaleLowerCase('es-NI')
+    if (!term) {
+      return true
+    }
+    const nombreCompleto = `${item.nombre ?? ''} ${item.apellido ?? ''}`.trim().toLocaleLowerCase('es-NI')
+    return nombreCompleto.includes(term) || String(item.id).includes(term)
+  })
 
   const mensualidadesFiltradas = mensualidades.filter((item) => {
     const matchEstado =
@@ -898,6 +931,15 @@ function MensualidadTab({
     setSelectedMensualidad(null)
   }
 
+  const abrirCobroEstudiante = (estudianteIdSeleccionado: number) => {
+    onEstudianteIdChange(String(estudianteIdSeleccionado))
+    const estudiante = estudiantesActivos?.find((item) => item.id === estudianteIdSeleccionado)
+    setSelectedEstudianteNombre(`${estudiante?.nombre ?? ''} ${estudiante?.apellido ?? ''}`.trim())
+    setSelectedMesesPendientes(pendientesPorEstudiante.get(estudianteIdSeleccionado)?.mesesPendientes ?? 0)
+    void onBuscarPendientes?.(String(estudianteIdSeleccionado))
+    setShowMensualidadPanel(true)
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -906,55 +948,65 @@ function MensualidadTab({
           Define política de mora y aplica el cobro con desglose para que caja trabaje con reglas claras.
         </p>
 
-        <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-2">
-          <label className="flex items-center gap-2 text-sm text-slate-700 md:col-span-2">
-            <input
-              type="checkbox"
-              checked={moraAutomatica}
-              onChange={(event) => onMoraAutomaticaChange(event.target.checked)}
-              className="h-4 w-4 rounded border-slate-300 text-teal-600"
-            />
-            Aplicar mora automática según atraso
-          </label>
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <input
-            value={diaLimitePago}
-            onChange={(event) => onDiaLimitePagoChange(event.target.value)}
-            placeholder="Día límite de pago"
-            type="number"
-            min="1"
-            max="31"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            value={buscarEstudiante}
+            onChange={(event) => onBuscarEstudianteChange(event.target.value)}
+            placeholder="Buscar estudiante activo"
+            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
           />
-          <input
-            value={moraPorPeriodo}
-            onChange={(event) => onMoraPorPeriodoChange(event.target.value)}
-            placeholder="Mora por período"
-            type="number"
-            step="0.01"
-            min="0"
-            className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-          />
-          <div className="md:col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            {periods > 0
-              ? `Atraso estimado: ${periods} período(s). Mora sugerida: ${formatMoney(moraSugerida)}.`
-              : 'Sin atraso para el mes seleccionado según la configuración actual.'}
+
+          <div className="mt-3 grid gap-2">
+            {estudiantesFiltrados.length > 0 ? (
+              estudiantesFiltrados.map((item) => {
+                const pendiente = pendientesPorEstudiante.get(item.id)
+                return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => abrirCobroEstudiante(item.id)}
+                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40"
+                >
+                  <div>
+                    <p className="font-semibold text-slate-900">{`${item.nombre ?? ''} ${item.apellido ?? ''}`.trim() || `Estudiante ${item.id}`}</p>
+                    <p className="text-xs text-slate-600">Año activo • ID: {item.id}</p>
+                    {pendiente ? (
+                      <p className="text-xs text-slate-500">Pagados: {pendiente.mesesPagados} • Pendientes: {pendiente.mesesPendientes}</p>
+                    ) : (
+                      <p className="text-xs text-slate-500">Pagados: 0 • Pendientes: 0</p>
+                    )}
+                  </div>
+                  {pendiente ? (
+                    <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-800">
+                      {pendiente.mesesPendientes} pendiente(s)
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
+                      Al día
+                    </span>
+                  )}
+                </button>
+                )
+              })
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+                No hay estudiantes activos que coincidan con la búsqueda.
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <input value={estudianteId} onChange={(event) => onEstudianteIdChange(event.target.value)} placeholder="ID estudiante" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" />
-          <input value={mesDePago} onChange={(event) => onMesDePagoChange(event.target.value)} placeholder="Mes de pago (1-12)" type="number" min="1" max="12" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" />
-          <input value={montoBase} onChange={(event) => onMontoBaseChange(event.target.value)} placeholder="Monto base" type="number" step="0.01" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" />
-          <input value={montoMora} onChange={(event) => onMontoMoraChange(event.target.value)} disabled={moraAutomatica} placeholder={moraAutomatica ? 'Mora automática' : 'Monto mora'} type="number" step="0.01" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100" />
-          <MetodoPagoSelect value={metodoPagoId} onChange={onMetodoPagoChange} metodosPago={metodosPago} />
-          <input value={detalle} onChange={(event) => onDetalleChange(event.target.value)} placeholder="Detalle" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" />
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 lg:col-span-3">
-            Base: <span className="font-semibold">{formatMoney(Number(montoBase) || 0)}</span> | Mora aplicada:{' '}
-            <span className="font-semibold">{formatMoney(moraAplicada)}</span> | Total a cobrar:{' '}
-            <span className="font-semibold text-teal-700">{formatMoney(totalEstimado)}</span>
+        {/** lista de meses adeudados retornada por el backend */}
+        {typeof (pendientesMensualidadesList ?? []) !== 'undefined' && (pendientesMensualidadesList ?? []).length > 0 ? (
+          <div className="mt-3">
+            <p className="text-sm text-slate-600">Meses adeudados (click para seleccionar)</p>
+            <div className="mt-2 grid gap-2">
+              {(pendientesMensualidadesList ?? []).map((p) => (
+                <button key={p.mensualidadId} type="button" onClick={() => { onMesDePagoChange(String(p.mes)); onMontoBaseChange(String(p.monto ?? 0)); onMontoMoraChange('0'); }} className="text-left rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">{`Mes ${p.mes} — ${formatMoney(p.monto ?? 0)}`}</button>
+              ))}
+            </div>
           </div>
-          <button type="button" disabled={busy} onClick={onPay} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-3">{busy ? 'Procesando...' : 'Cobrar mensualidad'}</button>
-        </div>
+        ) : null}
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <SectionCard title="Pendientes" value={`${mensualidadesPendientes}`} detail="Cuotas aún por cobrar" />
@@ -1030,7 +1082,7 @@ function MensualidadTab({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900">Detalle de mensualidad</h4>
-                <p className="text-sm text-slate-600">{selectedMensualidad.estudiante || 'Sin nombre'}</p>
+                <p className="text-sm text-slate-600">{selectedMensualidad!.estudiante || 'Sin nombre'}</p>
               </div>
               <button
                 type="button"
@@ -1044,32 +1096,32 @@ function MensualidadTab({
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Mes</p>
-                <p className="font-semibold text-slate-900">{selectedMensualidad.mes || '-'}</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad!.mes || '-'}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Monto</p>
-                <p className="font-semibold text-slate-900">{formatMoney(selectedMensualidad.monto)}</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedMensualidad!.monto)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Método de pago</p>
-                <p className="font-semibold text-slate-900">{selectedMensualidad.metodoPago || '-'}</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad!.metodoPago || '-'}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Fecha de pago</p>
-                <p className="font-semibold text-slate-900">{formatDate(selectedMensualidad.fechaPago)}</p>
+                <p className="font-semibold text-slate-900">{formatDate(selectedMensualidad!.fechaPago)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
                 <p className="text-slate-500">Estado</p>
-                <p className="font-semibold text-slate-900">{selectedMensualidad.estado || '-'}</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad!.estado || '-'}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm sm:col-span-2">
                 <p className="text-slate-500">Detalle</p>
-                <p className="font-semibold text-slate-900">{selectedMensualidad.detalle || '-'}</p>
+                <p className="font-semibold text-slate-900">{selectedMensualidad!.detalle || '-'}</p>
               </div>
-              {selectedMensualidad.anulado && selectedMensualidad.motivoAnulacion ? (
+              {selectedMensualidad!.anulado && selectedMensualidad!.motivoAnulacion ? (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm sm:col-span-2">
                   <p className="text-slate-500">Motivo de anulación</p>
-                  <p className="font-semibold text-rose-800">{selectedMensualidad.motivoAnulacion}</p>
+                  <p className="font-semibold text-rose-800">{selectedMensualidad!.motivoAnulacion}</p>
                 </div>
               ) : null}
             </div>
@@ -1086,36 +1138,69 @@ function MensualidadTab({
           </div>
         </div>
       ) : null}
+      {/* Mensualidad payment panel modal */}
+      <MensualidadPaymentPanel
+        open={showMensualidadPanel}
+        onClose={() => setShowMensualidadPanel(false)}
+        estudianteId={estudianteId}
+        estudianteNombre={selectedEstudianteNombre}
+        mesesPendientes={selectedMesesPendientes}
+        pendientes={pendientesMensualidadesList ?? []}
+        mesesPagados={mensualidadMesesPagados}
+        mesActual={mensualidadMesActual}
+        onMoraAutomaticaChange={onMoraAutomaticaChange}
+        mesDePago={mesDePago}
+        montoBase={montoBase}
+        montoMora={montoMora}
+        metodoPagoId={metodoPagoId}
+        metodosPago={metodosPago}
+        onMesDePagoChange={onMesDePagoChange}
+        onMontoBaseChange={onMontoBaseChange}
+        onMontoMoraChange={onMontoMoraChange}
+        onMetodoPagoChange={onMetodoPagoChange}
+        onPay={onPay}
+      />
     </div>
   )
 }
 
 export function CajaDashboardPanel() {
   const { token } = useAuth()
+  const [searchTerm, setSearchTerm] = useState('')
   const [tab, setTab] = useState<CajaTab>('talleres')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<CajaDashboardResponse | null>(null)
   const [activeSession, setActiveSession] = useState<CajaSessionInfo | null>(null)
   const [metodosPago, setMetodosPago] = useState<MetodoPagoOption[]>([])
+  const [tarifas, setTarifas] = useState<CajaTarifasResponse | null>(null)
+  const [estudiantesActivos, setEstudiantesActivos] = useState<EstudianteItem[]>([])
+  const [mensualidadesPendientesEstudiantes, setMensualidadesPendientesEstudiantes] = useState<ResumenPendientesMensualidadResponse[]>([])
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [openSaldo, setOpenSaldo] = useState('0')
   const [openObservacion, setOpenObservacion] = useState('')
-  const [closeSaldo, setCloseSaldo] = useState('0')
-  const [closeObservacion, setCloseObservacion] = useState('')
+  const closeSaldoState = useState('0')
+  const closeSaldo = closeSaldoState[0]
+  const closeObservacionState = useState('')
+  const closeObservacion = closeObservacionState[0]
   const [mensualidadEstudianteId, setMensualidadEstudianteId] = useState('')
+  const [pendientesMensualidadesList, setPendientesMensualidadesList] = useState<Array<import('./caja.api').PendienteMensualidadResponse>>([])
+  const [mensualidadMesesResumen, setMensualidadMesesResumen] = useState<MensualidadMesesResumenResponse>({ mesesPagados: [], mesActual: new Date().getMonth() + 1 })
   const [mensualidadMes, setMensualidadMes] = useState(String(new Date().getMonth() + 1))
   const [mensualidadMontoBase, setMensualidadMontoBase] = useState('')
   const [mensualidadMontoMora, setMensualidadMontoMora] = useState('0')
   const [mensualidadMoraAutomatica, setMensualidadMoraAutomatica] = useState(true)
-  const [mensualidadMoraPorPeriodo, setMensualidadMoraPorPeriodo] = useState('50')
-  const [mensualidadDiaLimitePago, setMensualidadDiaLimitePago] = useState('10')
+  const [mensualidadMoraPorPeriodo] = useState('50')
+  const [mensualidadDiaLimitePago] = useState('10')
   const [mensualidadBuscarEstudiante, setMensualidadBuscarEstudiante] = useState('')
   const [mensualidadFiltroEstado, setMensualidadFiltroEstado] = useState<'todos' | 'activos' | 'anulados'>('todos')
   const [mensualidadMetodoPagoId, setMensualidadMetodoPagoId] = useState('1')
-  const [mensualidadDetalle, setMensualidadDetalle] = useState('')
   const [tallerMetodoPagoId, setTallerMetodoPagoId] = useState('1')
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null)
+  const [annulModal, setAnnulModal] = useState<AnnulModalState | null>(null)
+  const [annulReason, setAnnulReason] = useState('')
+  const [showPreCloseModal, setShowPreCloseModal] = useState(false)
+  const [preCloseCounted, setPreCloseCounted] = useState('')
 
   const moraPeriodosSugeridos = useMemo(
     () => calculateMoraPeriods(mensualidadMes, mensualidadDiaLimitePago),
@@ -1132,7 +1217,7 @@ export function CajaDashboardPanel() {
   const totalCobradoTalleres = sumPaid(data?.pagosTaller ?? [])
   const totalCobradoMatriculas = sumPaid(data?.pagosMatricula ?? [])
   const totalCobradoMensualidades = sumPaid(data?.mensualidades ?? [])
-  const totalCobradoGeneral = totalCobradoTalleres + totalCobradoMatriculas + totalCobradoMensualidades
+  // totalCobradoGeneral available if needed: totalCobradoTalleres + totalCobradoMatriculas + totalCobradoMensualidades
   const anulacionesTotales =
     countAnnulled(data?.pagosTaller ?? []) +
     countAnnulled(data?.pagosMatricula ?? []) +
@@ -1143,14 +1228,22 @@ export function CajaDashboardPanel() {
     setError(null)
 
     try {
-      const [dashboard, session, methods] = await Promise.all([
+      const currentYear = String(new Date().getFullYear())
+      const [dashboard, session, methods, activeStudents, tarifasResponse] = await Promise.all([
         getCajaDashboard(token, 25),
         getActiveCajaSession(token),
         getMetodosPago(token),
+        listEstudiantesActivos(token, currentYear),
+        getCajaTarifas(token),
       ])
+      const pendingStudents = await getResumenPendientesMensualidad(token)
       setData(dashboard)
       setActiveSession(session)
       setMetodosPago(methods)
+      setTarifas(tarifasResponse)
+      setEstudiantesActivos(activeStudents)
+      setMensualidadesPendientesEstudiantes(pendingStudents)
+      setMensualidadMontoBase(String(Number(tarifasResponse.montoMensualidadBase ?? 0)))
       const firstMethodId = methods[0] ? String(methods[0].id) : ''
       setTallerMetodoPagoId((current) => (methods.some((method) => String(method.id) === current) ? current : firstMethodId))
       setMensualidadMetodoPagoId((current) => (methods.some((method) => String(method.id) === current) ? current : firstMethodId))
@@ -1192,7 +1285,14 @@ export function CajaDashboardPanel() {
   }
 
   const handleCloseSession = async () => {
-    await runAction('close-session', () => closeCajaSession(token, { saldoCierre: readNumber(closeSaldo), observacion: closeObservacion }))
+    // open pre-close modal first
+    setPreCloseCounted(closeSaldo)
+    setShowPreCloseModal(true)
+  }
+
+  const confirmCloseSession = async () => {
+    setShowPreCloseModal(false)
+    await runAction('close-session', () => closeCajaSession(token, { saldoCierre: readNumber(preCloseCounted), observacion: closeObservacion }))
   }
 
   const handlePayTaller = async (cupoId: number, monto: number) => {
@@ -1220,33 +1320,82 @@ export function CajaDashboardPanel() {
       montoBase: Number(mensualidadMontoBase),
       montoMora: Number.isFinite(moraAplicadaFormulario) ? moraAplicadaFormulario : 0,
       metodoPagoId: Number(mensualidadMetodoPagoId),
-      detalle: mensualidadDetalle,
+      detalle: 'Cobro desde caja',
     }))
   }
 
-  const handleAnnulTaller = async (pagoCupoId: number, numeroRecibo: string) => {
-    const motivo = window.prompt(`Motivo para anular el recibo ${numeroRecibo || pagoCupoId}`)
-    if (!motivo?.trim()) {
-      return
-    }
+  const handleAnnulTaller = async (pagoCupoId: number, motivo: string) => {
     await runAction(`annul-taller-${pagoCupoId}`, () => annulPagoTaller(token, pagoCupoId, { motivo }))
   }
 
-  const handleAnnulMatricula = async (pagoMatriculaId: number) => {
-    const motivo = window.prompt(`Motivo para anular la matrícula ${pagoMatriculaId}`)
-    if (!motivo?.trim()) {
-      return
-    }
+  const handleAnnulMatricula = async (pagoMatriculaId: number, motivo: string) => {
     await runAction(`annul-matricula-${pagoMatriculaId}`, () => annulPagoMatricula(token, pagoMatriculaId, { motivo }))
   }
 
-  const handleAnnulMensualidad = async (mensualidadId: number) => {
-    const motivo = window.prompt(`Motivo para anular la mensualidad ${mensualidadId}`)
-    if (!motivo?.trim()) {
-      return
-    }
+  const handleAnnulMensualidad = async (mensualidadId: number, motivo: string) => {
     await runAction(`annul-mensualidad-${mensualidadId}`, () => annulPagoMensualidad(token, mensualidadId, { motivo }))
   }
+
+  const requestAnnulTaller = (pagoCupoId: number, numeroRecibo: string) => {
+    setAnnulReason('')
+    setAnnulModal({
+      type: 'taller',
+      id: pagoCupoId,
+      label: numeroRecibo || String(pagoCupoId),
+    })
+  }
+
+  const requestAnnulMatricula = (pagoMatriculaId: number) => {
+    setAnnulReason('')
+    setAnnulModal({
+      type: 'matricula',
+      id: pagoMatriculaId,
+      label: String(pagoMatriculaId),
+    })
+  }
+
+  const requestAnnulMensualidad = (mensualidadId: number) => {
+    setAnnulReason('')
+    setAnnulModal({
+      type: 'mensualidad',
+      id: mensualidadId,
+      label: String(mensualidadId),
+    })
+  }
+
+  const closeAnnulModal = () => {
+    setAnnulModal(null)
+    setAnnulReason('')
+  }
+
+  const confirmAnnul = async () => {
+    if (!annulModal) {
+      return
+    }
+
+    const motivo = annulReason.trim()
+    if (!motivo) {
+      toast.error('Debes ingresar un motivo de anulación.')
+      return
+    }
+
+    if (annulModal.type === 'taller') {
+      await handleAnnulTaller(annulModal.id, motivo)
+      closeAnnulModal()
+      return
+    }
+
+    if (annulModal.type === 'matricula') {
+      await handleAnnulMatricula(annulModal.id, motivo)
+      closeAnnulModal()
+      return
+    }
+
+    await handleAnnulMensualidad(annulModal.id, motivo)
+    closeAnnulModal()
+  }
+
+  const isAnnulBusy = annulModal ? busyAction === `annul-${annulModal.type}-${annulModal.id}` : false
 
   const metricas = data?.metricas
 
@@ -1270,18 +1419,14 @@ export function CajaDashboardPanel() {
         </p>
       </div>
 
-      <SessionSection
+      <CompactSessionBar
         session={activeSession}
-        openSaldo={openSaldo}
-        openObservacion={openObservacion}
-        closeSaldo={closeSaldo}
-        closeObservacion={closeObservacion}
-        onOpenSaldoChange={setOpenSaldo}
-        onOpenObservacionChange={setOpenObservacion}
-        onCloseSaldoChange={setCloseSaldo}
-        onCloseObservacionChange={setCloseObservacion}
         onOpenSession={handleOpenSession}
         onCloseSession={handleCloseSession}
+        openSaldo={openSaldo}
+        setOpenSaldo={setOpenSaldo}
+        openObservacion={openObservacion}
+        setOpenObservacion={setOpenObservacion}
         busy={busyAction === 'open-session' || busyAction === 'close-session'}
       />
 
@@ -1290,7 +1435,6 @@ export function CajaDashboardPanel() {
           {paymentMessage}
         </div>
       ) : null}
-
       <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
         <SectionCard title="Talleres pendiente" value={`${metricas?.talleresPendientesPago ?? 0}`} detail="Inscripciones en espera de pago" />
         <SectionCard title="Matrículas pendiente" value={`${metricas?.matriculasPendientes ?? 0}`} detail="Estudiantes pendientes en caja" />
@@ -1300,25 +1444,34 @@ export function CajaDashboardPanel() {
         <SectionCard title="Pagos matr./mens." value={`${(metricas?.registrosMatricula ?? 0) + (metricas?.registrosMensualidad ?? 0)}`} detail="Actividad reciente de caja" />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SectionCard title="Recaudado talleres" value={formatMoney(totalCobradoTalleres)} detail="Solo pagos no anulados" />
-        <SectionCard title="Recaudado matrícula" value={formatMoney(totalCobradoMatriculas)} detail="Solo pagos no anulados" />
-        <SectionCard title="Recaudado mensualidad" value={formatMoney(totalCobradoMensualidades)} detail="Incluye mora aplicada" />
-        <SectionCard title="Total operativo" value={formatMoney(totalCobradoGeneral)} detail={`Anulaciones registradas: ${anulacionesTotales}`} />
+      {/* Search central */}
+      <div className="mt-4">
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Buscar por estudiante, tutor o número de recibo"
+          className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-teal-500"
+        />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2">
-        {tabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-          >
-            <Icon className="mr-2 h-4 w-4" />
-            {label}
-          </button>
-        ))}
+        {tabs.map(({ id, label, icon: Icon }) => {
+          const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+            >
+              <Icon className="mr-2 h-4 w-4" />
+              {label}
+              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
+                {count}
+              </span>
+            </button>
+          )
+        })}
       </div>
 
       <div className="mt-4">
@@ -1335,63 +1488,241 @@ export function CajaDashboardPanel() {
 
         {!isLoading && !error && data ? (
           <>
-            {tab === 'talleres' ? (
-              <TalleresTab
-                pendientes={data.talleresPendientes}
-                pagos={data.pagosTaller}
-                onPay={handlePayTaller}
-                onAnnul={handleAnnulTaller}
-                metodoPagoId={tallerMetodoPagoId}
-                onMetodoPagoChange={setTallerMetodoPagoId}
-                metodosPago={metodosPago}
-                busy={busyAction?.startsWith('pay-taller-') || busyAction?.startsWith('annul-taller-') || false}
-              />
-            ) : null}
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                {tab === 'talleres' ? (
+                  <TalleresTab
+                    pendientes={data.talleresPendientes}
+                    pagos={data.pagosTaller}
+                    onPay={handlePayTaller}
+                    onAnnul={requestAnnulTaller}
+                    metodoPagoId={tallerMetodoPagoId}
+                    onMetodoPagoChange={setTallerMetodoPagoId}
+                    metodosPago={metodosPago}
+                    busy={busyAction?.startsWith('pay-taller-') || busyAction?.startsWith('annul-taller-') || false}
+                    search={searchTerm}
+                  />
+                ) : null}
 
-            {tab === 'matricula' ? (
-              <MatriculaTab
-                pendientes={data.matriculasPendientes}
-                pagos={data.pagosMatricula}
-                onPay={handlePayMatricula}
-                onAnnul={handleAnnulMatricula}
-                metodosPago={metodosPago}
-                busy={busyAction === 'pay-matricula' || (busyAction?.startsWith('annul-matricula-') ?? false)}
-              />
-            ) : null}
+                {tab === 'matricula' ? (
+                  <MatriculaTab
+                    pendientes={data.matriculasPendientes}
+                    pagos={data.pagosMatricula}
+                    onPay={handlePayMatricula}
+                    onAnnul={requestAnnulMatricula}
+                    metodosPago={metodosPago}
+                    busy={busyAction === 'pay-matricula' || (busyAction?.startsWith('annul-matricula-') ?? false)}
+                    externalBusqueda={searchTerm}
+                    onPreviewMatricula={async (estudianteId: number) => {
+                      try {
+                        const resp = await previewMatricula(token ?? null, estudianteId)
+                        return resp
+                      } catch (e) {
+                        return null
+                      }
+                    }}
+                    montoBaseSugerido={tarifas?.montoMatriculaBase ?? null}
+                  />
+                ) : null}
 
-            {tab === 'mensualidad' ? (
-              <MensualidadTab
-                mensualidades={data.mensualidades}
-                mensualidadesPendientes={metricas?.mensualidadesPendientes ?? 0}
-                estudianteId={mensualidadEstudianteId}
-                mesDePago={mensualidadMes}
-                montoBase={mensualidadMontoBase}
-                montoMora={mensualidadMontoMora}
-                metodoPagoId={mensualidadMetodoPagoId}
-                detalle={mensualidadDetalle}
-                moraAutomatica={mensualidadMoraAutomatica}
-                moraPorPeriodo={mensualidadMoraPorPeriodo}
-                diaLimitePago={mensualidadDiaLimitePago}
-                buscarEstudiante={mensualidadBuscarEstudiante}
-                filtroEstado={mensualidadFiltroEstado}
-                onEstudianteIdChange={setMensualidadEstudianteId}
-                onMesDePagoChange={setMensualidadMes}
-                onMontoBaseChange={setMensualidadMontoBase}
-                onMontoMoraChange={setMensualidadMontoMora}
-                onMetodoPagoChange={setMensualidadMetodoPagoId}
-                onDetalleChange={setMensualidadDetalle}
-                onMoraAutomaticaChange={setMensualidadMoraAutomatica}
-                onMoraPorPeriodoChange={setMensualidadMoraPorPeriodo}
-                onDiaLimitePagoChange={setMensualidadDiaLimitePago}
-                onBuscarEstudianteChange={setMensualidadBuscarEstudiante}
-                onFiltroEstadoChange={setMensualidadFiltroEstado}
-                onPay={handlePayMensualidad}
-                onAnnul={handleAnnulMensualidad}
-                metodosPago={metodosPago}
-                busy={busyAction === 'pay-mensualidad' || (busyAction?.startsWith('annul-mensualidad-') ?? false)}
-              />
-            ) : null}
+                {tab === 'mensualidad' ? (
+                  <MensualidadTab
+                    mensualidades={data.mensualidades}
+                    mensualidadesPendientes={metricas?.mensualidadesPendientes ?? 0}
+                    estudianteId={mensualidadEstudianteId}
+                    mesDePago={mensualidadMes}
+                    montoBase={mensualidadMontoBase}
+                    montoMora={mensualidadMontoMora}
+                    metodoPagoId={mensualidadMetodoPagoId}
+                    buscarEstudiante={mensualidadBuscarEstudiante}
+                    filtroEstado={mensualidadFiltroEstado}
+                    onEstudianteIdChange={setMensualidadEstudianteId}
+                    onMesDePagoChange={setMensualidadMes}
+                    onMontoBaseChange={setMensualidadMontoBase}
+                    onMontoMoraChange={setMensualidadMontoMora}
+                    onMetodoPagoChange={setMensualidadMetodoPagoId}
+                    onMoraAutomaticaChange={setMensualidadMoraAutomatica}
+                    onBuscarEstudianteChange={setMensualidadBuscarEstudiante}
+                    onFiltroEstadoChange={setMensualidadFiltroEstado}
+                    pendientesMensualidadesList={pendientesMensualidadesList}
+                    mensualidadMesesPagados={mensualidadMesesResumen.mesesPagados}
+                    mensualidadMesActual={mensualidadMesesResumen.mesActual}
+                    estudiantesActivos={estudiantesActivos}
+                    estudiantesPendientesMensualidad={mensualidadesPendientesEstudiantes}
+                    onBuscarPendientes={async (estId: string) => {
+                      if (!token || !estId) return
+                      try {
+                        const [list, resumen] = await Promise.all([
+                          (await import('./caja.api')).getPendientesMensualidades(token ?? null, Number(estId)),
+                          getMensualidadMesesResumen(token ?? null, Number(estId)),
+                        ])
+                        setPendientesMensualidadesList(list)
+                        setMensualidadMesesResumen(resumen)
+                      } catch (e) {
+                        setPendientesMensualidadesList([])
+                        setMensualidadMesesResumen({ mesesPagados: [], mesActual: new Date().getMonth() + 1 })
+                      }
+                    }}
+                    onPay={handlePayMensualidad}
+                    onAnnul={requestAnnulMensualidad}
+                    metodosPago={metodosPago}
+                  />
+                ) : null}
+              </div>
+
+              <aside className="lg:col-span-1">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Bitácora del Día</h3>
+                  <p className="mt-1 text-xs text-slate-600">Pagos realizados en esta sesión (solo turno actual).</p>
+                  <div className="mt-3 space-y-2">
+                    {([...(data.pagosTaller ?? []), ...(data.pagosMatricula ?? []), ...(data.mensualidades ?? [])] as Array<any>).map((item) => (
+                      <div
+                        key={
+                          item.pagoCupoId
+                            ? `taller-${item.pagoCupoId}`
+                            : item.pagoMatriculaId
+                            ? `matricula-${item.pagoMatriculaId}`
+                            : item.mensualidadId
+                            ? `mensualidad-${item.mensualidadId}`
+                            : `recibo-${item.numeroRecibo ?? Math.random()}`
+                        }
+                        className={`relative rounded-xl border p-3 text-sm ${item.anulado ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">{item.estudiante || item.participante || item.numeroRecibo || 'Pago'}</p>
+                            <p className="text-slate-600">{item.metodoPago || ''} • {formatMoney(item.monto)}</p>
+                            <p className="text-xs text-slate-500">{formatDate(item.fechaPago)}</p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <button type="button" className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Reimprimir</button>
+                            {!item.anulado ? (
+                              <button onClick={() => {
+                                if (item.pagoCupoId) requestAnnulTaller(item.pagoCupoId, item.numeroRecibo)
+                                else if (item.pagoMatriculaId) requestAnnulMatricula(item.pagoMatriculaId)
+                                else if (item.mensualidadId) requestAnnulMensualidad(item.mensualidadId)
+                              }} type="button" className="rounded-xl border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700">Anular</button>
+                            ) : (
+                              <span className="rounded-xl bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Anulado</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </aside>
+            </div>
           </>
+        ) : null}
+
+        {annulModal ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900">Motivo de anulación</h4>
+                  <p className="text-sm text-slate-600">
+                    {annulModal.type === 'taller'
+                      ? `Recibo: ${annulModal.label}`
+                      : annulModal.type === 'matricula'
+                        ? `Pago de matrícula: ${annulModal.label}`
+                        : `Mensualidad: ${annulModal.label}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeAnnulModal}
+                  disabled={isAnnulBusy}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="mt-4">
+                <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="annul-reason">
+                  Escribe el motivo
+                </label>
+                <textarea
+                  id="annul-reason"
+                  value={annulReason}
+                  onChange={(event) => setAnnulReason(event.target.value)}
+                  rows={4}
+                  placeholder="Ejemplo: pago registrado por error, se emitirá nuevamente"
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                />
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeAnnulModal}
+                  disabled={isAnnulBusy}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAnnul}
+                  disabled={isAnnulBusy || !annulReason.trim()}
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isAnnulBusy ? 'Procesando...' : 'Confirmar anulación'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {showPreCloseModal ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900">Pre-cierre de caja</h4>
+                  <p className="text-sm text-slate-600">Revise los totales y confirme el cierre del turno.</p>
+                </div>
+                <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Cerrar</button>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <p className="text-sm text-slate-600">Arqueo sugerido</p>
+                  <p className="mt-1 font-semibold text-slate-900">Efectivo esperado: {formatMoney(totalCobradoTalleres + totalCobradoMatriculas + totalCobradoMensualidades)}</p>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                    <p className="text-xs text-slate-500">Talleres</p>
+                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoTalleres)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                    <p className="text-xs text-slate-500">Matrícula</p>
+                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoMatriculas)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                    <p className="text-xs text-slate-500">Mensualidad</p>
+                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoMensualidades)}</p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm">
+                  <p className="text-xs text-rose-700">Anulaciones en turno</p>
+                  <p className="font-semibold text-rose-800">{anulacionesTotales}</p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad física contada</label>
+                  <input value={preCloseCounted} onChange={(e) => setPreCloseCounted(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" placeholder="Ingrese monto contado" />
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</button>
+                <button type="button" onClick={confirmCloseSession} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Confirmar cierre</button>
+              </div>
+            </div>
+          </div>
         ) : null}
       </div>
     </section>

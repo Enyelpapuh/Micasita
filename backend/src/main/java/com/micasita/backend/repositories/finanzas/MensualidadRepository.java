@@ -17,11 +17,21 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
             """)
     long countPendientesCaja();
 
+        @Query("""
+            select coalesce(sum(coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)), 0)
+            from Mensualidad m
+            where upper(m.estadoPago.nombre) = 'PAGADO'
+              and (m.esAnulado is null or m.esAnulado = false)
+            """)
+        BigDecimal sumCobradoCaja();
+
     @Query("""
             select
                 m.id as mensualidadId,
                 concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
                 m.mesDePago as mes,
+                coalesce(m.montoBase, 0) as montoBase,
+                coalesce(m.montoMora, 0) as montoMora,
                 (coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)) as monto,
                 m.fechaDePago as fechaPago,
                 m.estadoPago.nombre as estado,
@@ -40,6 +50,8 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         Long getMensualidadId();
         String getEstudiante();
         Integer getMes();
+        BigDecimal getMontoBase();
+        BigDecimal getMontoMora();
         BigDecimal getMonto();
         LocalDate getFechaPago();
         String getEstado();
@@ -47,5 +59,74 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         String getDetalle();
         Boolean getAnulado();
         String getMotivoAnulacion();
+    }
+
+    @Query("""
+            select
+                m.id as mensualidadId,
+                m.mesDePago as mes,
+                coalesce(m.montoBase, 0) as montoBase,
+                coalesce(m.montoMora, 0) as montoMora,
+                (coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)) as monto,
+                m.estadoPago.nombre as estado,
+                m.fechaDePago as fechaPago
+            from Mensualidad m
+            where m.estudiante.id = :estudianteId
+              and upper(m.estadoPago.nombre) <> 'PAGADO'
+            order by m.mesDePago asc
+            """)
+    List<PendienteMensualidadView> findPendientesByEstudianteId(Long estudianteId);
+
+    @Query("""
+            select
+                e.id as estudianteId,
+                concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
+                count(mp.id) as mesesPagados,
+                case
+                    when :mesLimite - count(mp.id) < 0 then 0
+                    else :mesLimite - count(mp.id)
+                end as mesesPendientes,
+                min(mp.mesDePago) as proximoMes
+            from Matricula mat
+            join mat.estudiante e
+            join e.persona p
+            left join Mensualidad mp on mp.estudiante.id = e.id
+                and coalesce(mp.esAnulado, false) = false
+                and upper(mp.estadoPago.nombre) = 'PAGADO'
+            where upper(mat.estadoMatricula.nombreEstado) = 'OFICIAL'
+              and mat.anioLectivo = :anioLectivo
+            group by e.id, p.nombre, p.apellido
+            having (:mesLimite - count(mp.id)) > 0
+            order by p.nombre, p.apellido, e.id
+            """)
+    List<ResumenPendientesMensualidadView> findResumenPendientesCaja(String anioLectivo, Integer mesLimite);
+
+            @Query("""
+                select distinct m.mesDePago
+                from Mensualidad m
+                where m.estudiante.id = :estudianteId
+                  and upper(m.estadoPago.nombre) = 'PAGADO'
+                  and coalesce(m.esAnulado, false) = false
+                  and m.mesDePago between 1 and :mesLimite
+                order by m.mesDePago
+                """)
+            List<Integer> findMesesPagadosHasta(Long estudianteId, Integer mesLimite);
+
+    interface PendienteMensualidadView {
+        Long getMensualidadId();
+        Integer getMes();
+        BigDecimal getMontoBase();
+        BigDecimal getMontoMora();
+        BigDecimal getMonto();
+        String getEstado();
+        LocalDate getFechaPago();
+    }
+
+    interface ResumenPendientesMensualidadView {
+        Long getEstudianteId();
+        String getEstudiante();
+        Long getMesesPagados();
+        Long getMesesPendientes();
+        Integer getProximoMes();
     }
 }

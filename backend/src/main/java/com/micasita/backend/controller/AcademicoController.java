@@ -20,7 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/academico")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
-@PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE')")
+@PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR')")
 public class AcademicoController {
 
     private final AcademicoService academicoService;
@@ -95,6 +95,11 @@ public class AcademicoController {
     @GetMapping("/catalogos/estudiantes")
     public ResponseEntity<List<AcademicoService.EstudianteSimpleItem>> listEstudiantes() {
         return ResponseEntity.ok(academicoService.listEstudiantes());
+    }
+
+    @GetMapping("/catalogos/estudiantes/activos")
+    public ResponseEntity<List<AcademicoService.EstudianteSimpleItem>> listEstudiantesActivos(@RequestParam(required = false) String anioLectivo) {
+        return ResponseEntity.ok(academicoService.listEstudiantesActivos(anioLectivo));
     }
 
     @GetMapping("/catalogos/estudiantes/{estudianteId}/detalle")

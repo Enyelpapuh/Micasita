@@ -8,10 +8,10 @@ import { getLandingAdmisionConfig } from '../../features/admision/admision.api'
 
 const baseNavLinks = [
   { label: 'Inicio', to: '/' },
-  { label: 'Servicios', to: '/#servicios' },
-  { label: 'Nosotros', to: '/#nosotros' },
+  //{ label: 'Servicios', to: '/#servicios' },
+  //{ label: 'Nosotros', to: '/#nosotros' },
   { label: 'Conoce a nuestro equipo', to: '/equipo' },
-  { label: 'Contacto', to: '/#contacto' },
+  //{ label: 'Contacto', to: '/#contacto' },
 ]
 
 export function Navbar() {
