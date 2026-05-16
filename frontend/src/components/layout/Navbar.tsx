@@ -6,12 +6,51 @@ import logo from '../../assets/MiCASITALOGO-cropped.svg'
 import { useAuth } from '../../features/auth/AuthContext'
 import { getLandingAdmisionConfig } from '../../features/admision/admision.api'
 
+function scrollToMatchingText(text: string) {
+  const normalize = (s?: string) =>
+    (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[?¿¡!.,;:\/\-]/g, '')
+      .trim()
+
+  const target = normalize(text)
+
+  if (target === 'inicio') {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    return
+  }
+
+  const headingSelectors = 'h1,h2,h3,h4,h5,section'
+  const headings = Array.from(document.querySelectorAll<HTMLElement>(headingSelectors))
+  const match = headings.find(el => normalize(el.textContent).includes(target))
+
+  const doFocusAndScroll = (el: HTMLElement) => {
+    el.setAttribute('tabindex', '-1')
+    el.focus({ preventScroll: true })
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  if (match) {
+    doFocusAndScroll(match)
+    return
+  }
+
+  const all = Array.from(document.querySelectorAll<HTMLElement>('body *'))
+  const fallback = all.find(el => normalize(el.textContent).includes(target))
+  if (fallback) {
+    doFocusAndScroll(fallback)
+  }
+}
+
 const baseNavLinks = [
   { label: 'Inicio', to: '/' },
-  //{ label: 'Servicios', to: '/#servicios' },
-  //{ label: 'Nosotros', to: '/#nosotros' },
+  { label: '¿Qué es Mi casita?', to: '/' },
+  { label: 'Talleres', to: '/talleres' },
+  { label: 'Noticias', to: '/' },
   { label: 'Conoce a nuestro equipo', to: '/equipo' },
-  //{ label: 'Contacto', to: '/#contacto' },
+  { label: 'Contacto', to: '/contacto' },
 ]
 
 export function Navbar() {
@@ -61,6 +100,8 @@ export function Navbar() {
     navigate('/', { replace: true })
   }
 
+  const landingQuickLabels = ['Inicio', '¿Qué es Mi casita?', 'Talleres', 'Noticias']
+
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/80 backdrop-blur">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
@@ -71,12 +112,31 @@ export function Navbar() {
         <ul className="hidden items-center gap-6 md:flex">
           {navLinks.map((link) => (
             <li key={link.label}>
-              <Link
-                to={link.to}
-                className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
-              >
-                {link.label}
-              </Link>
+              {landingQuickLabels.includes(link.label) ? (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    if (landingQuickLabels.includes(link.label)) {
+                      const key = link.label === 'Inicio' ? 'inicio' : link.label === '¿Qué es Mi casita?' ? 'que es mi casita' : link.label.toLowerCase()
+                      navigate('/', { state: { scrollTo: key } })
+                    } else {
+                      navigate(link.to)
+                    }
+                    handleCloseMenu()
+                  }}
+                  className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+                >
+                  {link.label}
+                </a>
+              ) : (
+                <Link
+                  to={link.to}
+                  className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
+                >
+                  {link.label}
+                </Link>
+              )}
             </li>
           ))}
         </ul>
@@ -130,13 +190,32 @@ export function Navbar() {
           <ul className="space-y-1 px-4 py-4">
             {navLinks.map((link) => (
               <li key={link.label}>
-                <Link
-                  to={link.to}
-                  onClick={handleCloseMenu}
-                  className="block rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
-                >
-                  {link.label}
-                </Link>
+                {landingQuickLabels.includes(link.label) ? (
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      if (landingQuickLabels.includes(link.label)) {
+                        const key = link.label === 'Inicio' ? 'inicio' : link.label === '¿Qué es Mi casita?' ? 'que es mi casita' : link.label.toLowerCase()
+                        navigate('/', { state: { scrollTo: key } })
+                      } else {
+                        navigate(link.to)
+                      }
+                      handleCloseMenu()
+                    }}
+                    className="block rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    {link.label}
+                  </a>
+                ) : (
+                  <Link
+                    to={link.to}
+                    onClick={handleCloseMenu}
+                    className="block rounded-md px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    {link.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

@@ -62,6 +62,7 @@ export type CajaPagoMatriculaItem = {
   pagoMatriculaId: number
   matriculaId: number
   estudiante: string
+  numeroRecibo: string
   monto?: number | null
   fechaPago?: string | null
   estado: string
@@ -75,6 +76,7 @@ export type CajaMensualidadItem = {
   mensualidadId: number
   estudiante: string
   mes: string
+  numeroRecibo: string
   monto?: number | null
   fechaPago?: string | null
   estado: string
@@ -320,4 +322,8 @@ export async function getFinanzasConfig(token: string | null): Promise<Configura
 export async function updateFinanzasConfig(token: string | null, body: ConfiguracionFinanzasDto): Promise<ConfiguracionFinanzasDto> {
   const response = await api.put<ConfiguracionFinanzasDto>('/finanzas/configuracion', body, { headers: authHeaders(token) })
   return response.data
+}
+
+export async function closeAllOpenCajas(token: string | null): Promise<void> {
+  await api.post('/finanzas/caja/admin/close-all-open', null, { headers: authHeaders(token) })
 }

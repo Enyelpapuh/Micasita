@@ -1,4 +1,7 @@
 import FAQItem from './faq-items';
+import image1 from '@/assets/elements/image1.jpg';
+import image2 from '@/assets/elements/image2.jpg';
+import image3 from '@/assets/elements/image3.jpg';
 
 type FaqEntry = {
   id: number;
@@ -15,7 +18,7 @@ export default function FAQSection() {
       question: '¿Qué es Mi casita?',
       answer:
         'Mi casita es un centro integral de estimulación temprana que proporciona un ambiente seguro y amoroso para el desarrollo de niños y niñas en sus primeros años de vida. Nuestro equipo de profesionales cualificados utiliza metodologías innovadoras para estimular todas las áreas del desarrollo: física, cognitiva, emocional y social.',
-      image: '/favicon.svg',
+      image: image1,
       imagePosition: 'right'
     },
     {
@@ -23,7 +26,7 @@ export default function FAQSection() {
       question: '¿Qué se aprenderá?',
       answer:
         'En Mi casita, los niños desarrollan habilidades fundamentales a través de actividades lúdicas y experiencias significativas. Trabajamos en: motricidad fina y gruesa, lenguaje y comunicación, desarrollo cognitivo y concentración, inteligencia emocional, socialización y autonomía. Todo adaptado al ritmo individual de cada niño.',
-      image: '/favicon.svg',
+      image: image2,
       imagePosition: 'left'
     },
     {
@@ -31,7 +34,7 @@ export default function FAQSection() {
       question: '¿Cómo puedo inscribirme?',
       answer:
         'El proceso es simple y pensado para brindarte comodidad. Primero agenda una visita guiada a nuestras instalaciones, luego presenta los documentos requeridos y completa el formulario de inscripción. Nuestro equipo te asesorará en cada paso del proceso y responderá todas tus preguntas sobre horarios, programas y valores. ¡Te esperamos!',
-      image: '/favicon.svg',
+      image: image3,
       imagePosition: 'right'
     }
   ];

@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { Clock, Users, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
 import heroImage from '../../../assets/hero.png';
 
-const workshops = [
-
 function formatCordobas(value: number) {
   return new Intl.NumberFormat('es-NI', { style: 'currency', currency: 'NIO' }).format(Number.isFinite(value) ? value : 0);
 }
+
+const workshops = [
   {
     id: 1,
     title: 'Estimulación Sensorial',

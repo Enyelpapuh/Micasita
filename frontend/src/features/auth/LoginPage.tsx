@@ -44,34 +44,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.18),_transparent_32%),linear-gradient(135deg,_#0f172a_0%,_#042f2e_45%,_#08111f_100%)] px-4 py-10 text-slate-100 sm:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-5rem)] max-w-6xl gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <section className="rounded-[2rem] border border-white/10 bg-white/8 p-8 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-10">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-200">Micasita Dashboard</p>
-          <h1 className="mt-4 max-w-xl text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-            Accede al sistema con una sola sesion y controla tus modulos por permisos.
-          </h1>
-          <p className="mt-4 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-            El acceso se mantiene con JWT, por lo que puedes navegar al dashboard sin perder tu sesion mientras el token siga vigente.
-          </p>
+    <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.18),_transparent_32%),linear-gradient(135deg,_#0f172a_0%,_#042f2e_45%,_#08111f_100%)] px-4 py-10 text-slate-100 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-md">
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-sm text-teal-200">Usuario demo</p>
-              <p className="mt-1 text-lg font-semibold text-white">foo@gmail.com</p>
-            </article>
-            <article className="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-              <p className="text-sm text-teal-200">Clave demo</p>
-              <p className="mt-1 text-lg font-semibold text-white">123</p>
-            </article>
-          </div>
-        </section>
 
         <section className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
           <div className="mb-8">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-200">Inicio de sesion</p>
-            <h2 className="mt-2 text-3xl font-semibold text-white">Entra al panel</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Ingresa tus credenciales para obtener el token y abrir el dashboard.</p>
+            <h1 className="mt-2 text-3xl font-semibold text-white">Entra al panel</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Ingresa tus credenciales para acceder al sistema del centro.</p>
           </div>
 
           <form className="space-y-4" onSubmit={handleSubmit}>

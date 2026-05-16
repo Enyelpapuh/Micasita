@@ -337,7 +337,7 @@ export function SettingsPanel() {
   const [isSaving, setIsSaving] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
-  const canManageFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER'].includes(role))
+  const canEditFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION'].includes(role?.toUpperCase?.() ?? role))
 
   const validateStrongPassword = (password: string) => {
     if (password.length < 10 || password.length > 64) {
@@ -554,7 +554,7 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      {canManageFinanzas ? (
+      {canEditFinanzas ? (
         <div className="mt-6 max-w-4xl">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -570,18 +570,29 @@ export function SettingsPanel() {
 }
 
 export function FinanzasConfigPanel({ user }: { user?: AuthUser | null }) {
-  const canManageFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER'].includes(role))
+  const canEditFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION', 'ADMIN_DIRECCION', 'PROFESOR'].includes(role?.toUpperCase?.() ?? role))
+
+  // Debug: información para validar acceso
+  console.log('=== FinanzasConfigPanel Debug ===')
+  console.log('Usuario completo:', user)
+  console.log('Roles del usuario:', user?.roles)
+  console.log('Permisos del usuario:', user?.permisos)
+  console.log('Email del usuario:', user?.email)
+  console.log('Roles en mayúscula:', user?.roles?.map(r => r?.toUpperCase?.() ?? r))
+  console.log('¿Puede editar finanzas?:', canEditFinanzas)
+  console.log('Roles permitidos: ADMIN, DEVELOPER, ADMINISTRACION, ADMIN_DIRECCION, PROFESOR')
+  console.log('================================')
 
   return (
     <PanelShell
       title="Configuración de precios"
       subtitle="Define el precio de matrícula y mensualidad para el período activo."
     >
-      {canManageFinanzas ? (
+      {canEditFinanzas ? (
         <AdminFinanzasPanel />
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          No tienes permisos para editar precios de matrícula y mensualidad.
+          No tienes permisos para editar precios de matrícula y mensualidad. Contacta a administración.
         </div>
       )}
     </PanelShell>

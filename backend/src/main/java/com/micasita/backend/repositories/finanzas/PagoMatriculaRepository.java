@@ -36,19 +36,44 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
                 pm.metodoPago.nombre as metodoPago,
                 pm.detalle as detalle,
                 coalesce(pm.esAnulado, false) as anulado,
-                pm.motivoAnulacion as motivoAnulacion
+                pm.motivoAnulacion as motivoAnulacion,
+                pm.numeroRecibo as numeroRecibo
             from PagoMatricula pm
             join pm.matricula m
             join m.estudiante e
             join e.persona p
+            where lower(pm.usuario.email) = lower(:email)
             order by pm.id desc
             """)
-    List<PagoMatriculaCajaView> findRecentCaja();
+    List<PagoMatriculaCajaView> findRecentCaja(String email);
+
+    @Query("""
+            select
+                pm.id as pagoMatriculaId,
+                pm.matricula.id as matriculaId,
+                concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
+                pm.monto as monto,
+                pm.fechaDePago as fechaPago,
+                pm.estadoPago.nombre as estado,
+                pm.metodoPago.nombre as metodoPago,
+                pm.detalle as detalle,
+                coalesce(pm.esAnulado, false) as anulado,
+                pm.motivoAnulacion as motivoAnulacion,
+                pm.numeroRecibo as numeroRecibo
+            from PagoMatricula pm
+            join pm.matricula m
+            join m.estudiante e
+            join e.persona p
+            where pm.cajaSesion.id = :sessionId
+            order by pm.id desc
+            """)
+    List<PagoMatriculaCajaView> findByCajaSesionId(Long sessionId);
 
     interface PagoMatriculaCajaView {
         Long getPagoMatriculaId();
         Long getMatriculaId();
         String getEstudiante();
+        String getNumeroRecibo();
         BigDecimal getMonto();
         LocalDate getFechaPago();
         String getEstado();

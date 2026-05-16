@@ -257,7 +257,7 @@ export default function TalleresSection() {
   }
 
   return (
-    <section className="bg-gradient-to-b from-white via-teal-50/30 to-slate-50 py-16 md:py-20">
+    <section id="talleres" className="bg-gradient-to-b from-white via-teal-50/30 to-slate-50 py-16 md:py-20">
       <div className="container mx-auto px-4 md:px-8">
         <div className="mb-12">
           <h2 className="mb-2 text-4xl font-bold text-slate-900 md:text-5xl">Nuestros talleres</h2>

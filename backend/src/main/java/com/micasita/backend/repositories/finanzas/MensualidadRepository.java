@@ -38,13 +38,38 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 m.metodoPago.nombre as metodoPago,
                 m.detalle as detalle,
                 coalesce(m.esAnulado, false) as anulado,
-                m.motivoAnulacion as motivoAnulacion
+                m.motivoAnulacion as motivoAnulacion,
+                m.numeroRecibo as numeroRecibo
             from Mensualidad m
             join m.estudiante e
             join e.persona p
+            where lower(m.usuario.email) = lower(:email)
             order by m.id desc
             """)
-    List<MensualidadCajaView> findRecentCaja();
+    List<MensualidadCajaView> findRecentCaja(String email);
+
+    @Query("""
+            select
+                m.id as mensualidadId,
+                concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
+                m.mesDePago as mes,
+                coalesce(m.montoBase, 0) as montoBase,
+                coalesce(m.montoMora, 0) as montoMora,
+                (coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)) as monto,
+                m.fechaDePago as fechaPago,
+                m.estadoPago.nombre as estado,
+                m.metodoPago.nombre as metodoPago,
+                m.detalle as detalle,
+                coalesce(m.esAnulado, false) as anulado,
+                m.motivoAnulacion as motivoAnulacion,
+                m.numeroRecibo as numeroRecibo
+            from Mensualidad m
+            join m.estudiante e
+            join e.persona p
+            where m.cajaSesion.id = :sessionId
+            order by m.id desc
+            """)
+    List<MensualidadCajaView> findByCajaSesionId(Long sessionId);
 
     interface MensualidadCajaView {
         Long getMensualidadId();
@@ -57,6 +82,7 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         String getEstado();
         String getMetodoPago();
         String getDetalle();
+        String getNumeroRecibo();
         Boolean getAnulado();
         String getMotivoAnulacion();
     }

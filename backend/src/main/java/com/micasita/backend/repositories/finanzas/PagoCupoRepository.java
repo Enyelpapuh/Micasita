@@ -43,9 +43,32 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
             join pc.cupo c
             join c.participante part
             left join part.persona per
+            where lower(pc.usuario.email) = lower(:email)
             order by pc.id desc
             """)
-    List<PagoCupoCajaView> findRecentCaja();
+    List<PagoCupoCajaView> findRecentCaja(String email);
+
+    @Query("""
+            select
+                pc.id as pagoCupoId,
+                pc.cupo.id as cupoId,
+                pc.cupo.taller.nombre as taller,
+                concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''), coalesce(part.nombreTmp, '')) as participante,
+                pc.numeroRecibo as numeroRecibo,
+                pc.monto as monto,
+                pc.fechaDePago as fechaPago,
+                pc.estadoPago.nombre as estado,
+                pc.metodoPago.nombre as metodoPago,
+                pc.esAnulado as anulado,
+                pc.motivoAnulacion as motivoAnulacion
+            from PagoCupo pc
+            join pc.cupo c
+            join c.participante part
+            left join part.persona per
+            where pc.cajaSesion.id = :sessionId
+            order by pc.id desc
+            """)
+    List<PagoCupoCajaView> findByCajaSesionId(Long sessionId);
 
     interface PagoCupoCajaView {
         Long getPagoCupoId();

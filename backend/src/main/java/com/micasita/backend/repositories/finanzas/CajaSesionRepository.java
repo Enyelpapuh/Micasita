@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface CajaSesionRepository extends JpaRepository<CajaSesion, Long> {
@@ -12,9 +13,11 @@ public interface CajaSesionRepository extends JpaRepository<CajaSesion, Long> {
 
     boolean existsByEstadoCajaNombre(String estado);
 
-        Optional<CajaSesion> findTopByUsuarioAperturaEmailAndEstadoCajaNombreOrderByFechaAperturaDesc(String email, String estado);
+    Optional<CajaSesion> findTopByUsuarioAperturaEmailAndEstadoCajaNombreOrderByFechaAperturaDesc(String email, String estado);
 
-        @Query("""
+    List<CajaSesion> findAllByEstadoCajaNombre(String estado);
+
+    @Query("""
                         select c
                         from CajaSesion c
                         where c.usuarioApertura.email = :email

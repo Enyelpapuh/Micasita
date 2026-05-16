@@ -1,11 +1,16 @@
 import { Route, Routes } from 'react-router-dom'
 import { BaseLayout } from './components/layout/BaseLayout'
-import { EquipoPage } from './features/equipo/components/EquipoPage'
-import { LandingPage } from './features/landing/components/LandingPage'
-import MatriculasSection from './features/landing/components/matriculas-section'
-import { LoginPage } from './features/auth/LoginPage'
+import PageWrapper from './components/ui/PageWrapper'
+import { Suspense, lazy } from 'react'
 import { RequireAuth } from './features/auth/RequireAuth'
 import { DashboardPage } from './features/dashboard/DashboardPage.tsx'
+
+const EquipoPage = lazy(() => import('./features/equipo/components/EquipoPage').then(m => ({ default: m.EquipoPage })))
+const LandingPage = lazy(() => import('./features/landing/components/LandingPage').then(m => ({ default: m.LandingPage })))
+const MatriculasSection = lazy(() => import('./features/landing/components/matriculas-section').then(m => ({ default: m.default })) )
+const ContactForm = lazy(() => import('./features/landing/components/ContactForm').then(m => ({ default: m.default })) )
+const TalleresView = lazy(() => import('./features/talleres/components/TalleresView').then(m => ({ default: m.TalleresView })) )
+const LoginPage = lazy(() => import('./features/auth/LoginPage').then(m => ({ default: m.LoginPage })) )
 
 function NotFoundPage() {
   return (
@@ -20,17 +25,83 @@ function NotFoundPage() {
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<BaseLayout><LandingPage /></BaseLayout>} />
-      <Route path="/equipo" element={<BaseLayout><EquipoPage /></BaseLayout>} />
-      <Route path="/admisiones/solicitud" element={<BaseLayout><MatriculasSection /></BaseLayout>} />
-      <Route path="/login" element={<BaseLayout><LoginPage /></BaseLayout>} />
+      <Route
+        path="/"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <LandingPage />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
+      <Route
+        path="/equipo"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <EquipoPage />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
+      <Route
+        path="/talleres"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <TalleresView />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
+      <Route
+        path="/contacto"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <ContactForm />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
+      <Route
+        path="/admisiones/solicitud"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <MatriculasSection />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
+      <Route
+        path="/login"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <LoginPage />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
       <Route
         path="/dashboard"
         element={
           <RequireAuth>
-            <BaseLayout>
-              <DashboardPage />
-            </BaseLayout>
+            <DashboardPage />
           </RequireAuth>
         }
       />

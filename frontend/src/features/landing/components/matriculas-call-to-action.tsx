@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, Layers, X } from 'lucide-react'
+import { ArrowRight, X } from 'lucide-react'
 import MatriculasSection from './matriculas-section'
 
 const ADMISION_FORM_DRAFT_KEY = 'micasita.admision.formDraft'
@@ -57,6 +57,15 @@ export default function MatriculasCallToAction() {
                 Ir al formulario
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
+              {hasDraft ? (
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(true)}
+                  className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Continuar borrador
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

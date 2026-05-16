@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/finanzas/configuracion")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
-@PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION')")
 public class FinanzasConfiguracionController {
 
     private final ConfiguracionFinanzasService configuracionFinanzasService;
@@ -23,11 +22,13 @@ public class FinanzasConfiguracionController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','CAJA')")
     public ResponseEntity<ConfiguracionFinanzasService.ConfiguracionFinanzasResponse> getConfiguration() {
         return ResponseEntity.ok(configuracionFinanzasService.getConfiguration());
     }
 
     @PutMapping
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION')")
     public ResponseEntity<ConfiguracionFinanzasService.ConfiguracionFinanzasResponse> updateConfiguration(
             @RequestBody ConfiguracionFinanzasService.UpdateConfiguracionFinanzasRequest request
     ) {

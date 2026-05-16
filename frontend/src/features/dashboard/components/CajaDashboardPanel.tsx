@@ -7,6 +7,7 @@ import {
   annulPagoMatricula,
   annulPagoMensualidad,
   annulPagoTaller,
+  closeAllOpenCajas,
   closeCajaSession,
   getActiveCajaSession,
   getCajaDashboard,
@@ -152,6 +153,76 @@ function countAnnulled(items: Array<{ anulado?: boolean }>) {
   return items.reduce((total, item) => total + (item.anulado ? 1 : 0), 0)
 }
 
+type CajaHistorialItem = {
+  key: string
+  tipo: 'Taller' | 'Matrícula' | 'Mensualidad'
+  titulo: string
+  numeroRecibo: string
+  detalle: string
+  monto?: number | null
+  fecha?: string | null
+  metodoPago?: string | null
+  estado?: string | null
+  anulado?: boolean
+  motivoAnulacion?: string | null
+  pagoCupoId?: number
+  pagoMatriculaId?: number
+  mensualidadId?: number
+}
+
+function buildCajaHistorial(data?: CajaDashboardResponse | null): CajaHistorialItem[] {
+  const historialTaller = (data?.pagosTaller ?? []).map((item) => ({
+    key: `taller-${item.pagoCupoId}`,
+    tipo: 'Taller' as const,
+    titulo: item.taller || 'Taller',
+    numeroRecibo: item.numeroRecibo || `T-${item.pagoCupoId}`,
+    detalle: item.participante || 'Sin nombre',
+    monto: item.monto,
+    fecha: item.fechaPago,
+    metodoPago: item.metodoPago,
+    estado: item.estado,
+    anulado: item.anulado,
+    motivoAnulacion: item.motivoAnulacion,
+    pagoCupoId: item.pagoCupoId,
+  }))
+
+  const historialMatricula = (data?.pagosMatricula ?? []).map((item) => ({
+    key: `matricula-${item.pagoMatriculaId}`,
+    tipo: 'Matrícula' as const,
+    titulo: item.estudiante || 'Matrícula',
+    numeroRecibo: item.numeroRecibo || `M-${item.pagoMatriculaId}`,
+    detalle: item.detalle || 'Cobro de matrícula',
+    monto: item.monto,
+    fecha: item.fechaPago,
+    metodoPago: item.metodoPago,
+    estado: item.estado,
+    anulado: item.anulado,
+    motivoAnulacion: item.motivoAnulacion,
+    pagoMatriculaId: item.pagoMatriculaId,
+  }))
+
+  const historialMensualidad = (data?.mensualidades ?? []).map((item) => ({
+    key: `mensualidad-${item.mensualidadId}`,
+    tipo: 'Mensualidad' as const,
+    titulo: item.estudiante || 'Mensualidad',
+    numeroRecibo: item.numeroRecibo || `ME-${item.mensualidadId}`,
+    detalle: item.detalle || item.mes || 'Cobro mensualidad',
+    monto: item.monto,
+    fecha: item.fechaPago,
+    metodoPago: item.metodoPago,
+    estado: item.estado,
+    anulado: item.anulado,
+    motivoAnulacion: item.motivoAnulacion,
+    mensualidadId: item.mensualidadId,
+  }))
+
+  return [...historialTaller, ...historialMatricula, ...historialMensualidad].sort((a, b) => {
+    const fechaA = a.fecha ? new Date(a.fecha).getTime() : 0
+    const fechaB = b.fecha ? new Date(b.fecha).getTime() : 0
+    return fechaB - fechaA
+  })
+}
+
 function CompactSessionBar({
   session,
   onOpenSession,
@@ -161,6 +232,8 @@ function CompactSessionBar({
   openObservacion,
   setOpenObservacion,
   busy,
+  showAdminAction,
+  onCloseAllOpenCajas,
 }: {
   session: CajaSessionInfo | null
   onOpenSession: () => void
@@ -170,56 +243,80 @@ function CompactSessionBar({
   openObservacion: string
   setOpenObservacion: (v: string) => void
   busy: boolean
+  showAdminAction: boolean
+  onCloseAllOpenCajas: () => void
 }) {
   return (
-    <div className="mt-4 flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white px-3 py-2">
-      {session ? (
-        <div className="flex items-center gap-4">
-          <div className="text-sm">
-            <div className="font-semibold text-slate-900">Caja: {session.codigo}</div>
-            <div className="text-xs text-slate-600">Estado: {session.estado}</div>
-          </div>
+    <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_auto] xl:items-end">
+        <div className="rounded-2xl bg-slate-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sesión de caja</p>
+          {session ? (
+            <div className="mt-3 space-y-1 text-sm text-slate-600">
+              <p className="text-base font-semibold text-slate-900">Caja activa {session.codigo}</p>
+              <p>Estado: {session.estado}</p>
+              <p>Apertura: {formatDate(session.fechaApertura)}</p>
+              <p>Saldo inicial: {formatMoney(session.saldoInicial)}</p>
+            </div>
+          ) : (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <input
+                value={openSaldo}
+                onChange={(e) => setOpenSaldo(e.target.value)}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Saldo inicial"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+              />
+              <input
+                value={openObservacion}
+                onChange={(e) => setOpenObservacion(e.target.value)}
+                placeholder="Observación de apertura"
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+              />
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="flex items-center gap-3">
-          <input
-            value={openSaldo}
-            onChange={(e) => setOpenSaldo(e.target.value)}
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="Saldo inicial"
-            className="w-40 rounded-xl border border-slate-300 px-2 py-1 text-sm outline-none focus:border-teal-500"
-          />
-          <input
-            value={openObservacion}
-            onChange={(e) => setOpenObservacion(e.target.value)}
-            placeholder="Obs. apertura"
-            className="w-64 rounded-xl border border-slate-300 px-2 py-1 text-sm outline-none focus:border-teal-500"
-          />
-        </div>
-      )}
 
-      <div className="ml-auto">
-        {session ? (
-          <button
-            type="button"
-            onClick={onCloseSession}
-            disabled={busy}
-            className="rounded-xl bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? 'Procesando...' : 'Cerrar caja'}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onOpenSession}
-            disabled={busy}
-            className="rounded-xl bg-teal-600 px-3 py-1.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {busy ? 'Procesando...' : 'Abrir caja'}
-          </button>
-        )}
+        <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm text-teal-950">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Acción principal</p>
+          <p className="mt-2 font-semibold">{session ? 'Cerrar la caja activa cuando termine el turno.' : 'Abrir una nueva sesión para registrar cobros.'}</p>
+          <p className="mt-1 text-teal-800/80">Los cambios se guardan al instante y el historial queda ordenado por recibo.</p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {session ? (
+            <button
+              type="button"
+              onClick={onCloseSession}
+              disabled={busy}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? 'Procesando...' : 'Cerrar caja'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenSession}
+              disabled={busy}
+              className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {busy ? 'Procesando...' : 'Abrir caja'}
+            </button>
+          )}
+
+          {showAdminAction ? (
+            <button
+              type="button"
+              onClick={onCloseAllOpenCajas}
+              disabled={busy}
+              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cerrar todas las cajas abiertas
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   )
@@ -254,12 +351,11 @@ function TalleresTab({
   const montoCobroNumber = Number(montoCobro) || 0
   const montoRecibidoNumber = Number(montoRecibido) || 0
   const vuelto = montoRecibidoNumber - montoCobroNumber
-  const puedeCobrar = !!selectedPendiente && montoCobroNumber > 0 && !!metodoPagoId && vuelto >= 0 && !busy
+  const puedeCobrar = !!selectedPendiente && montoCobroNumber > 0 && !!metodoPagoId && vuelto >= 0 && !busy && Number(selectedPendiente?.montoEsperado ?? 0) > 0
 
   const abrirModal = (item: CajaTallerPendienteItem) => {
     setSelectedPago(null)
     setSelectedPendiente(item)
-    setMontoCobro(String(Number(item.montoEsperado ?? 0)))
     setMontoRecibido('')
   }
 
@@ -287,7 +383,7 @@ function TalleresTab({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
+    <div className="grid gap-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Inscripciones en espera de pago</h3>
         <div className="mt-3 grid gap-3 sm:grid-cols-[180px_1fr]">
@@ -323,7 +419,7 @@ function TalleresTab({
                       <td className="px-2 py-3 text-right">
                         <div className="inline-flex gap-2">
                           <button type="button" onClick={() => abrirModal(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Ver</button>
-                          <button type="button" disabled={busy || !metodoPagoId} onClick={() => abrirModal(item)} className="rounded-xl bg-teal-600 px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">Cobrar</button>
+                          <button type="button" disabled={!puedeCobrar} onClick={() => abrirModal(item)} className="rounded-xl bg-teal-600 px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">Cobrar</button>
                         </div>
                       </td>
                     </tr>
@@ -550,6 +646,7 @@ function MatriculaTab({
       setMetodoPagoId('')
       return
     }
+
     setMetodoPagoId((current) => (metodosPago.some((item) => String(item.id) === current) ? current : String(metodosPago[0].id)))
   }, [metodosPago])
 
@@ -615,7 +712,7 @@ function MatriculaTab({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-2">
+    <div className="grid gap-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Lista de matrículas pendientes</h3>
         <p className="mt-1 text-xs text-slate-600">Filtra por estudiante y abre el modal para procesar el cobro y el vuelto.</p>
@@ -941,7 +1038,7 @@ function MensualidadTab({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+    <div className="grid gap-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Pagos de mensualidad</h3>
         <p className="mt-1 text-xs text-slate-600">
@@ -1165,7 +1262,7 @@ function MensualidadTab({
 }
 
 export function CajaDashboardPanel() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [tab, setTab] = useState<CajaTab>('talleres')
   const [isLoading, setIsLoading] = useState(true)
@@ -1199,6 +1296,7 @@ export function CajaDashboardPanel() {
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null)
   const [annulModal, setAnnulModal] = useState<AnnulModalState | null>(null)
   const [annulReason, setAnnulReason] = useState('')
+  const [historialModalOpen, setHistorialModalOpen] = useState(false)
   const [showPreCloseModal, setShowPreCloseModal] = useState(false)
   const [preCloseCounted, setPreCloseCounted] = useState('')
 
@@ -1213,6 +1311,21 @@ export function CajaDashboardPanel() {
   )
 
   const moraAplicadaFormulario = mensualidadMoraAutomatica ? moraSugerida : Number(mensualidadMontoMora)
+
+  const isCajaAdmin = Boolean(user?.roles?.some((role) => ['ADMIN', 'DEVELOPER'].includes(role.toUpperCase())))
+  const historialGeneral = useMemo(() => buildCajaHistorial(data), [data])
+  const historialFiltrado = useMemo(() => {
+    const term = searchTerm.trim().toLocaleLowerCase('es-NI')
+    if (!term) {
+      return historialGeneral
+    }
+
+    return historialGeneral.filter((item) => {
+      return [item.tipo, item.titulo, item.numeroRecibo, item.detalle, item.metodoPago, item.estado]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase('es-NI').includes(term))
+    })
+  }, [historialGeneral, searchTerm])
 
   const totalCobradoTalleres = sumPaid(data?.pagosTaller ?? [])
   const totalCobradoMatriculas = sumPaid(data?.pagosMatricula ?? [])
@@ -1282,6 +1395,24 @@ export function CajaDashboardPanel() {
 
   const handleOpenSession = async () => {
     await runAction('open-session', () => openCajaSession(token, { saldoInicial: readNumber(openSaldo), observacion: openObservacion }))
+  }
+
+  const handleCloseAllOpenCajas = async () => {
+    setBusyAction('close-all-open-cajas')
+    setPaymentMessage(null)
+    try {
+      await closeAllOpenCajas(token)
+      const message = 'Todas las cajas abiertas fueron cerradas.'
+      toast.success(message)
+      setPaymentMessage(message)
+      await refreshAll()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'No se pudo completar la operacion.'
+      toast.error(message)
+      setPaymentMessage(message)
+    } finally {
+      setBusyAction(null)
+    }
   }
 
   const handleCloseSession = async () => {
@@ -1408,6 +1539,47 @@ export function CajaDashboardPanel() {
     [],
   )
 
+  const openHistorialModal = () => setHistorialModalOpen(true)
+  const closeHistorialModal = () => setHistorialModalOpen(false)
+
+  function buildReceiptHtml(item: CajaHistorialItem) {
+    const anuladoBadge = item.anulado ? `<div style="color: #b91c1c; font-weight:700;">ANULADO: ${item.motivoAnulacion || 'Sin motivo'}</div>` : ''
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Recibo ${item.numeroRecibo}</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111} .header{display:flex;justify-content:space-between;align-items:center} .meta{margin-top:12px;color:#444} .line{margin:8px 0;padding:8px;border-bottom:1px solid #eee}</style></head><body><div class="header"><h2>Recibo - ${item.numeroRecibo}</h2><div>${formatDate(item.fecha) || ''}</div></div><div class="meta">Tipo: ${item.tipo} • ${item.titulo}</div>${anuladoBadge}<div style="margin-top:16px"> <div class="line"><strong>Detalle:</strong> ${item.detalle || '-'}</div><div class="line"><strong>Monto:</strong> ${formatMoney(item.monto)}</div><div class="line"><strong>Método:</strong> ${item.metodoPago || '-'}</div><div class="line"><strong>Estado:</strong> ${item.estado || '-'}</div></div><footer style="margin-top:28px;color:#666;font-size:12px">Generado desde Micasita • ${new Date().toLocaleString()}</footer></body></html>`
+  }
+
+  const openReceipt = (item: CajaHistorialItem) => {
+    const html = buildReceiptHtml(item)
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast.error('No se pudo abrir la ventana de impresión. Permite popups.')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    // give browser a moment to render then call print
+    setTimeout(() => {
+      try {
+        w.focus()
+        w.print()
+      } catch (e) {
+        // ignore
+      }
+    }, 300)
+  }
+
+  const downloadReceipt = (item: CajaHistorialItem) => {
+    const html = buildReceiptHtml(item)
+    const blob = new Blob([html], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `recibo-${item.numeroRecibo || item.key}.html`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <div>
@@ -1427,7 +1599,9 @@ export function CajaDashboardPanel() {
         setOpenSaldo={setOpenSaldo}
         openObservacion={openObservacion}
         setOpenObservacion={setOpenObservacion}
-        busy={busyAction === 'open-session' || busyAction === 'close-session'}
+        busy={busyAction === 'open-session' || busyAction === 'close-session' || busyAction === 'close-all-open-cajas'}
+        showAdminAction={isCajaAdmin}
+        onCloseAllOpenCajas={handleCloseAllOpenCajas}
       />
 
       {paymentMessage ? (
@@ -1572,43 +1746,56 @@ export function CajaDashboardPanel() {
 
               <aside className="lg:col-span-1">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Bitácora del Día</h3>
-                  <p className="mt-1 text-xs text-slate-600">Pagos realizados en esta sesión (solo turno actual).</p>
-                  <div className="mt-3 space-y-2">
-                    {([...(data.pagosTaller ?? []), ...(data.pagosMatricula ?? []), ...(data.mensualidades ?? [])] as Array<any>).map((item) => (
-                      <div
-                        key={
-                          item.pagoCupoId
-                            ? `taller-${item.pagoCupoId}`
-                            : item.pagoMatriculaId
-                            ? `matricula-${item.pagoMatriculaId}`
-                            : item.mensualidadId
-                            ? `mensualidad-${item.mensualidadId}`
-                            : `recibo-${item.numeroRecibo ?? Math.random()}`
-                        }
-                        className={`relative rounded-xl border p-3 text-sm ${item.anulado ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-slate-900">{item.estudiante || item.participante || item.numeroRecibo || 'Pago'}</p>
-                            <p className="text-slate-600">{item.metodoPago || ''} • {formatMoney(item.monto)}</p>
-                            <p className="text-xs text-slate-500">{formatDate(item.fechaPago)}</p>
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <button type="button" className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Reimprimir</button>
-                            {!item.anulado ? (
-                              <button onClick={() => {
-                                if (item.pagoCupoId) requestAnnulTaller(item.pagoCupoId, item.numeroRecibo)
-                                else if (item.pagoMatriculaId) requestAnnulMatricula(item.pagoMatriculaId)
-                                else if (item.mensualidadId) requestAnnulMensualidad(item.mensualidadId)
-                              }} type="button" className="rounded-xl border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700">Anular</button>
-                            ) : (
-                              <span className="rounded-xl bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Anulado</span>
-                            )}
-                          </div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Historial general</h3>
+                      <div className="flex items-center justify-between">
+                        <p className="mt-1 text-xs text-slate-600">Un solo listado cronológico para talleres, matrícula y mensualidad.</p>
+                        <div>
+                          <button type="button" onClick={openHistorialModal} className="rounded-xl border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ver todos</button>
                         </div>
                       </div>
+                  <div className="mt-3 space-y-2">
+                    {historialFiltrado.map((item) => (
+                      <article
+                        key={item.key}
+                        className={`rounded-xl border p-3 text-sm ${item.anulado ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-900">{item.titulo}</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{item.tipo}</p>
+                            <p className="mt-1 text-slate-600">Recibo: {item.numeroRecibo}</p>
+                            <p className="text-slate-600">{item.detalle}</p>
+                            <p className="text-slate-500">{formatMoney(item.monto)} | {item.metodoPago || '-'} | {formatDate(item.fecha)} | {item.estado || '-'}</p>
+                          </div>
+                          <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-2">
+                                  <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Ver recibo</button>
+                                  <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Descargar</button>
+                                  {!item.anulado ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (item.pagoCupoId) {
+                                          requestAnnulTaller(item.pagoCupoId, item.numeroRecibo)
+                                        } else if (item.pagoMatriculaId) {
+                                          requestAnnulMatricula(item.pagoMatriculaId)
+                                        } else if (item.mensualidadId) {
+                                          requestAnnulMensualidad(item.mensualidadId)
+                                        }
+                                      }}
+                                      className="rounded-xl border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                                    >
+                                      Anular
+                                    </button>
+                                  ) : (
+                                    <span className="rounded-xl bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">Anulado</span>
+                                  )}
+                                </div>
+                          </div>
+                        </div>
+                      </article>
                     ))}
+                    {historialFiltrado.length === 0 ? <EmptyState message="No hay movimientos que coincidan con la búsqueda." /> : null}
                   </div>
                 </div>
               </aside>
@@ -1720,6 +1907,65 @@ export function CajaDashboardPanel() {
               <div className="mt-4 flex justify-end gap-2">
                 <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</button>
                 <button type="button" onClick={confirmCloseSession} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Confirmar cierre</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {historialModalOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900">Historial completo</h4>
+                  <p className="text-sm text-slate-600">Listado cronológico de todos los pagos. Usa búsqueda para filtrar.</p>
+                </div>
+                <button type="button" onClick={closeHistorialModal} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Cerrar</button>
+              </div>
+
+              <div className="mt-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-slate-500">
+                        <th className="px-2 py-2">Tipo</th>
+                        <th className="px-2 py-2">Título</th>
+                        <th className="px-2 py-2">Recibo</th>
+                        <th className="px-2 py-2">Detalle</th>
+                        <th className="px-2 py-2">Monto</th>
+                        <th className="px-2 py-2">Fecha</th>
+                        <th className="px-2 py-2">Método</th>
+                        <th className="px-2 py-2">Estado</th>
+                        <th className="px-2 py-2 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historialGeneral.map((item) => (
+                        <tr key={item.key} className={`border-b ${item.anulado ? 'bg-rose-50' : ''}`}>
+                          <td className="px-2 py-3">{item.tipo}</td>
+                          <td className="px-2 py-3">{item.titulo}</td>
+                          <td className="px-2 py-3">{item.numeroRecibo}</td>
+                          <td className="px-2 py-3">{item.detalle}</td>
+                          <td className="px-2 py-3">{formatMoney(item.monto)}</td>
+                          <td className="px-2 py-3">{formatDate(item.fecha)}</td>
+                          <td className="px-2 py-3">{item.metodoPago || '-'}</td>
+                          <td className="px-2 py-3">{item.anulado ? `Anulado` : (item.estado || '-')}</td>
+                          <td className="px-2 py-3 text-right">
+                            <div className="inline-flex gap-2">
+                              <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100">Imprimir</button>
+                              <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Descargar</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {historialGeneral.length === 0 ? (
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                    No hay registros en el historial.
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

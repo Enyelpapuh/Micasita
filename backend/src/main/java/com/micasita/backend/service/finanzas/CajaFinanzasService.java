@@ -143,6 +143,19 @@ public class CajaFinanzasService {
         return new CajaOperacionResult(session.getId(), session.getCodigo(), ESTADO_CERRADA, "Caja cerrada");
     }
 
+    @Transactional
+    public void closeAllOpenCajas() {
+        List<CajaSesion> openCajas = cajaSesionRepository.findAllByEstadoCajaNombre(ESTADO_ABIERTA);
+        EstadoCaja estadoCerrada = requireEstadoCaja(ESTADO_CERRADA);
+
+        for (CajaSesion caja : openCajas) {
+            caja.setEstadoCaja(estadoCerrada);
+            caja.setFechaCierre(LocalDateTime.now());
+            caja.setObservacionCierre("Cierre automático por el sistema.");
+            cajaSesionRepository.save(caja);
+        }
+    }
+
     public CajaOperacionResult payMatricula(String email, Long matriculaId, BigDecimal monto, Long metodoPagoId, String detalle) {
         CajaSesion session = getRequiredActiveSession(email);
         Matricula matricula = matriculaRepository.findById(matriculaId)

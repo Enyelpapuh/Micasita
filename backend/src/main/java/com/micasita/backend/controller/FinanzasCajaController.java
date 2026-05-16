@@ -7,6 +7,7 @@ import com.micasita.backend.repositories.finanzas.MensualidadRepository;
 import com.micasita.backend.repositories.finanzas.PagoCupoRepository;
 import com.micasita.backend.repositories.finanzas.PagoMatriculaRepository;
 import com.micasita.backend.repositories.talleres.CupoTallerRepository;
+import com.micasita.backend.repositories.finanzas.CajaSesionRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -34,7 +35,8 @@ import java.util.Set;
 public class FinanzasCajaController {
 
         private final CajaFinanzasService cajaFinanzasService;
-    private final CupoTallerRepository cupoTallerRepository;
+        private final CupoTallerRepository cupoTallerRepository;
+        private final CajaSesionRepository cajaSesionRepository;
     private final MatriculaRepository matriculaRepository;
     private final PagoCupoRepository pagoCupoRepository;
     private final PagoMatriculaRepository pagoMatriculaRepository;
@@ -46,9 +48,10 @@ public class FinanzasCajaController {
             CupoTallerRepository cupoTallerRepository,
             MatriculaRepository matriculaRepository,
             PagoCupoRepository pagoCupoRepository,
-            PagoMatriculaRepository pagoMatriculaRepository,
-            MensualidadRepository mensualidadRepository,
-            com.micasita.backend.service.finanzas.ConfiguracionFinanzasService configuracionFinanzasService
+                        PagoMatriculaRepository pagoMatriculaRepository,
+                        MensualidadRepository mensualidadRepository,
+                        CajaSesionRepository cajaSesionRepository,
+                        com.micasita.backend.service.finanzas.ConfiguracionFinanzasService configuracionFinanzasService
     ) {
                 this.cajaFinanzasService = cajaFinanzasService;
         this.cupoTallerRepository = cupoTallerRepository;
@@ -56,6 +59,7 @@ public class FinanzasCajaController {
         this.pagoCupoRepository = pagoCupoRepository;
         this.pagoMatriculaRepository = pagoMatriculaRepository;
         this.mensualidadRepository = mensualidadRepository;
+                this.cajaSesionRepository = cajaSesionRepository;
         this.configuracionFinanzasService = configuracionFinanzasService;
     }
 
@@ -84,6 +88,13 @@ public class FinanzasCajaController {
                         @RequestBody CloseCajaRequest request
         ) {
                 return ResponseEntity.ok(cajaFinanzasService.closeSession(authentication.getName(), request.saldoCierre(), request.observacion()));
+        }
+
+        @PostMapping("/admin/close-all-open")
+        @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER')")
+        public ResponseEntity<Void> closeAllOpenCajas() {
+                cajaFinanzasService.closeAllOpenCajas();
+                return ResponseEntity.ok().build();
         }
 
         @PostMapping("/payments/matricula")
@@ -166,9 +177,9 @@ public class FinanzasCajaController {
 
         @GetMapping("/mensualidades/pendientes/estudiantes")
         public ResponseEntity<List<ResumenPendientesMensualidadResponse>> estudiantesPendientesMensualidad() {
-                int anio = LocalDate.now().getYear();
                 int mesLimite = Math.max(LocalDate.now().getMonthValue() - 1, 0);
-                List<MensualidadRepository.ResumenPendientesMensualidadView> pendientes = mensualidadRepository.findResumenPendientesCaja(String.valueOf(anio), mesLimite);
+                String anioLectivo = String.valueOf(LocalDate.now().getYear());
+                List<MensualidadRepository.ResumenPendientesMensualidadView> pendientes = mensualidadRepository.findResumenPendientesCaja(anioLectivo, mesLimite);
                 List<ResumenPendientesMensualidadResponse> resp = pendientes.stream()
                                 .map(v -> new ResumenPendientesMensualidadResponse(v.getEstudianteId(), clean(v.getEstudiante()), v.getMesesPagados(), v.getMesesPendientes(), v.getProximoMes()))
                                 .toList();
@@ -196,7 +207,6 @@ public class FinanzasCajaController {
         ) {
                 return ResponseEntity.ok(cajaFinanzasService.annulPagoMatricula(authentication.getName(), id, request.motivo()));
         }
-
         @PostMapping("/payments/taller/{id}/annul")
         public ResponseEntity<CajaFinanzasService.CajaOperacionResult> annulTaller(
                         Authentication authentication,
@@ -215,9 +225,10 @@ public class FinanzasCajaController {
                 return ResponseEntity.ok(cajaFinanzasService.annulPagoMensualidad(authentication.getName(), id, request.motivo()));
         }
 
-    @GetMapping("/dashboard")
-    public ResponseEntity<CajaDashboardResponse> dashboard(@RequestParam(defaultValue = "25") int limit) {
-        int safeLimit = Math.max(1, Math.min(limit, 100));
+        @GetMapping("/dashboard")
+        public ResponseEntity<CajaDashboardResponse> dashboard(Authentication authentication, @RequestParam(defaultValue = "25") int limit) {
+                int safeLimit = Math.max(1, Math.min(limit, 100));
+                String email = authentication.getName();
 
         List<CupoPendienteItem> talleresPendientes = cupoTallerRepository.findPendientesPagoCaja().stream()
                 .limit(safeLimit)
@@ -245,7 +256,7 @@ public class FinanzasCajaController {
                 ))
                 .toList();
 
-        List<PagoMatriculaItem> pagosMatricula = pagoMatriculaRepository.findRecentCaja().stream()
+        List<PagoMatriculaItem> pagosMatricula = pagoMatriculaRepository.findRecentCaja(email).stream()
                 .limit(safeLimit)
                 .map(v -> new PagoMatriculaItem(
                         v.getPagoMatriculaId(),
@@ -261,7 +272,7 @@ public class FinanzasCajaController {
                 ))
                 .toList();
 
-        List<MensualidadItem> mensualidades = mensualidadRepository.findRecentCaja().stream()
+        List<MensualidadItem> mensualidades = mensualidadRepository.findRecentCaja(email).stream()
                 .limit(safeLimit)
                 .map(v -> new MensualidadItem(
                         v.getMensualidadId(),
@@ -279,7 +290,7 @@ public class FinanzasCajaController {
                 ))
                 .toList();
 
-        List<PagoCupoItem> pagosTaller = pagoCupoRepository.findRecentCaja().stream()
+        List<PagoCupoItem> pagosTaller = pagoCupoRepository.findRecentCaja(email).stream()
                 .limit(safeLimit)
                 .map(v -> new PagoCupoItem(
                         v.getPagoCupoId(),
@@ -455,6 +466,12 @@ public class FinanzasCajaController {
             List<MensualidadItem> mensualidades
     ) {}
 
+    public record CajaHistorialResponse(
+            List<PagoCupoItem> pagosTaller,
+            List<PagoMatriculaItem> pagosMatricula,
+            List<MensualidadItem> mensualidades
+    ) {}
+
         public record CajaSesionResponse(
                         Long id,
                         String codigo,
@@ -492,4 +509,76 @@ public class FinanzasCajaController {
         public record TallerPaymentRequest(Long cupoId, BigDecimal monto, Long metodoPagoId, String detalle) {}
 
         public record MensualidadPaymentRequest(Long estudianteId, Integer mesDePago, BigDecimal montoBase, BigDecimal montoMora, Long metodoPagoId, String detalle) {}
+
+            @GetMapping("/historial")
+            public ResponseEntity<CajaHistorialResponse> historial(
+                    Authentication authentication,
+                    @RequestParam(name = "sessionId", required = false) Long sessionId
+            ) {
+                CajaSesion session = null;
+                if (sessionId != null) {
+                    session = cajaSesionRepository.findById(sessionId).orElse(null);
+                } else {
+                    session = cajaFinanzasService.getActiveSession(authentication.getName());
+                }
+
+                if (session == null) {
+                    return ResponseEntity.ok(new CajaHistorialResponse(List.of(), List.of(), List.of()));
+                }
+
+                int safeLimit = 1000;
+
+                List<PagoCupoItem> pagosTaller = pagoCupoRepository.findByCajaSesionId(session.getId()).stream()
+                        .limit(safeLimit)
+                        .map(v -> new PagoCupoItem(
+                                v.getPagoCupoId(),
+                                v.getCupoId(),
+                                clean(v.getTaller()),
+                                clean(v.getParticipante()),
+                                clean(v.getNumeroRecibo()),
+                                v.getMonto(),
+                                v.getFechaPago(),
+                                clean(v.getEstado()),
+                                clean(v.getMetodoPago()),
+                                Boolean.TRUE.equals(v.getAnulado()),
+                                clean(v.getMotivoAnulacion())
+                        ))
+                        .toList();
+
+                List<PagoMatriculaItem> pagosMatricula = pagoMatriculaRepository.findByCajaSesionId(session.getId()).stream()
+                        .limit(safeLimit)
+                        .map(v -> new PagoMatriculaItem(
+                                v.getPagoMatriculaId(),
+                                v.getMatriculaId(),
+                                clean(v.getEstudiante()),
+                                v.getMonto(),
+                                v.getFechaPago(),
+                                clean(v.getEstado()),
+                                clean(v.getMetodoPago()),
+                                clean(v.getDetalle()),
+                                Boolean.TRUE.equals(v.getAnulado()),
+                                clean(v.getMotivoAnulacion())
+                        ))
+                        .toList();
+
+                List<MensualidadItem> mensualidades = mensualidadRepository.findByCajaSesionId(session.getId()).stream()
+                        .limit(safeLimit)
+                        .map(v -> new MensualidadItem(
+                                v.getMensualidadId(),
+                                clean(v.getEstudiante()),
+                                monthLabel(v.getMes()),
+                                v.getMontoBase(),
+                                v.getMontoMora(),
+                                v.getMonto(),
+                                v.getFechaPago(),
+                                clean(v.getEstado()),
+                                clean(v.getMetodoPago()),
+                                clean(v.getDetalle()),
+                                Boolean.TRUE.equals(v.getAnulado()),
+                                clean(v.getMotivoAnulacion())
+                        ))
+                        .toList();
+
+                return ResponseEntity.ok(new CajaHistorialResponse(pagosTaller, pagosMatricula, mensualidades));
+            }
 }
