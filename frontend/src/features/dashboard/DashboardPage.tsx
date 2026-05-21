@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import { DashboardSidebar, type DashboardView, dashboardMenuConfig, dashboardCategories } from './components/DashboardSidebar'
@@ -9,20 +10,42 @@ export function DashboardPage() {
   const { user, logout } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const visibleMenuItems = useMemo(
-    () => dashboardMenuConfig.filter((item) => !item.permission || user?.permisos.includes(item.permission)),
-    [user?.permisos],
-  )
+  const visibleMenuItems = useMemo(() => {
+    const topRoles = ['ADMIN', 'DIRECTOR']
+    const userRoles = (user?.roles ?? []).map((r) => r?.toUpperCase?.() ?? r)
+    const isTopRank = userRoles.some((r) => topRoles.includes(r))
+
+    return dashboardMenuConfig.filter((item) => {
+      if (!item.permission) return true
+      if (item.view === 'auditoria') {
+        // Mostrar la pestaña de auditoría sólo a roles top
+        return Boolean(isTopRank)
+      }
+      return Boolean(user?.permisos.includes(item.permission))
+    })
+  }, [user?.permisos, user?.roles])
 
   const [currentView, setCurrentView] = useState<DashboardView>(visibleMenuItems[0]?.view ?? 'overview')
 
   useEffect(() => {
     if (!visibleMenuItems.some((item) => item.view === currentView)) {
+      // Si la vista actual ya no está permitida (por URL manual u otro cambio), avisar y volver a la vista disponible
+      toast.error('No tienes permisos para acceder a la vista solicitada')
       setCurrentView(visibleMenuItems[0]?.view ?? 'overview')
     }
   }, [currentView, visibleMenuItems])
 
   const handleViewChange = (view: DashboardView) => {
+    const topRoles = ['ADMIN', 'DIRECTOR']
+    const userRoles = (user?.roles ?? []).map((r) => r?.toUpperCase?.() ?? r)
+    const isTop = userRoles.some((r) => topRoles.includes(r))
+
+    if (view === 'auditoria' && !isTop) {
+      toast.error('No tienes permisos para ver Auditoría del sistema')
+      setIsSidebarOpen(false)
+      return
+    }
+
     setCurrentView(view)
     setIsSidebarOpen(false)
   }

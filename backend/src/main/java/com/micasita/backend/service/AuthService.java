@@ -6,11 +6,16 @@ import com.micasita.backend.dto.auth.ChangePasswordRequest;
 import com.micasita.backend.dto.auth.LoginRequest;
 import com.micasita.backend.dto.auth.UpdateMyProfileRequest;
 import com.micasita.backend.service.validation.IdentityValidationUtils;
+import com.micasita.backend.entities.core.AuditoriaAccesoSistema;
 import com.micasita.backend.entities.core.PersonaRoles;
 import com.micasita.backend.entities.core.Usuario;
+import com.micasita.backend.repositories.core.AuditoriaAccesoRepository;
 import com.micasita.backend.repositories.core.PersonaRepository;
 import com.micasita.backend.repositories.core.PersonaRolesRepository;
 import com.micasita.backend.repositories.core.UsuarioRepository;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
@@ -18,6 +23,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -38,9 +46,12 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AuthService {
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final UsuarioRepository usuarioRepository;
     private final PersonaRepository personaRepository;
     private final PersonaRolesRepository personaRolesRepository;
+    private final AuditoriaAccesoRepository auditoriaAccesoRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final Path avatarDirectory;
@@ -50,6 +61,7 @@ public class AuthService {
             UsuarioRepository usuarioRepository,
             PersonaRepository personaRepository,
             PersonaRolesRepository personaRolesRepository,
+            AuditoriaAccesoRepository auditoriaAccesoRepository,
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             @Value("${app.upload.usuarios-avatar-dir:uploads/usuarios}") String avatarDirectory,
@@ -58,6 +70,7 @@ public class AuthService {
         this.usuarioRepository = usuarioRepository;
         this.personaRepository = personaRepository;
         this.personaRolesRepository = personaRolesRepository;
+        this.auditoriaAccesoRepository = auditoriaAccesoRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.avatarDirectory = Paths.get(avatarDirectory).toAbsolutePath().normalize();
@@ -91,6 +104,8 @@ public class AuthService {
                 user.roles(),
                 user.permisos()
         );
+
+        registerSuccessfulLoginAudit(usuario);
 
         return new AuthResponse(token, "Bearer", jwtService.getExpirationMinutes(), user);
     }
@@ -284,6 +299,8 @@ public class AuthService {
             permissions.add("DASHBOARD_USUARIOS");
             permissions.add("DASHBOARD_CONFIGURACION");
             permissions.add("USUARIOS_MANAGE");
+            // Permiso para acceder al panel de auditoría
+            permissions.add("DASHBOARD_AUDITORIA");
         }
 
         if (roles.contains("ADMINISTRACION")) {
@@ -315,5 +332,58 @@ public class AuthService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void registerSuccessfulLoginAudit(Usuario usuario) {
+        try {
+            HttpServletRequest request = resolveRequest();
+            String ip = extractClientIp(request);
+            String userAgent = request != null ? defaultIfNull(request.getHeader("User-Agent"), "<unknown>") : "<unknown>";
+
+            AuditoriaAccesoSistema record = AuditoriaAccesoSistema.builder()
+                    .usuario(usuario)
+                    .emailUsuario(usuario.getEmail())
+                    .fechaIngreso(java.time.LocalDateTime.now())
+                    .ipTerminal(ip)
+                    .navegadorCliente(userAgent)
+                    .estadoIntento("EXITOSO")
+                    .build();
+
+            auditoriaAccesoRepository.save(record);
+        } catch (Exception ex) {
+            // No debe bloquear el login si falla la escritura de auditoría.
+            log.error("Error saving successful login audit", ex);
+        }
+    }
+
+    private HttpServletRequest resolveRequest() {
+        RequestAttributes attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs instanceof ServletRequestAttributes sra) {
+            return sra.getRequest();
+        }
+        return null;
+    }
+
+    private String extractClientIp(HttpServletRequest request) {
+        if (request == null) return "<unknown>";
+
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            String[] parts = xff.split(",");
+            if (parts.length > 0) {
+                return parts[0].trim();
+            }
+        }
+
+        String realIp = request.getHeader("X-Real-IP");
+        if (realIp != null && !realIp.isBlank()) {
+            return realIp.trim();
+        }
+
+        return request.getRemoteAddr();
+    }
+
+    private String defaultIfNull(String value, String defaultVal) {
+        return value == null ? defaultVal : value;
     }
 }

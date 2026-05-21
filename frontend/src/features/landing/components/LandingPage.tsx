@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import Carousel from './carousel'
-import NewsCarousel from './news-carousel'
+// import NewsCarousel from './news-carousel'
 import TalleresSection from './talleres-section'
 import MatriculasCallToAction from './matriculas-call-to-action'
 import FAQSection from './faq-section'
@@ -60,7 +60,7 @@ export function LandingPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100">
       <Carousel />
-      <NewsCarousel />
+      {/* <NewsCarousel /> */}
       <TalleresSection />
       <MatriculasCallToAction />
       <FAQSection />

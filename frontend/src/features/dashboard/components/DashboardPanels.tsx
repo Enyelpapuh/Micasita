@@ -22,6 +22,8 @@ import { AdmisionDashboardPanel } from '../../admision/components/AdmisionDashbo
 import { AcademicoAsistenciaPanel, AcademicoGestionPanel, AcademicoNotasPanel } from './AcademicoPanels'
 import { StudentDirectoryPanel } from './StudentDirectoryPanel'
 import { useAuth } from '../../auth/AuthContext'
+import axios from 'axios'
+import type { RendimientoSistemaDTO } from '../../../dto/audit/RendimientoSistemaDTO'
 import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar } from './settings.api'
 import { CajaDashboardPanel } from './CajaDashboardPanel'
 import { getCajaDashboard } from './caja.api'
@@ -321,6 +323,70 @@ export function MensajesPanel() {
       icon={Mail}
       accent="from-cyan-50 via-sky-50 to-white"
     />
+  )
+}
+
+export function AuditoriaPanel() {
+  const { token } = useAuth()
+  const [data, setData] = useState<RendimientoSistemaDTO[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      if (!token) return
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await axios.get<RendimientoSistemaDTO[]>('/api/admin/auditoria/rendimiento', {
+          baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!cancelled) setData(res.data ?? [])
+      } catch (err) {
+        if (!cancelled) setError('No fue posible cargar métricas de rendimiento')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [token])
+
+  return (
+    <PanelShell title="Auditoría del Sistema" subtitle="Métricas de rendimiento y uso del sistema (solo visible por la persona de mayor rango)">
+      {loading ? (
+        <div className="p-6 text-center">Cargando métricas...</div>
+      ) : error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full table-auto">
+            <thead>
+              <tr className="text-left text-sm text-slate-700">
+                <th className="px-3 py-2">Periodo</th>
+                <th className="px-3 py-2">Total requests</th>
+                <th className="px-3 py-2">Avg response (ms)</th>
+                <th className="px-3 py-2">Max response (ms)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, idx) => (
+                <tr key={idx} className="border-t border-slate-100 text-sm text-slate-700">
+                  <td className="px-3 py-2">{row.periodo}</td>
+                  <td className="px-3 py-2">{row.totalRequests ?? '-'}</td>
+                  <td className="px-3 py-2">{row.avgResponseMs ?? '-'}</td>
+                  <td className="px-3 py-2">{row.maxResponseMs ?? '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </PanelShell>
   )
 }
 
@@ -625,8 +691,12 @@ export function getDashboardPanel(view: DashboardView, user?: AuthUser | null) {
       return <RecepcionPanel />
     case 'mensajes':
       return <MensajesPanel />
+    case 'noticias':
+      return <OverviewPanel user={user} />
     case 'settings':
       return <SettingsPanel />
+    case 'auditoria':
+      return <AuditoriaPanel />
     default:
       return <OverviewPanel user={user} />
   }

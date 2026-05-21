@@ -60,9 +60,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void setAuthentication(HttpServletRequest request, JwtPayload payload) {
-        List<SimpleGrantedAuthority> authorities = payload.roles().stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                .toList();
+        List<SimpleGrantedAuthority> roleAuthorities = payload.roles().stream()
+            .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+            .toList();
+
+        List<SimpleGrantedAuthority> permissionAuthorities = payload.permisos().stream()
+            .map(perm -> new SimpleGrantedAuthority(perm))
+            .toList();
+
+        List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+        authorities.addAll(roleAuthorities);
+        authorities.addAll(permissionAuthorities);
 
         log.info("[JWT] setting authentication user={} authorities={}", payload.email(), authorities);
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import heroImage from '../../../assets/hero.png';
+import image4 from '@/assets/elements/image4.jpg';
+import image5 from '@/assets/elements/image5.jpg';
+import image6 from '@/assets/elements/image6.jpg';
 
 export default function Carousel() {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -12,21 +14,21 @@ export default function Carousel() {
       title: 'Bienvenido a Mi casita',
       subtitle: 'Un espacio de amor, cuidado y aprendizaje',
       color: 'from-teal-700/90 to-cyan-600/90',
-      image: heroImage,
+      image: image4,
     },
     {
       id: 2,
       title: 'Desarrollo integral',
       subtitle: 'Estimulación temprana con profesionales calificados',
       color: 'from-orange-500/90 to-amber-500/90',
-      image: heroImage,
+      image: image5,
     },
     {
       id: 3,
       title: 'Crecimiento y felicidad',
       subtitle: 'Juntos creamos un futuro brillante para tus hijos',
       color: 'from-blue-600/90 to-teal-700/90',
-      image: heroImage,
+      image: image6,
     }
   ];
 

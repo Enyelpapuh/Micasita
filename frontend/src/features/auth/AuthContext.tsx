@@ -47,6 +47,17 @@ const API_MESSAGE_MAP: Record<string, string> = {
   ADMISION_TIPO_DOCUMENTO_NO_ENCONTRADO: 'El tipo de documento no existe o ya fue eliminado.',
   ADMISION_TIPO_DOCUMENTO_REQUEST_INVALIDO: 'La solicitud para tipo de documento es inválida.',
   ADMISION_TIPO_DOCUMENTO_EN_USO: 'No se puede eliminar este tipo de documento porque ya está en uso.',
+  ANUNCIO_PAYLOAD_REQUIRED: 'Debes completar la información de la noticia.',
+  ANUNCIO_TITLE_REQUIRED: 'El título de la noticia es obligatorio.',
+  ANUNCIO_DESCRIPTION_REQUIRED: 'La descripción de la noticia es obligatoria.',
+  ANUNCIO_NOT_FOUND: 'La noticia no existe o ya fue eliminada.',
+  ANUNCIO_IMAGE_TOO_LARGE: 'La imagen supera el tamaño máximo permitido.',
+  ANUNCIO_IMAGE_INVALID_TYPE: 'Solo se permiten archivos de imagen.',
+  ANUNCIO_IMAGE_INVALID_NAME: 'El nombre del archivo es inválido.',
+  ANUNCIO_IMAGE_SAVE_ERROR: 'No fue posible guardar la imagen.',
+  ANUNCIO_IMAGE_READ_ERROR: 'No fue posible leer la imagen.',
+  ANUNCIO_IMAGE_TYPE_ERROR: 'No fue posible determinar el tipo de imagen.',
+  ANUNCIO_IMAGE_NOT_FOUND: 'La imagen de la noticia no existe.',
 }
 
 export function normalizeApiError(error: unknown, fallback: string): string {

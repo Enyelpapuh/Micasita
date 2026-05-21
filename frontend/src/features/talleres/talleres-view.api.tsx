@@ -189,6 +189,14 @@ export function resolveTallerImageUrl(rutaImagen?: string | null): string {
     return rutaImagen
   }
 
+  if (rutaImagen.startsWith('/api/')) {
+    return `${API_ORIGIN}${rutaImagen}`
+  }
+
+  if (rutaImagen.startsWith('/')) {
+    return `${API_ORIGIN}${rutaImagen}`
+  }
+
   return new URL(rutaImagen, API_ORIGIN).toString()
 }
 

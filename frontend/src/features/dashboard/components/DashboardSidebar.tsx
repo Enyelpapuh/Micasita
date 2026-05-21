@@ -25,6 +25,8 @@ export type DashboardView =
   | 'grades'
   | 'cashier'
   | 'talleres'
+  | 'auditoria'
+  | 'noticias'
   | 'finanzasConfig'
   | 'recepcion'
   | 'mensajes'
@@ -214,4 +216,5 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
   { icon: Inbox, label: 'Bandeja de Solicitudes', view: 'recepcion', category: 'administrativo', permission: 'DASHBOARD_ADMISION' },
   { icon: Mail, label: 'Mensajes', view: 'mensajes', category: 'administrativo', permission: 'DASHBOARD_ADMISION' },
   { icon: Settings, label: 'Configuración', view: 'settings', category: 'sistema', permission: 'DASHBOARD_CONFIGURACION' },
+  { icon: ShieldCheck, label: 'Auditoría', view: 'auditoria', category: 'sistema', permission: 'DASHBOARD_AUDITORIA' },
 ]
