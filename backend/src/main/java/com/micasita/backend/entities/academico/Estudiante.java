@@ -21,4 +21,10 @@ public class Estudiante {
     @JoinColumn(name = "ID_persona", nullable = false)
     @ToString.Exclude
     private Persona persona;
+
+    @Column(name = "Alergias_Graves", length = 255)
+    private String alergiasGraves;
+
+    @Column(name = "Observacion_Medica_Corta", length = 500)
+    private String observacionMedicaCorta;
 }

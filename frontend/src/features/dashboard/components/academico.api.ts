@@ -59,6 +59,8 @@ export type EstudianteDetailItem = {
   telefono?: string | null
   correo?: string | null
   identificador?: string | null
+  alergiasGraves?: string | null
+  observacionMedicaCorta?: string | null
   tutores: EstudianteDetailTutorItem[]
   grupos: EstudianteDetailGrupoItem[]
 }
@@ -89,6 +91,8 @@ export type AsistenciaRowItem = {
   estudianteAsignaturaId?: number | null
   estadoAsistenciaId?: number | null
   observaciones?: string | null
+  estudianteAlergiasGraves?: string | null
+  estudianteObservacionMedicaCorta?: string | null
 }
 
 export type AsistenciaSheetResponse = {
@@ -99,6 +103,41 @@ export type AsistenciaSheetResponse = {
   fecha: string
   estados: EstadoAsistenciaItem[]
   rows: AsistenciaRowItem[]
+}
+
+export type AsistenciaHistorialItem = {
+  fecha: string
+  grupoId: number
+  grupoNombre: string
+  asignaturaId: number
+  asignaturaNombre: string
+  presentes: number
+  ausentes: number
+  justificados: number
+  total: number
+  ultimaObservacion?: string | null
+}
+
+export type DocenteClaseEstudianteItem = {
+  estudianteId: number
+  nombre?: string | null
+  apellido?: string | null
+  alergiasGraves?: string | null
+  observacionMedicaCorta?: string | null
+}
+
+export type DocenteClaseAsignaturaItem = {
+  asignaturaId: number
+  asignaturaNombre?: string | null
+}
+
+export type DocenteClaseItem = {
+  grupoId: number
+  grupoNombre?: string | null
+  grupoCodigoFuncion?: number | null
+  fechaInicio?: string | null
+  asignaturas: DocenteClaseAsignaturaItem[]
+  estudiantes: DocenteClaseEstudianteItem[]
 }
 
 export type EstudianteAsignaturaItem = {
@@ -152,6 +191,17 @@ export async function getEstudianteDetail(token: string | null, estudianteId: nu
   return response.data
 }
 
+export async function updateEstudianteInformacionDocente(
+  token: string | null,
+  estudianteId: number,
+  payload: { alergiasGraves: string | null; observacionMedicaCorta: string | null },
+) {
+  const response = await adminApi.put<EstudianteDetailItem>(`/academico/catalogos/estudiantes/${estudianteId}/informacion-docente`, payload, {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
 export async function listProfesores(token: string | null): Promise<ProfesorItem[]> {
   const response = await adminApi.get<ProfesorItem[]>('/academico/catalogos/profesores', { headers: authHeaders(token) })
   return response.data
@@ -188,6 +238,11 @@ export async function listEstadosAsistencia(token: string | null): Promise<Estad
   return response.data
 }
 
+export async function getMisClasesDocente(token: string | null): Promise<DocenteClaseItem[]> {
+  const response = await adminApi.get<DocenteClaseItem[]>('/academico/docente/mis-clases', { headers: authHeaders(token) })
+  return response.data
+}
+
 export async function getAsistenciaSheet(token: string | null, params: { grupoId: number; asignaturaId: number; fecha: string }) {
   const response = await adminApi.get<AsistenciaSheetResponse>('/academico/asistencia/sheet', {
     headers: authHeaders(token),
@@ -206,6 +261,17 @@ export async function registrarAsistenciaSheet(
   },
 ) {
   await adminApi.post('/academico/asistencia/sheet', payload, { headers: authHeaders(token) })
+}
+
+export async function getAsistenciaHistorial(
+  token: string | null,
+  params: { grupoId: number; asignaturaId: number; limit?: number },
+): Promise<AsistenciaHistorialItem[]> {
+  const response = await adminApi.get<AsistenciaHistorialItem[]>('/academico/asistencia/historial', {
+    headers: authHeaders(token),
+    params,
+  })
+  return response.data
 }
 
 export async function registrarTrabajo(token: string | null, payload: { estudianteAsignaturaId: number; nota: number; fecha?: string | null }) {

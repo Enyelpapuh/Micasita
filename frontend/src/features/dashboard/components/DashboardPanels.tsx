@@ -304,7 +304,7 @@ export function GradesPanel() {
 }
 
 export function TalleresPanel() {
-  return <CajaDashboardPanel />
+  return <TalleresView />
 }
 
 export function CashierPanel() {
@@ -322,6 +322,17 @@ export function MensajesPanel() {
       subtitle="Centro de comunicaciones y seguimiento de mensajes internos."
       icon={Mail}
       accent="from-cyan-50 via-sky-50 to-white"
+    />
+  )
+}
+
+export function AvisosPanel() {
+  return (
+    <GenericModulePanel
+      title="Noticias y avisos"
+      subtitle="Publicaciones visibles para la comunidad: anuncios, novedades y mensajes de dirección."
+      icon={Mail}
+      accent="from-amber-50 via-orange-50 to-white"
     />
   )
 }
@@ -692,7 +703,7 @@ export function getDashboardPanel(view: DashboardView, user?: AuthUser | null) {
     case 'mensajes':
       return <MensajesPanel />
     case 'noticias':
-      return <OverviewPanel user={user} />
+      return <AvisosPanel />
     case 'settings':
       return <SettingsPanel />
     case 'auditoria':

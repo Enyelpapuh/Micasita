@@ -6,10 +6,14 @@ import com.micasita.backend.dto.admin.UpdateUsuarioEstadoRequest;
 import com.micasita.backend.dto.admin.UpdateUsuarioRolesRequest;
 import com.micasita.backend.dto.admin.UsuarioAdminResponse;
 import com.micasita.backend.service.validation.IdentityValidationUtils;
+import com.micasita.backend.entities.academico.Profesor;
+import com.micasita.backend.entities.academico.Puesto;
 import com.micasita.backend.entities.core.Persona;
 import com.micasita.backend.entities.core.PersonaRoles;
 import com.micasita.backend.entities.core.Roles;
 import com.micasita.backend.entities.core.Usuario;
+import com.micasita.backend.repositories.academico.ProfesorRepository;
+import com.micasita.backend.repositories.academico.PuestoRepository;
 import com.micasita.backend.repositories.core.PersonaRepository;
 import com.micasita.backend.repositories.core.PersonaRolesRepository;
 import com.micasita.backend.repositories.core.RolesRepository;
@@ -41,6 +45,8 @@ public class AdminUsuarioService {
 
     private final UsuarioRepository usuarioRepository;
     private final PersonaRepository personaRepository;
+    private final ProfesorRepository profesorRepository;
+    private final PuestoRepository puestoRepository;
     private final RolesRepository rolesRepository;
     private final PersonaRolesRepository personaRolesRepository;
     private final PasswordEncoder passwordEncoder;
@@ -50,6 +56,8 @@ public class AdminUsuarioService {
     public AdminUsuarioService(
             UsuarioRepository usuarioRepository,
             PersonaRepository personaRepository,
+            ProfesorRepository profesorRepository,
+            PuestoRepository puestoRepository,
             RolesRepository rolesRepository,
             PersonaRolesRepository personaRolesRepository,
             PasswordEncoder passwordEncoder,
@@ -58,6 +66,8 @@ public class AdminUsuarioService {
     ) {
         this.usuarioRepository = usuarioRepository;
         this.personaRepository = personaRepository;
+        this.profesorRepository = profesorRepository;
+        this.puestoRepository = puestoRepository;
         this.rolesRepository = rolesRepository;
         this.personaRolesRepository = personaRolesRepository;
         this.passwordEncoder = passwordEncoder;
@@ -106,6 +116,7 @@ public class AdminUsuarioService {
                 .build());
 
         replaceRoles(usuario.getPersona().getId(), request.roles());
+        syncAcademicProfiles(usuario.getPersona().getId(), request.roles());
 
         return toUsuarioAdminResponse(usuario);
     }
@@ -120,6 +131,7 @@ public class AdminUsuarioService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
         replaceRoles(usuario.getPersona().getId(), request.roles());
+        syncAcademicProfiles(usuario.getPersona().getId(), request.roles());
 
         return toUsuarioAdminResponse(usuario);
     }
@@ -231,6 +243,40 @@ public class AdminUsuarioService {
     private Roles resolveRol(String roleName) {
         return rolesRepository.findByNombreRol(roleName)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Rol no existe: " + roleName));
+    }
+
+    private void syncAcademicProfiles(Long personaId, List<String> roles) {
+        if (personaId == null || roles == null || roles.isEmpty()) {
+            return;
+        }
+
+        boolean shouldBeProfesor = roles.stream()
+                .map(this::normalizeRole)
+                .anyMatch(role -> "PROFESOR".equals(role) || "DOCENTE".equals(role));
+
+        if (!shouldBeProfesor) {
+            return;
+        }
+
+        if (profesorRepository.findByPersonaId(personaId).isPresent()) {
+            return;
+        }
+
+        Persona persona = personaRepository.findById(personaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Persona no encontrada para crear perfil profesor"));
+
+        Puesto puestoDocente = puestoRepository.findByNombre("DOCENTE")
+                .orElseGet(() -> puestoRepository.save(Puesto.builder()
+                        .nombre("DOCENTE")
+                        .descripcion("Docente")
+                        .rango("DOCENTE")
+                        .build()));
+
+        profesorRepository.save(Profesor.builder()
+                .persona(persona)
+                .puesto(puestoDocente)
+                .carrera(null)
+                .build());
     }
 
     private String normalizeRole(String role) {

@@ -1,4 +1,3 @@
-import { Mail, Phone, MapPin } from 'lucide-react';
 import { FiFacebook, FiInstagram } from 'react-icons/fi';
 import type { MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';

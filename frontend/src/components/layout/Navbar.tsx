@@ -6,44 +6,6 @@ import logo from '../../assets/MiCASITALOGO-cropped.svg'
 import { useAuth } from '../../features/auth/AuthContext'
 import { getLandingAdmisionConfig } from '../../features/admision/admision.api'
 
-function scrollToMatchingText(text: string) {
-  const normalize = (s?: string) =>
-    (s || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .replace(/[?¿¡!.,;:\/\-]/g, '')
-      .trim()
-
-  const target = normalize(text)
-
-  if (target === 'inicio') {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-    return
-  }
-
-  const headingSelectors = 'h1,h2,h3,h4,h5,section'
-  const headings = Array.from(document.querySelectorAll<HTMLElement>(headingSelectors))
-  const match = headings.find(el => normalize(el.textContent).includes(target))
-
-  const doFocusAndScroll = (el: HTMLElement) => {
-    el.setAttribute('tabindex', '-1')
-    el.focus({ preventScroll: true })
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  if (match) {
-    doFocusAndScroll(match)
-    return
-  }
-
-  const all = Array.from(document.querySelectorAll<HTMLElement>('body *'))
-  const fallback = all.find(el => normalize(el.textContent).includes(target))
-  if (fallback) {
-    doFocusAndScroll(fallback)
-  }
-}
-
 const baseNavLinks = [
   { label: 'Inicio', to: '/' },
   { label: '¿Qué es Mi casita?', to: '/' },

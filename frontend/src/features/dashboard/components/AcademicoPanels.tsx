@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { LoaderCircle, Save } from 'lucide-react'
+import { LoaderCircle, MessageSquare, Save } from 'lucide-react'
 import { normalizeApiError, useAuth } from '../../auth/AuthContext'
 import {
   actualizarNotaFinal,
@@ -8,10 +8,12 @@ import {
   asignarProfesorGrupo,
   createAsignatura,
   createGrupo,
+  getMisClasesDocente,
   getAsistenciaSheet,
   inscribirEstudianteAsignatura,
   inscribirEstudianteGrupo,
   listAsignaturas,
+  getAsistenciaHistorial,
   listEstadosAsistencia,
   listEstudiantes,
   listGrupos,
@@ -21,7 +23,10 @@ import {
   registrarTrabajo,
   vincularEstudianteTutor,
   type AsistenciaRowItem,
+  type AsistenciaHistorialItem,
+  type AsistenciaSheetResponse,
   type AsignaturaItem,
+  type DocenteClaseItem,
   type EstadoAsistenciaItem,
   type EstudianteItem,
   type GrupoItem,
@@ -47,6 +52,7 @@ type AcademicoRowState = AsistenciaRowItem & {
   selectedEstadoId?: number | null
   noteTrabajo?: string
   notaFinal?: string
+  observacionesOpen?: boolean
 }
 
 function AcademicoAsistenciaSegment({
@@ -55,6 +61,7 @@ function AcademicoAsistenciaSegment({
   savingAttendance,
   onEstadoChange,
   onObservacionChange,
+  onToggleObservation,
   onSave,
 }: {
   rows: AcademicoRowState[]
@@ -62,8 +69,34 @@ function AcademicoAsistenciaSegment({
   savingAttendance: boolean
   onEstadoChange: (estudianteId: number, estadoId: number) => void
   onObservacionChange: (estudianteId: number, observaciones: string) => void
+  onToggleObservation: (estudianteId: number) => void
   onSave: () => void
 }) {
+  const getEstadoMeta = (estadoId?: number | null) => {
+    const estado = estados.find((item) => item.id === estadoId)
+    const normalized = estado?.nombre?.trim().toUpperCase() ?? ''
+
+    if (normalized === 'PRESENTE') {
+      return { label: 'P', color: 'green', className: 'bg-green-50 border-green-200 text-green-900', button: 'bg-green-600 text-white border-green-600' }
+    }
+
+    if (normalized === 'AUSENTE' || normalized === 'INASISTENCIA') {
+      return { label: 'I', color: 'red', className: 'bg-red-50 border-red-200 text-red-900', button: 'bg-red-600 text-white border-red-600' }
+    }
+
+    if (normalized === 'JUSTIFICADO') {
+      return { label: 'J', color: 'amber', className: 'bg-amber-50 border-amber-200 text-amber-900', button: 'bg-amber-500 text-white border-amber-500' }
+    }
+
+    return { label: '?', color: 'slate', className: 'bg-slate-50 border-slate-200 text-slate-900', button: 'bg-slate-200 text-slate-800 border-slate-300' }
+  }
+
+  const initials = (name?: string | null, lastName?: string | null) => {
+    const first = name?.trim()?.[0] ?? 'U'
+    const second = lastName?.trim()?.[0] ?? ''
+    return `${first}${second}`.toUpperCase()
+  }
+
   return (
     <>
       <div className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-3">
@@ -71,50 +104,103 @@ function AcademicoAsistenciaSegment({
         <p className="text-xs text-teal-800">Marca estado por estudiante y guarda toda la asistencia del día en un solo paso.</p>
       </div>
 
-      <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
-        <table className="min-w-full divide-y divide-slate-200 text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-600">
-            <tr>
-              <th className="px-3 py-2 text-left">Estudiante</th>
-              <th className="px-3 py-2 text-left">Asistencia</th>
-              <th className="px-3 py-2 text-left">Observaciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.map((row) => (
-              <tr key={row.estudianteId}>
-                <td className="px-3 py-2">{row.estudianteNombre} {row.estudianteApellido}</td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap gap-2">
-                    {estados.map((estado) => (
-                      <button
-                        key={`${row.estudianteId}-${estado.id}`}
-                        type="button"
-                        onClick={() => onEstadoChange(row.estudianteId, estado.id)}
-                        className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${row.selectedEstadoId === estado.id ? 'border-teal-600 bg-teal-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-                      >
-                        {estado.nombre}
-                      </button>
-                    ))}
-                  </div>
-                </td>
-                <td className="px-3 py-2">
-                  <input
+      <div className="mt-4 grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        {rows.length > 0 ? rows.map((row) => {
+          const estadoMeta = getEstadoMeta(row.selectedEstadoId)
+
+          return (
+            <article
+              key={row.estudianteId}
+              className={`flex h-full flex-col rounded-2xl border p-4 shadow-sm transition-all duration-200 ${estadoMeta.className}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-sm font-bold ${estadoMeta.button}`}>
+                  {initials(row.estudianteNombre, row.estudianteApellido)}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">
+                    {row.estudianteNombre} {row.estudianteApellido}
+                  </p>
+                  <p className="text-[11px] uppercase tracking-[0.14em] opacity-70">ID {row.estudianteId}</p>
+                  {row.estudianteAlergiasGraves || row.estudianteObservacionMedicaCorta ? (
+                    <div className="mt-2 space-y-2">
+                      {row.estudianteAlergiasGraves ? (
+                        <p className="line-clamp-2 rounded-xl border border-rose-200/80 bg-rose-50/80 px-2.5 py-2 text-xs text-rose-900">
+                          <span className="font-semibold uppercase tracking-[0.12em]">Alergia:</span> {row.estudianteAlergiasGraves}
+                        </p>
+                      ) : null}
+                      {row.estudianteObservacionMedicaCorta ? (
+                        <p className="line-clamp-3 rounded-xl border border-amber-200/80 bg-amber-50/80 px-2.5 py-2 text-xs text-amber-950">
+                          <span className="font-semibold uppercase tracking-[0.12em]">Nota:</span> {row.estudianteObservacionMedicaCorta}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2">
+                {estados.map((estado) => {
+                  const normalized = estado.nombre.trim().toUpperCase()
+                  const buttonClass = normalized === 'PRESENTE'
+                    ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                    : normalized === 'AUSENTE' || normalized === 'INASISTENCIA'
+                      ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                      : normalized === 'JUSTIFICADO'
+                        ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+
+                  return (
+                    <button
+                      key={`${row.estudianteId}-${estado.id}`}
+                      type="button"
+                      title={estado.nombre}
+                      onClick={() => onEstadoChange(row.estudianteId, estado.id)}
+                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-bold transition ${row.selectedEstadoId === estado.id ? `${buttonClass} ring-2 ring-offset-1 ring-current/20` : buttonClass}`}
+                    >
+                      {normalized === 'PRESENTE' ? 'P' : normalized === 'AUSENTE' || normalized === 'INASISTENCIA' ? 'I' : normalized === 'JUSTIFICADO' ? 'J' : estado.nombre.slice(0, 1).toUpperCase()}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => onToggleObservation(row.estudianteId)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Observación
+                </button>
+                <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                  {estadoMeta.label}
+                </span>
+              </div>
+
+              {row.observacionesOpen ? (
+                <div className="mt-3">
+                  <textarea
                     value={row.observaciones ?? ''}
                     onChange={(e) => onObservacionChange(row.estudianteId, e.target.value)}
-                    placeholder="Observación de asistencia (opcional)"
-                    className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"
+                    rows={2}
+                    placeholder="Motivo de tardanza, salud o aviso..."
+                    className="w-full rounded-xl border border-white/60 bg-white/90 px-3 py-2 text-sm outline-none ring-0 placeholder:text-slate-400 focus:border-slate-300"
                   />
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="px-3 py-6 text-center text-xs text-slate-500">Carga una hoja para comenzar.</td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+                </div>
+              ) : row.observaciones ? (
+                <p className="mt-3 line-clamp-2 rounded-xl border border-white/60 bg-white/60 px-3 py-2 text-xs text-slate-700">
+                  {row.observaciones}
+                </p>
+              ) : null}
+            </article>
+          )
+        }) : (
+          <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-sm text-slate-500">
+            Carga una hoja para comenzar.
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex justify-end">
@@ -567,32 +653,146 @@ export function AcademicoAsistenciaNotasPanel({
   title = 'Asistencia y notas',
   subtitle = 'Vista intuitiva para docentes: selecciona grupo, asignatura y fecha, marca estados rápidos y registra notas.',
 }: AcademicoAsistenciaNotasPanelProps = {}) {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [activeSegment, setActiveSegment] = useState<'asistencia' | 'notas'>(initialSegment)
   const [loading, setLoading] = useState(true)
   const [grupos, setGrupos] = useState<GrupoItem[]>([])
   const [asignaturas, setAsignaturas] = useState<AsignaturaItem[]>([])
   const [estados, setEstados] = useState<EstadoAsistenciaItem[]>([])
+  const [misClasesDocente, setMisClasesDocente] = useState<DocenteClaseItem[]>([])
 
   const [selectedGrupoId, setSelectedGrupoId] = useState<number | null>(null)
   const [selectedAsignaturaId, setSelectedAsignaturaId] = useState<number | null>(null)
   const [selectedFecha, setSelectedFecha] = useState<string>(new Date().toISOString().slice(0, 10))
   const [rows, setRows] = useState<AcademicoRowState[]>([])
+  const [historial, setHistorial] = useState<AsistenciaHistorialItem[]>([])
   const [loadingSheet, setLoadingSheet] = useState(false)
+  const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [savingAttendance, setSavingAttendance] = useState(false)
+  const sheetCacheRef = useRef<Map<string, AsistenciaSheetResponse>>(new Map())
+
+  const isProfesor = useMemo(() => {
+    const roles = user?.roles ?? []
+    return roles.some((role) => ['PROFESOR', 'DOCENTE'].includes(role?.toUpperCase?.() ?? role))
+  }, [user])
+
+  const gruposVisibles = useMemo(() => {
+    if (!isProfesor) {
+      return grupos
+    }
+
+    const unique = new Map<number, GrupoItem>()
+    misClasesDocente.forEach((clase) => {
+      if (!clase.grupoId || unique.has(clase.grupoId)) {
+        return
+      }
+      unique.set(clase.grupoId, {
+        id: clase.grupoId,
+        nombre: clase.grupoNombre ?? `Grupo ${clase.grupoId}`,
+        codigoFuncion: clase.grupoCodigoFuncion ?? null,
+      })
+    })
+
+    return Array.from(unique.values())
+  }, [grupos, isProfesor, misClasesDocente])
+
+  const asignaturasVisibles = useMemo(() => {
+    if (!isProfesor) {
+      return asignaturas
+    }
+
+    const unique = new Map<number, AsignaturaItem>()
+    misClasesDocente
+      .filter((clase) => clase.grupoId === selectedGrupoId)
+      .forEach((clase) => {
+        clase.asignaturas.forEach((asignatura) => {
+          if (!asignatura.asignaturaId || unique.has(asignatura.asignaturaId)) {
+            return
+          }
+          unique.set(asignatura.asignaturaId, {
+            id: asignatura.asignaturaId,
+            nombre: asignatura.asignaturaNombre ?? `Asignatura ${asignatura.asignaturaId}`,
+            descripcion: null,
+          })
+        })
+      })
+
+    return Array.from(unique.values())
+  }, [asignaturas, isProfesor, misClasesDocente, selectedGrupoId])
+
+  const estudiantesClaseSeleccionada = useMemo(() => {
+    if (!isProfesor || !selectedGrupoId) {
+      return []
+    }
+
+    const clase = misClasesDocente.find((item) => item.grupoId === selectedGrupoId)
+    return clase?.estudiantes ?? []
+  }, [isProfesor, misClasesDocente, selectedGrupoId])
+
+  const getPresentEstadoId = () => estados.find((estado) => estado.nombre.trim().toUpperCase() === 'PRESENTE')?.id ?? null
+
+  const buildSheetCacheKey = useCallback((grupoId: number, asignaturaId: number, fecha: string) => {
+    return `${grupoId}::${asignaturaId}::${fecha}`
+  }, [])
+
+  const applySheetRows = useCallback((response: AsistenciaSheetResponse) => {
+    const presentEstadoId = getPresentEstadoId()
+
+    setRows(response.rows.map((row) => ({
+      ...row,
+      selectedEstadoId: row.estadoAsistenciaId ?? presentEstadoId ?? undefined,
+      noteTrabajo: '',
+      notaFinal: '',
+      observacionesOpen: Boolean(row.observaciones),
+    })))
+  }, [estados])
+
+  const loadHistory = useCallback(async (grupoId?: number | null, asignaturaId?: number | null) => {
+    if (!grupoId || !asignaturaId) {
+      setHistorial([])
+      return
+    }
+
+    setLoadingHistorial(true)
+    try {
+      const response = await getAsistenciaHistorial(token, { grupoId, asignaturaId, limit: 8 })
+      setHistorial(response)
+    } catch (error) {
+      toast.error(normalizeApiError(error, 'No se pudo cargar el historial de asistencia'))
+      setHistorial([])
+    } finally {
+      setLoadingHistorial(false)
+    }
+  }, [token])
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       setLoading(true)
       try {
-        const [g, a, e] = await Promise.all([listGrupos(token), listAsignaturas(token), listEstadosAsistencia(token)])
+        const [g, a, e, misClases] = await Promise.all([
+          listGrupos(token),
+          listAsignaturas(token),
+          listEstadosAsistencia(token),
+          isProfesor ? getMisClasesDocente(token) : Promise.resolve([]),
+        ])
+
+        const misClasesProfesor = (misClases as DocenteClaseItem[])
         if (!cancelled) {
           setGrupos(g)
           setAsignaturas(a)
           setEstados(e)
-          setSelectedGrupoId(g[0]?.id ?? null)
-          setSelectedAsignaturaId(a[0]?.id ?? null)
+          setMisClasesDocente(misClasesProfesor)
+
+          if (isProfesor) {
+            const primerGrupo = misClasesProfesor[0]?.grupoId ?? null
+            const primeraAsignatura = misClasesProfesor[0]?.asignaturas?.[0]?.asignaturaId ?? null
+            setSelectedGrupoId(primerGrupo)
+            setSelectedAsignaturaId(primeraAsignatura)
+          } else {
+            setSelectedGrupoId(g[0]?.id ?? null)
+            setSelectedAsignaturaId(a[0]?.id ?? null)
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -608,13 +808,56 @@ export function AcademicoAsistenciaNotasPanel({
     return () => {
       cancelled = true
     }
-  }, [token])
+  }, [isProfesor, token])
+
+  useEffect(() => {
+    if (!isProfesor) {
+      return
+    }
+
+    if (gruposVisibles.length === 0) {
+      setSelectedGrupoId(null)
+      setSelectedAsignaturaId(null)
+      return
+    }
+
+    if (!selectedGrupoId || !gruposVisibles.some((item) => item.id === selectedGrupoId)) {
+      setSelectedGrupoId(gruposVisibles[0].id)
+      return
+    }
+
+    if (asignaturasVisibles.length === 0) {
+      setSelectedAsignaturaId(null)
+      return
+    }
+
+    if (!selectedAsignaturaId || !asignaturasVisibles.some((item) => item.id === selectedAsignaturaId)) {
+      setSelectedAsignaturaId(asignaturasVisibles[0].id)
+    }
+  }, [asignaturasVisibles, gruposVisibles, isProfesor, selectedAsignaturaId, selectedGrupoId])
+
+  useEffect(() => {
+    void loadHistory(selectedGrupoId, selectedAsignaturaId)
+  }, [loadHistory, selectedGrupoId, selectedAsignaturaId])
 
   const canLoadSheet = useMemo(() => Boolean(selectedGrupoId && selectedAsignaturaId && selectedFecha), [selectedGrupoId, selectedAsignaturaId, selectedFecha])
 
-  const loadSheet = async () => {
+  const loadSheet = useCallback(async (
+    fecha = selectedFecha,
+    options?: { forceRefresh?: boolean },
+  ) => {
     if (!selectedGrupoId || !selectedAsignaturaId) {
       return
+    }
+
+    const cacheKey = buildSheetCacheKey(selectedGrupoId, selectedAsignaturaId, fecha)
+    if (!options?.forceRefresh) {
+      const cached = sheetCacheRef.current.get(cacheKey)
+      if (cached) {
+        applySheetRows(cached)
+        await loadHistory(selectedGrupoId, selectedAsignaturaId)
+        return
+      }
     }
 
     setLoadingSheet(true)
@@ -622,21 +865,32 @@ export function AcademicoAsistenciaNotasPanel({
       const response = await getAsistenciaSheet(token, {
         grupoId: selectedGrupoId,
         asignaturaId: selectedAsignaturaId,
-        fecha: selectedFecha,
+        fecha,
       })
 
-      setRows(response.rows.map((row) => ({
-        ...row,
-        selectedEstadoId: row.estadoAsistenciaId ?? undefined,
-        noteTrabajo: '',
-        notaFinal: '',
-      })))
+      sheetCacheRef.current.set(cacheKey, response)
+      applySheetRows(response)
+      await loadHistory(selectedGrupoId, selectedAsignaturaId)
     } catch (error) {
       toast.error(normalizeApiError(error, 'No se pudo cargar la hoja de asistencia'))
     } finally {
       setLoadingSheet(false)
     }
-  }
+  }, [applySheetRows, buildSheetCacheKey, loadHistory, selectedAsignaturaId, selectedFecha, selectedGrupoId, token])
+
+  useEffect(() => {
+    if (!canLoadSheet || loading) {
+      return
+    }
+
+    const debounceId = window.setTimeout(() => {
+      void loadSheet(selectedFecha)
+    }, 250)
+
+    return () => {
+      window.clearTimeout(debounceId)
+    }
+  }, [canLoadSheet, loadSheet, loading, selectedAsignaturaId, selectedFecha, selectedGrupoId])
 
   const saveAttendance = async () => {
     if (!selectedGrupoId || !selectedAsignaturaId) {
@@ -665,7 +919,7 @@ export function AcademicoAsistenciaNotasPanel({
         registros,
       })
       toast.success('Asistencia guardada correctamente')
-      await loadSheet()
+      await loadSheet(selectedFecha, { forceRefresh: true })
     } catch (error) {
       toast.error(normalizeApiError(error, 'No se pudo guardar la asistencia'))
     } finally {
@@ -721,7 +975,7 @@ export function AcademicoAsistenciaNotasPanel({
       }
 
       toast.success('Notas guardadas')
-      await loadSheet()
+      await loadSheet(selectedFecha, { forceRefresh: true })
     } catch (error) {
       toast.error(normalizeApiError(error, 'No se pudieron guardar las notas'))
     }
@@ -742,19 +996,23 @@ export function AcademicoAsistenciaNotasPanel({
         <>
           <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-sm font-semibold text-slate-900">Contexto de clase</p>
-            <p className="mb-3 text-xs text-slate-500">Primero selecciona el grupo, asignatura y fecha para abrir la hoja del día.</p>
+            <p className="mb-3 text-xs text-slate-500">
+              {isProfesor
+                ? 'Se muestran solo tus clases asignadas. Selecciona clase y fecha para abrir asistencia.'
+                : 'Primero selecciona el grupo, asignatura y fecha para abrir la hoja del día.'}
+            </p>
             <div className="grid gap-2 md:grid-cols-4">
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-700">Grupo</label>
                 <select value={selectedGrupoId ?? ''} onChange={(e) => setSelectedGrupoId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                  {grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                  {gruposVisibles.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
                 </select>
               </div>
 
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-700">Asignatura</label>
                 <select value={selectedAsignaturaId ?? ''} onChange={(e) => setSelectedAsignaturaId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                  {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                  {asignaturasVisibles.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                 </select>
               </div>
 
@@ -766,15 +1024,52 @@ export function AcademicoAsistenciaNotasPanel({
               <div className="flex items-end">
                 <button
                   type="button"
-                  onClick={loadSheet}
+                  onClick={() => loadSheet(selectedFecha, { forceRefresh: true })}
                   disabled={!canLoadSheet || loadingSheet}
                   className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
                 >
                   {loadingSheet ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Cargar hoja
+                  Recargar hoja
                 </button>
               </div>
             </div>
+
+            {isProfesor ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-900">Estudiantes asignados en esta clase</p>
+                <p className="text-xs text-slate-500">Vista rápida por grupo para preparar asistencia.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {estudiantesClaseSeleccionada.length > 0 ? estudiantesClaseSeleccionada.map((estudiante) => (
+                    <article key={estudiante.estudianteId} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {estudiante.nombre} {estudiante.apellido}
+                      </p>
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">ID {estudiante.estudianteId}</p>
+                      {estudiante.alergiasGraves ? (
+                        <p className="mt-2 line-clamp-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-900">
+                          Alergia: {estudiante.alergiasGraves}
+                        </p>
+                      ) : null}
+                      {estudiante.observacionMedicaCorta ? (
+                        <p className="mt-2 line-clamp-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                          Nota: {estudiante.observacionMedicaCorta}
+                        </p>
+                      ) : null}
+                    </article>
+                  )) : (
+                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                      No hay estudiantes asignados para este grupo.
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
+            {isProfesor && gruposVisibles.length === 0 ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                No tienes clases asignadas todavía. Solicita a administración que te vincule a un grupo y asignatura.
+              </div>
+            ) : null}
           </div>
 
           {!lockSegment ? (
@@ -797,18 +1092,78 @@ export function AcademicoAsistenciaNotasPanel({
           ) : null}
 
           {activeSegment === 'asistencia' ? (
-            <AcademicoAsistenciaSegment
-              rows={rows}
-              estados={estados}
-              savingAttendance={savingAttendance}
-              onEstadoChange={(estudianteId, estadoId) => {
-                setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, selectedEstadoId: estadoId } : item))
-              }}
-              onObservacionChange={(estudianteId, observaciones) => {
-                setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, observaciones } : item))
-              }}
-              onSave={saveAttendance}
-            />
+            <>
+              <AcademicoAsistenciaSegment
+                rows={rows}
+                estados={estados}
+                savingAttendance={savingAttendance}
+                onEstadoChange={(estudianteId, estadoId) => {
+                  setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, selectedEstadoId: estadoId } : item))
+                }}
+                onObservacionChange={(estudianteId, observaciones) => {
+                  setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, observaciones } : item))
+                }}
+                onToggleObservation={(estudianteId) => {
+                  setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, observacionesOpen: !item.observacionesOpen } : item))
+                }}
+                onSave={saveAttendance}
+              />
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Historial de asistencias</p>
+                    <p className="text-xs text-slate-500">Últimas sesiones guardadas para este grupo y asignatura.</p>
+                  </div>
+                  {loadingHistorial ? <LoaderCircle className="h-4 w-4 animate-spin text-slate-500" /> : null}
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {historial.length > 0 ? historial.map((item) => (
+                    <button
+                      key={`${item.fecha}-${item.grupoId}-${item.asignaturaId}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFecha(item.fecha)
+                        void loadSheet(item.fecha)
+                      }}
+                      className="text-left rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-teal-300 hover:bg-teal-50/60"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{new Date(item.fecha).toLocaleDateString('es-NI', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                          <p className="text-xs text-slate-500">{item.grupoNombre} · {item.asignaturaNombre}</p>
+                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{item.total} alumnos</span>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                        <div className="rounded-xl bg-green-50 px-3 py-2 text-green-800">
+                          <p className="font-semibold">Presentes</p>
+                          <p>{item.presentes}</p>
+                        </div>
+                        <div className="rounded-xl bg-red-50 px-3 py-2 text-red-800">
+                          <p className="font-semibold">Ausentes</p>
+                          <p>{item.ausentes}</p>
+                        </div>
+                        <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800">
+                          <p className="font-semibold">Justificados</p>
+                          <p>{item.justificados}</p>
+                        </div>
+                      </div>
+
+                      {item.ultimaObservacion ? (
+                        <p className="mt-3 line-clamp-2 text-xs text-slate-600">{item.ultimaObservacion}</p>
+                      ) : null}
+                    </button>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+                      Aún no hay historial para esta combinación.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
           ) : (
             <AcademicoNotasSegment
               rows={rows}

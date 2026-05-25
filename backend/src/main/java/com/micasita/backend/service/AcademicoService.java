@@ -15,6 +15,7 @@ import com.micasita.backend.entities.academico.Profesor;
 import com.micasita.backend.entities.academico.ProfesorGrupo;
 import com.micasita.backend.entities.academico.Trabajo;
 import com.micasita.backend.entities.academico.Tutor;
+import com.micasita.backend.entities.core.Usuario;
 import com.micasita.backend.repositories.academico.AsignaturaRepository;
 import com.micasita.backend.repositories.academico.AsistenciaEstudianteRepository;
 import com.micasita.backend.repositories.academico.AsistenciaGeneralRepository;
@@ -30,6 +31,7 @@ import com.micasita.backend.repositories.academico.ProfesorGrupoRepository;
 import com.micasita.backend.repositories.academico.ProfesorRepository;
 import com.micasita.backend.repositories.academico.TrabajoRepository;
 import com.micasita.backend.repositories.academico.TutorRepository;
+import com.micasita.backend.repositories.core.UsuarioRepository;
 import com.micasita.backend.repositories.finanzas.MatriculaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -63,6 +65,7 @@ public class AcademicoService {
     private final TutorRepository tutorRepository;
     private final EstudianteTutorRepository estudianteTutorRepository;
         private final MatriculaRepository matriculaRepository;
+        private final UsuarioRepository usuarioRepository;
 
     public AcademicoService(
             GrupoRepository grupoRepository,
@@ -80,7 +83,8 @@ public class AcademicoService {
             TrabajoRepository trabajoRepository,
             TutorRepository tutorRepository,
             EstudianteTutorRepository estudianteTutorRepository,
-            MatriculaRepository matriculaRepository
+            MatriculaRepository matriculaRepository,
+            UsuarioRepository usuarioRepository
     ) {
         this.grupoRepository = grupoRepository;
         this.asignaturaRepository = asignaturaRepository;
@@ -97,7 +101,8 @@ public class AcademicoService {
         this.trabajoRepository = trabajoRepository;
         this.tutorRepository = tutorRepository;
         this.estudianteTutorRepository = estudianteTutorRepository;
-                this.matriculaRepository = matriculaRepository;
+        this.matriculaRepository = matriculaRepository;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Transactional(readOnly = true)
@@ -292,6 +297,21 @@ public class AcademicoService {
                 .toList();
     }
 
+        @Transactional
+        public EstudianteDetailItem updateEstudianteInformacionDocente(Long estudianteId, String alergiasGraves, String observacionMedicaCorta) {
+                if (estudianteId == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_ESTUDIANTE_INVALIDO");
+                }
+
+                Estudiante estudiante = estudianteRepository.findById(estudianteId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_ESTUDIANTE_INVALIDO"));
+
+                estudiante.setAlergiasGraves(trimToNull(alergiasGraves));
+                estudiante.setObservacionMedicaCorta(trimToNull(observacionMedicaCorta));
+                estudianteRepository.save(estudiante);
+                return getEstudianteDetail(estudianteId);
+        }
+
     @Transactional(readOnly = true)
     public List<EstudianteSimpleItem> listEstudiantesActivos(String anioLectivo) {
         String year = (anioLectivo == null || anioLectivo.isBlank())
@@ -369,6 +389,8 @@ public class AcademicoService {
                 estudiante.getPersona() != null ? estudiante.getPersona().getTelefono() : null,
                 estudiante.getPersona() != null ? estudiante.getPersona().getCorreo() : null,
                 estudiante.getPersona() != null ? estudiante.getPersona().getIdentificador() : null,
+                estudiante.getAlergiasGraves(),
+                estudiante.getObservacionMedicaCorta(),
                 tutores,
                 grupos);
     }
@@ -403,6 +425,70 @@ public class AcademicoService {
                 .sorted(Comparator.comparing(EstadoAsistencia::getId))
                 .map(item -> new EstadoAsistenciaItem(item.getId(), item.getNombre()))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<ClaseProfesorItem> listMisClasesProfesor(String email) {
+        if (isBlank(email)) {
+            return List.of();
+        }
+
+        Usuario usuario = usuarioRepository.findByEmail(email.trim())
+                .orElse(null);
+
+        Long personaId = usuario != null && usuario.getPersona() != null
+                ? usuario.getPersona().getId()
+                : null;
+        if (personaId == null) {
+            return List.of();
+        }
+
+        Profesor profesor = profesorRepository.findByPersonaId(personaId)
+                .orElse(null);
+        if (profesor == null || profesor.getId() == null) {
+            return List.of();
+        }
+
+        List<ProfesorGrupo> gruposAsignados = profesorGrupoRepository.findByProfesorIdOrderByIdAsc(profesor.getId());
+
+        List<ClaseProfesorItem> clases = new ArrayList<>();
+        for (ProfesorGrupo profesorGrupo : gruposAsignados) {
+            Grupo grupo = profesorGrupo.getGrupo();
+            if (grupo == null || grupo.getId() == null) {
+                continue;
+            }
+
+            List<GrupoAsignaturaResumenItem> asignaturas = grupoAsignaturaRepository.findByGrupoIdOrderByIdAsc(grupo.getId()).stream()
+                    .map(item -> new GrupoAsignaturaResumenItem(
+                            item.getAsignatura() != null ? item.getAsignatura().getId() : null,
+                            item.getAsignatura() != null ? item.getAsignatura().getNombre() : null
+                    ))
+                    .filter(item -> item.asignaturaId() != null)
+                    .toList();
+
+            List<EstudianteBasicoItem> estudiantes = estudianteGrupoRepository.findByGrupoIdOrderByIdAsc(grupo.getId()).stream()
+                    .map(eg -> eg.getEstudiante())
+                    .filter(Objects::nonNull)
+                    .map(est -> new EstudianteBasicoItem(
+                            est.getId(),
+                            est.getPersona() != null ? est.getPersona().getNombre() : null,
+                            est.getPersona() != null ? est.getPersona().getApellido() : null,
+                            est.getAlergiasGraves(),
+                            est.getObservacionMedicaCorta()
+                    ))
+                    .toList();
+
+            clases.add(new ClaseProfesorItem(
+                    grupo.getId(),
+                    grupo.getNombre(),
+                    grupo.getCodigoFuncion(),
+                    profesorGrupo.getFechaInicio(),
+                    asignaturas,
+                    estudiantes
+            ));
+        }
+
+        return clases;
     }
 
     @Transactional(readOnly = true)
@@ -461,7 +547,9 @@ public class AcademicoService {
                     estudiante.getPersona() != null ? estudiante.getPersona().getApellido() : null,
                     estudianteAsignatura != null ? estudianteAsignatura.getId() : null,
                     estadoAsistenciaId,
-                    observaciones));
+                    observaciones,
+                    estudiante.getAlergiasGraves(),
+                    estudiante.getObservacionMedicaCorta()));
         }
 
         return new AsistenciaSheetResponse(
@@ -582,6 +670,77 @@ public class AcademicoService {
                 .toList();
     }
 
+        @Transactional(readOnly = true)
+        public List<AsistenciaHistorialItem> listAsistenciaHistorial(Long grupoId, Long asignaturaId, Integer limit) {
+                if (grupoId == null || asignaturaId == null) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_GRUPO_ASIGNATURA_REQUERIDOS");
+                }
+
+                int maxItems = limit == null || limit <= 0 ? 8 : Math.min(limit, 30);
+
+                Grupo grupo = grupoRepository.findById(grupoId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_GRUPO_INVALIDO"));
+                Asignatura asignatura = asignaturaRepository.findById(asignaturaId)
+                                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_ASIGNATURA_INVALIDA"));
+
+                List<LocalDate> fechas = asistenciaGeneralRepository.findByGrupoIdOrderByFechaDesc(grupoId).stream()
+                                .map(AsistenciaGeneral::getFecha)
+                                .filter(Objects::nonNull)
+                                .distinct()
+                                .limit(maxItems)
+                                .toList();
+
+                List<EstadoAsistenciaItem> estados = listEstadosAsistencia();
+
+                List<AsistenciaHistorialItem> historial = new ArrayList<>();
+                for (LocalDate fecha : fechas) {
+                        AsistenciaSheetResponse sheet = getAsistenciaSheet(grupoId, asignaturaId, fecha);
+
+                        long presentes = 0;
+                        long ausentes = 0;
+                        long justificados = 0;
+                        String ultimaObservacion = null;
+
+                        for (AsistenciaRowItem row : sheet.rows()) {
+                                String estadoNombre = estados.stream()
+                                                .filter(item -> Objects.equals(item.id(), row.estadoAsistenciaId()))
+                                                .map(EstadoAsistenciaItem::nombre)
+                                                .findFirst()
+                                                .orElse(null);
+
+                                if (estadoNombre != null) {
+                                        String normalized = estadoNombre.trim().toUpperCase();
+                                        if ("PRESENTE".equals(normalized)) {
+                                                presentes++;
+                                        } else if ("AUSENTE".equals(normalized) || "INASISTENCIA".equals(normalized)) {
+                                                ausentes++;
+                                        } else if ("JUSTIFICADO".equals(normalized)) {
+                                                justificados++;
+                                        }
+                                }
+
+                                if (ultimaObservacion == null && row.observaciones() != null && !row.observaciones().isBlank()) {
+                                        ultimaObservacion = row.observaciones().trim();
+                                }
+                        }
+
+                        historial.add(new AsistenciaHistorialItem(
+                                        fecha,
+                                        grupo.getId(),
+                                        grupo.getNombre(),
+                                        asignatura.getId(),
+                                        asignatura.getNombre(),
+                                        presentes,
+                                        ausentes,
+                                        justificados,
+                                        (long) sheet.rows().size(),
+                                        ultimaObservacion
+                        ));
+                }
+
+                return historial;
+        }
+
     private EstudianteAsignaturaItem toEstudianteAsignaturaItem(EstudianteAsignatura item) {
         return new EstudianteAsignaturaItem(
                 item.getId(),
@@ -624,6 +783,8 @@ public class AcademicoService {
             String telefono,
             String correo,
             String identificador,
+            String alergiasGraves,
+            String observacionMedicaCorta,
             List<TutorResumenItem> tutores,
             List<GrupoResumenItem> grupos
     ) {}
@@ -652,7 +813,9 @@ public class AcademicoService {
             String estudianteApellido,
             Long estudianteAsignaturaId,
             Long estadoAsistenciaId,
-            String observaciones
+            String observaciones,
+            String estudianteAlergiasGraves,
+            String estudianteObservacionMedicaCorta
     ) {}
 
     public record AsistenciaSheetResponse(
@@ -663,6 +826,38 @@ public class AcademicoService {
             LocalDate fecha,
             List<EstadoAsistenciaItem> estados,
             List<AsistenciaRowItem> rows
+    ) {}
+
+    public record AsistenciaHistorialItem(
+            LocalDate fecha,
+            Long grupoId,
+            String grupoNombre,
+            Long asignaturaId,
+            String asignaturaNombre,
+            Long presentes,
+            Long ausentes,
+            Long justificados,
+            Long total,
+            String ultimaObservacion
+    ) {}
+
+    public record ClaseProfesorItem(
+            Long grupoId,
+            String grupoNombre,
+            Integer grupoCodigoFuncion,
+            LocalDate fechaInicio,
+            List<GrupoAsignaturaResumenItem> asignaturas,
+            List<EstudianteBasicoItem> estudiantes
+    ) {}
+
+    public record GrupoAsignaturaResumenItem(Long asignaturaId, String asignaturaNombre) {}
+
+    public record EstudianteBasicoItem(
+            Long estudianteId,
+            String nombre,
+            String apellido,
+            String alergiasGraves,
+            String observacionMedicaCorta
     ) {}
 
     public record AsistenciaRegistroInput(Long estudianteId, Long estadoAsistenciaId, String observaciones) {}

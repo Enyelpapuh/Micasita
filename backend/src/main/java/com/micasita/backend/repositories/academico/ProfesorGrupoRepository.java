@@ -8,5 +8,7 @@ import java.util.List;
 public interface ProfesorGrupoRepository extends JpaRepository<ProfesorGrupo, Long> {
     boolean existsByProfesorIdAndGrupoId(Long profesorId, Long grupoId);
 
+    List<ProfesorGrupo> findByProfesorIdOrderByIdAsc(Long profesorId);
+
     List<ProfesorGrupo> findByGrupoIdOrderByIdAsc(Long grupoId);
 }

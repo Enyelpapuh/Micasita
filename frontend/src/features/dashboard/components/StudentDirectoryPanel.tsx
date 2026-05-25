@@ -2,7 +2,23 @@ import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, CalendarDays, ChevronRight, Mail, Phone, Search, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { normalizeApiError, useAuth } from '../../auth/AuthContext'
-import { getEstudianteDetail, listEstudiantes, type EstudianteDetailItem, type EstudianteItem } from './academico.api'
+import {
+  asignarProfesorGrupo,
+  getEstudianteDetail,
+  inscribirEstudianteGrupo,
+  listEstudiantes,
+  listGrupos,
+  listProfesores,
+  listTutores,
+  updateEstudianteInformacionDocente,
+  vincularEstudianteTutor,
+  type EstudianteDetailItem,
+  type EstudianteItem,
+  type GrupoItem,
+  type ProfesorItem,
+  type TutorItem,
+} from './academico.api'
+import { StudentAssignmentModal } from './StudentAssignmentModal'
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -36,13 +52,27 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
 }
 
 export function StudentDirectoryPanel() {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [students, setStudents] = useState<EstudianteItem[]>([])
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null)
   const [selectedStudent, setSelectedStudent] = useState<EstudianteDetailItem | null>(null)
+  const [gruposDisponibles, setGruposDisponibles] = useState<GrupoItem[]>([])
+  const [profesoresDisponibles, setProfesoresDisponibles] = useState<ProfesorItem[]>([])
+  const [tutoresDisponibles, setTutoresDisponibles] = useState<TutorItem[]>([])
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false)
+  const [studentAlergiasDraft, setStudentAlergiasDraft] = useState('')
+  const [studentObservacionDraft, setStudentObservacionDraft] = useState('')
+  const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null)
+  const [savingStudentDescription, setSavingStudentDescription] = useState(false)
+  const [savingTutorLink, setSavingTutorLink] = useState(false)
   const [loadingList, setLoadingList] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [search, setSearch] = useState('')
+
+  const canEditStudentNotes = useMemo(
+    () => (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION', 'ADMIN_DIRECCION'].includes(role?.toUpperCase?.() ?? role)),
+    [user?.roles],
+  )
 
   const filteredStudents = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('es-NI')
@@ -60,16 +90,24 @@ export function StudentDirectoryPanel() {
   useEffect(() => {
     let cancelled = false
 
-    const loadStudents = async () => {
+    const loadData = async () => {
       setLoadingList(true)
       try {
-        const result = await listEstudiantes(token)
+        const [studentsResult, gruposResult, profesoresResult, tutoresResult] = await Promise.all([
+          listEstudiantes(token),
+          listGrupos(token),
+          listProfesores(token),
+          listTutores(token),
+        ])
         if (cancelled) {
           return
         }
 
-        setStudents(result)
-        setSelectedStudentId((current) => current ?? result[0]?.id ?? null)
+        setStudents(studentsResult)
+        setGruposDisponibles(gruposResult)
+        setProfesoresDisponibles(profesoresResult)
+        setTutoresDisponibles(tutoresResult)
+        setSelectedStudentId((current) => current ?? studentsResult[0]?.id ?? null)
       } catch (error) {
         if (!cancelled) {
           toast.error(normalizeApiError(error, 'No se pudo cargar la lista de estudiantes'))
@@ -81,7 +119,7 @@ export function StudentDirectoryPanel() {
       }
     }
 
-    loadStudents()
+    loadData()
     return () => {
       cancelled = true
     }
@@ -101,6 +139,8 @@ export function StudentDirectoryPanel() {
         const detail = await getEstudianteDetail(token, selectedStudentId)
         if (!cancelled) {
           setSelectedStudent(detail)
+          setStudentAlergiasDraft(detail.alergiasGraves ?? '')
+          setStudentObservacionDraft(detail.observacionMedicaCorta ?? '')
         }
       } catch (error) {
         if (!cancelled) {
@@ -118,6 +158,75 @@ export function StudentDirectoryPanel() {
       cancelled = true
     }
   }, [selectedStudentId, token])
+
+  useEffect(() => {
+    if (selectedStudent) {
+      setStudentAlergiasDraft(selectedStudent.alergiasGraves ?? '')
+      setStudentObservacionDraft(selectedStudent.observacionMedicaCorta ?? '')
+    }
+  }, [selectedStudent])
+
+  useEffect(() => {
+    setSelectedTutorId(tutoresDisponibles[0]?.id ?? null)
+  }, [tutoresDisponibles])
+
+  const handleGuardarAsignacion = async (estudianteId: number, grupoId: number, profesorId: number) => {
+    try {
+      await inscribirEstudianteGrupo(token, { estudianteId, grupoId })
+      await asignarProfesorGrupo(token, { profesorId, grupoId })
+
+      if (selectedStudentId === estudianteId) {
+        const detail = await getEstudianteDetail(token, estudianteId)
+        setSelectedStudent(detail)
+      }
+
+      setIsAssignmentModalOpen(false)
+      toast.success('Asignación guardada correctamente')
+    } catch (error) {
+      toast.error(normalizeApiError(error, 'No se pudo guardar la asignación'))
+    }
+  }
+
+  const handleGuardarInformacionDocente = async () => {
+    if (!selectedStudent) {
+      return
+    }
+
+    setSavingStudentDescription(true)
+    try {
+      const updated = await updateEstudianteInformacionDocente(token, selectedStudent.id, {
+        alergiasGraves: studentAlergiasDraft,
+        observacionMedicaCorta: studentObservacionDraft,
+      })
+      setSelectedStudent(updated)
+      setStudentAlergiasDraft(updated.alergiasGraves ?? '')
+      setStudentObservacionDraft(updated.observacionMedicaCorta ?? '')
+      toast.success('La información del estudiante se actualizó')
+    } catch (error) {
+      toast.error(normalizeApiError(error, 'No se pudo actualizar la información del estudiante'))
+    } finally {
+      setSavingStudentDescription(false)
+    }
+  }
+
+  const handleVincularTutor = async () => {
+    if (!selectedStudent || !selectedTutorId) {
+      toast.error('Selecciona un tutor para vincular')
+      return
+    }
+
+    setSavingTutorLink(true)
+    try {
+      await vincularEstudianteTutor(token, { estudianteId: selectedStudent.id, tutorId: selectedTutorId })
+      const detail = await getEstudianteDetail(token, selectedStudent.id)
+      setSelectedStudent(detail)
+      toast.success('Tutor vinculado al estudiante')
+    } catch (error) {
+      toast.error(normalizeApiError(error, 'No se pudo vincular el tutor'))
+    } finally {
+      setSavingTutorLink(false)
+    }
+  }
 
   const selectedSummary = selectedStudent ?? null
 
@@ -202,9 +311,19 @@ export function StudentDirectoryPanel() {
                     </h3>
                     <p className="mt-1 text-sm text-slate-600">ID interno {selectedSummary.id}</p>
                   </div>
-                  <div className="rounded-2xl border border-white bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Identificador</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">{selectedSummary.identificador ?? 'No registrado'}</p>
+                  <div className="flex flex-col items-end gap-3">
+                    <div className="rounded-2xl border border-white bg-white/90 px-4 py-3 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Identificador</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">{selectedSummary.identificador ?? 'No registrado'}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsAssignmentModalOpen(true)}
+                      className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-[1px] hover:bg-teal-500"
+                    >
+                      Asignar grupo / profesor
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
 
@@ -281,6 +400,83 @@ export function StudentDirectoryPanel() {
                   </div>
                 </section>
               </div>
+
+              <section className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <SectionTitle title="Información visible para docentes" subtitle="Alergias graves y observación médica para la hoja de asistencia" />
+                  {canEditStudentNotes ? (
+                    <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white">Editable por admin</span>
+                  ) : (
+                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Solo lectura</span>
+                  )}
+                </div>
+
+                <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                  <div className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Alergias y observación médica</p>
+                    <p className="mt-1 text-sm text-slate-600">Se mostrará en asistencia y en la ficha del estudiante para que el docente tenga contexto.</p>
+                    <div className="mt-3 grid gap-3">
+                      <textarea
+                        value={studentAlergiasDraft}
+                        onChange={(event) => setStudentAlergiasDraft(event.target.value)}
+                        disabled={!canEditStudentNotes}
+                        rows={2}
+                        placeholder="Ej. Alergia grave al maní / penicilina"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      />
+                      <textarea
+                        value={studentObservacionDraft}
+                        onChange={(event) => setStudentObservacionDraft(event.target.value)}
+                        disabled={!canEditStudentNotes}
+                        rows={4}
+                        placeholder="Ej. Requiere supervisión al salir, avisar a tutor si presenta malestar..."
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      />
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">Escribe notas breves. El profesor las verá en asistencia, pero solo admin podrá editarlas.</p>
+                      {canEditStudentNotes ? (
+                        <button
+                          type="button"
+                          onClick={handleGuardarInformacionDocente}
+                          disabled={savingStudentDescription}
+                          className="inline-flex items-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
+                        >
+                          {savingStudentDescription ? 'Guardando...' : 'Guardar nota'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Vincular tutor</p>
+                    <p className="mt-1 text-sm text-slate-600">Agrega un tutor adicional al estudiante desde esta misma ficha.</p>
+
+                    <div className="mt-3 grid gap-3">
+                      <select
+                        value={selectedTutorId ?? ''}
+                        onChange={(event) => setSelectedTutorId(Number(event.target.value))}
+                        className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
+                      >
+                        {tutoresDisponibles.map((tutor) => (
+                          <option key={tutor.id} value={tutor.id}>
+                            {tutor.nombre ?? 'Sin nombre'} {tutor.apellido ?? ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={handleVincularTutor}
+                        disabled={savingTutorLink || tutoresDisponibles.length === 0}
+                        className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-70"
+                      >
+                        {savingTutorLink ? 'Vinculando...' : 'Vincular tutor'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
@@ -289,6 +485,16 @@ export function StudentDirectoryPanel() {
           )}
         </article>
       </div>
+
+      {selectedSummary && isAssignmentModalOpen ? (
+        <StudentAssignmentModal
+          estudiante={selectedSummary}
+          gruposDisponibles={gruposDisponibles}
+          profesoresDisponibles={profesoresDisponibles}
+          onClose={() => setIsAssignmentModalOpen(false)}
+          onGuardar={handleGuardarAsignacion}
+        />
+      ) : null}
     </section>
   )
 }

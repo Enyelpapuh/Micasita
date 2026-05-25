@@ -4,6 +4,7 @@ import com.micasita.backend.service.AcademicoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -107,6 +108,19 @@ public class AcademicoController {
         return ResponseEntity.ok(academicoService.getEstudianteDetail(estudianteId));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION')")
+    @PutMapping("/catalogos/estudiantes/{estudianteId}/informacion-docente")
+    public ResponseEntity<AcademicoService.EstudianteDetailItem> updateEstudianteInformacionDocente(
+            @PathVariable Long estudianteId,
+            @RequestBody UpdateEstudianteInformacionDocenteRequest request
+    ) {
+        return ResponseEntity.ok(academicoService.updateEstudianteInformacionDocente(
+                estudianteId,
+                request.alergiasGraves(),
+                request.observacionMedicaCorta()
+        ));
+    }
+
     @GetMapping("/catalogos/profesores")
     public ResponseEntity<List<AcademicoService.ProfesorSimpleItem>> listProfesores() {
         return ResponseEntity.ok(academicoService.listProfesores());
@@ -122,6 +136,11 @@ public class AcademicoController {
         return ResponseEntity.ok(academicoService.listEstadosAsistencia());
     }
 
+    @GetMapping("/docente/mis-clases")
+    public ResponseEntity<List<AcademicoService.ClaseProfesorItem>> listMisClasesDocente(Authentication authentication) {
+        return ResponseEntity.ok(academicoService.listMisClasesProfesor(authentication.getName()));
+    }
+
     @GetMapping("/asistencia/sheet")
     public ResponseEntity<AcademicoService.AsistenciaSheetResponse> getAsistenciaSheet(
             @RequestParam Long grupoId,
@@ -129,6 +148,15 @@ public class AcademicoController {
             @RequestParam String fecha
     ) {
         return ResponseEntity.ok(academicoService.getAsistenciaSheet(grupoId, asignaturaId, LocalDate.parse(fecha)));
+    }
+
+    @GetMapping("/asistencia/historial")
+    public ResponseEntity<List<AcademicoService.AsistenciaHistorialItem>> getAsistenciaHistorial(
+            @RequestParam Long grupoId,
+            @RequestParam Long asignaturaId,
+            @RequestParam(required = false) Integer limit
+    ) {
+        return ResponseEntity.ok(academicoService.listAsistenciaHistorial(grupoId, asignaturaId, limit));
     }
 
     @PostMapping("/asistencia/sheet")
@@ -177,6 +205,8 @@ public class AcademicoController {
     public record InscribirAsignaturaRequest(Long estudianteId, Long asignaturaId, LocalDate periodo) {}
 
     public record VincularEstudianteTutorRequest(Long estudianteId, Long tutorId) {}
+
+    public record UpdateEstudianteInformacionDocenteRequest(String alergiasGraves, String observacionMedicaCorta) {}
 
     public record AsistenciaRegistroRequest(Long estudianteId, Long estadoAsistenciaId, String observaciones) {}
 

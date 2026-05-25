@@ -2,30 +2,40 @@ import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { LogOut } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
-import { DashboardSidebar, type DashboardView, dashboardMenuConfig, dashboardCategories } from './components/DashboardSidebar'
+import {
+  DashboardSidebar,
+  type DashboardView,
+  dashboardMenuConfig,
+  dashboardCategories,
+  getVisibleDashboardMenuItems,
+} from './components/DashboardSidebar'
 import { getDashboardPanel } from './components/DashboardPanels'
 import { DashboardLayout } from './components/DashboardLayout'
 
 export function DashboardPage() {
   const { user, logout } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('micasita.dashboard.sidebarCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
 
   const visibleMenuItems = useMemo(() => {
-    const topRoles = ['ADMIN', 'DIRECTOR']
-    const userRoles = (user?.roles ?? []).map((r) => r?.toUpperCase?.() ?? r)
-    const isTopRank = userRoles.some((r) => topRoles.includes(r))
-
-    return dashboardMenuConfig.filter((item) => {
-      if (!item.permission) return true
-      if (item.view === 'auditoria') {
-        // Mostrar la pestaña de auditoría sólo a roles top
-        return Boolean(isTopRank)
-      }
-      return Boolean(user?.permisos.includes(item.permission))
-    })
-  }, [user?.permisos, user?.roles])
+    return getVisibleDashboardMenuItems(user)
+  }, [user])
 
   const [currentView, setCurrentView] = useState<DashboardView>(visibleMenuItems[0]?.view ?? 'overview')
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('micasita.dashboard.sidebarCollapsed', isSidebarCollapsed ? '1' : '0')
+    } catch {
+      // ignore storage errors
+    }
+  }, [isSidebarCollapsed])
 
   useEffect(() => {
     if (!visibleMenuItems.some((item) => item.view === currentView)) {
@@ -36,12 +46,10 @@ export function DashboardPage() {
   }, [currentView, visibleMenuItems])
 
   const handleViewChange = (view: DashboardView) => {
-    const topRoles = ['ADMIN', 'DIRECTOR']
-    const userRoles = (user?.roles ?? []).map((r) => r?.toUpperCase?.() ?? r)
-    const isTop = userRoles.some((r) => topRoles.includes(r))
+    const allowed = visibleMenuItems.some((item) => item.view === view)
 
-    if (view === 'auditoria' && !isTop) {
-      toast.error('No tienes permisos para ver Auditoría del sistema')
+    if (!allowed) {
+      toast.error('No tienes permisos para ver esa sección')
       setIsSidebarOpen(false)
       return
     }
@@ -63,6 +71,8 @@ export function DashboardPage() {
       <DashboardSidebar
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
         currentView={currentView}
         onViewChange={handleViewChange}
         items={visibleMenuItems}
@@ -71,12 +81,13 @@ export function DashboardPage() {
 
       <div className="min-w-0 flex-1 px-4 py-6 pl-4 pr-4 sm:px-6 lg:px-8 lg:pl-8">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">
                 {currentCategoryMeta?.label ?? 'General'}
               </p>
               <h1 className="text-3xl font-semibold text-slate-900">{currentCategoryMeta?.description}</h1>
+              <p className="mt-1 text-sm text-slate-500">Navegación enfocada en tareas diarias según tu rol.</p>
             </div>
             <button
               onClick={logout}
