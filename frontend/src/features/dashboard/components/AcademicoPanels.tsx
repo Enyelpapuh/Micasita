@@ -1194,12 +1194,17 @@ export function AcademicoAsistenciaPanel() {
 }
 
 export function AcademicoNotasPanel() {
+  // Procedencia del cambio: módulo de notas desactivado a solicitud del usuario para todos los roles.
   return (
-    <AcademicoAsistenciaNotasPanel
-      initialSegment="notas"
-      lockSegment
-      title="Registro de notas"
-      subtitle="Vista exclusiva para notas de trabajo y actualización de nota final por estudiante."
-    />
+    <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Dashboard</p>
+        <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Registro de notas</h2>
+        <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">Módulo deshabilitado temporalmente para todos los roles.</p>
+      </div>
+      <div className="mt-6 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+        El registro de notas ha sido desactivado.
+      </div>
+    </section>
   )
 }

@@ -28,7 +28,6 @@ export function AdmisionDashboardPanel() {
   const [formularioActivo, setFormularioActivo] = useState(true)
   const [savingId, setSavingId] = useState<number | null>(null)
   const [savingConfig, setSavingConfig] = useState(false)
-  const [savingTipoId, setSavingTipoId] = useState<number | null>(null)
   const [deletingTipoId, setDeletingTipoId] = useState<number | null>(null)
   const [creatingTipo, setCreatingTipo] = useState(false)
   const [tipoDocumentoPanelOpen, setTipoDocumentoPanelOpen] = useState(false)
@@ -36,6 +35,12 @@ export function AdmisionDashboardPanel() {
   const [newTipoObligatorio, setNewTipoObligatorio] = useState(true)
   const [previewDoc, setPreviewDoc] = useState<DocumentoSolicitud | null>(null)
   const [selectedSolicitudId, setSelectedSolicitudId] = useState<number | null>(null)
+  const [filterMode, setFilterMode] = useState<'all' | 'pendiente' | 'procesado'>('all')
+  const [searchTerm, setSearchTerm] = useState<string>('')
+  const [showConfirmSaveTipos, setShowConfirmSaveTipos] = useState(false)
+  const [savingAllTipos, setSavingAllTipos] = useState(false)
+  const [tipoToDelete, setTipoToDelete] = useState<TipoDocumento | null>(null)
+  const [deletingTipoProcessing, setDeletingTipoProcessing] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -127,33 +132,15 @@ export function AdmisionDashboardPanel() {
     }
   }
 
-  const saveTipoDocumento = async (tipo: TipoDocumento) => {
-    const nombre = tipo.nombre.trim()
-    if (!nombre) {
-      toast.error('El nombre del tipo de documento es requerido')
-      return
-    }
-
-    setSavingTipoId(tipo.id)
-    try {
-      const updated = await updateAdminTipoDocumento(token, tipo.id, {
-        nombre,
-        obligatorio: tipo.obligatorio,
-      })
-      setTiposDocumento((prev) => prev.map((item) => (item.id === tipo.id ? updated : item)))
-      toast.success('Tipo de documento actualizado')
-    } catch (error) {
-      toast.error(normalizeApiError(error, 'No se pudo actualizar el tipo de documento'))
-    } finally {
-      setSavingTipoId(null)
-    }
+  const removeTipoDocumento = (tipo: TipoDocumento) => {
+    // Open confirmation modal instead of immediate window.confirm
+    setTipoToDelete(tipo)
   }
 
-  const removeTipoDocumento = async (tipo: TipoDocumento) => {
-    if (!window.confirm(`¿Eliminar tipo de documento ${tipo.nombre}?`)) {
-      return
-    }
-
+  const confirmDeleteTipo = async () => {
+    if (!tipoToDelete) return
+    const tipo = tipoToDelete
+    setDeletingTipoProcessing(true)
     setDeletingTipoId(tipo.id)
     try {
       await deleteAdminTipoDocumento(token, tipo.id)
@@ -163,6 +150,8 @@ export function AdmisionDashboardPanel() {
       toast.error(normalizeApiError(error, 'No se pudo eliminar el tipo de documento'))
     } finally {
       setDeletingTipoId(null)
+      setDeletingTipoProcessing(false)
+      setTipoToDelete(null)
     }
   }
 
@@ -178,6 +167,31 @@ export function AdmisionDashboardPanel() {
   const isImageDoc = (rutaArchivo: string) => /\.(png|jpe?g|webp|gif)$/i.test(rutaArchivo)
   const isPdfDoc = (rutaArchivo: string) => /\.pdf$/i.test(rutaArchivo)
   const selectedSolicitud = solicitudes.find((item) => item.id === selectedSolicitudId) ?? null
+
+  const filteredAndSortedSolicitudes = (() => {
+    const q = (searchTerm ?? '').trim().toLowerCase()
+
+    const matchesSearch = (s: SolicitudAdmision) => {
+      if (!q) return true
+      const haystack = `${s.nombrePostulante ?? ''} ${s.apellidoPostulante ?? ''} ${s.nombreTutor ?? ''} ${s.identificadorPostulante ?? ''}`.toLowerCase()
+      return haystack.includes(q)
+    }
+
+    const isPendiente = (s: SolicitudAdmision) => (s.estadoSolicitud ?? '').toLowerCase() === 'pendiente'
+
+    const filtered = solicitudes.filter((s) => {
+      if (!matchesSearch(s)) return false
+      if (filterMode === 'pendiente') return isPendiente(s)
+      if (filterMode === 'procesado') return !isPendiente(s)
+      return true
+    })
+
+    return [...filtered].sort((a, b) => {
+      const nameA = `${a.nombrePostulante ?? ''} ${a.apellidoPostulante ?? ''}`.localeCompare(`${b.nombrePostulante ?? ''} ${b.apellidoPostulante ?? ''}`)
+      if (nameA !== 0) return nameA
+      return new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime()
+    })
+  })()
 
   const splitComentarios = (comentarios?: string | null) => {
     const base = (comentarios ?? '').trim()
@@ -207,6 +221,19 @@ export function AdmisionDashboardPanel() {
     }
     const tutoresText = `${TUTORES_MARKER}\n${tutoresAdicionales.join('\n')}`
     return comments ? `${comments}\n\n${tutoresText}` : tutoresText
+  }
+
+  const getBirthYear = (value?: string | null) => {
+    if (!value) {
+      return 'N/D'
+    }
+
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) {
+      return value || 'N/D'
+    }
+
+    return date.toLocaleDateString()
   }
 
   return (
@@ -239,6 +266,44 @@ export function AdmisionDashboardPanel() {
             {formularioActivo ? 'Desactivar formulario' : 'Activar formulario'}
           </button>
         </div>
+      
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-sm font-medium text-slate-700">Buscar por estudiante</span>
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar por nombre, apellido o identificador..."
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none w-[320px]"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFilterMode('all')}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${filterMode === 'all' ? 'bg-slate-900 text-white' : 'bg-white border border-slate-300 text-slate-700'}`}
+            >
+              Todos
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterMode('pendiente')}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${filterMode === 'pendiente' ? 'bg-amber-500 text-white' : 'bg-white border border-slate-300 text-slate-700'}`}
+            >
+              En espera
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setFilterMode('procesado')}
+              className={`rounded-xl px-3 py-2 text-sm font-semibold ${filterMode === 'procesado' ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-300 text-slate-700'}`}
+            >
+              Procesados
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading ? (
@@ -250,13 +315,13 @@ export function AdmisionDashboardPanel() {
 
       {!loading ? (
         <div className="mt-6 space-y-4">
-          {solicitudes.map((solicitud) => (
+          {filteredAndSortedSolicitudes.map((solicitud) => (
             <article key={solicitud.id} className="rounded-2xl border border-slate-200 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{solicitud.nombrePostulante} {solicitud.apellidoPostulante}</p>
                   <p className="text-xs text-slate-500">Tutor: {solicitud.nombreTutor || 'N/D'} ({solicitud.parentescoTutor || 'N/D'})</p>
-                  <p className="text-xs text-slate-500">Estado: {solicitud.estadoSolicitud} • Creada: {new Date(solicitud.fechaCreacion).toLocaleString()}</p>
+                  <p className="text-xs text-slate-500">Creada: {new Date(solicitud.fechaCreacion).toLocaleString()}</p>
                   <p className="text-xs text-slate-500">Documentos: {solicitud.documentos.length}</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -309,9 +374,7 @@ export function AdmisionDashboardPanel() {
               <div className="grid gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                   <p><span className="font-semibold">Postulante:</span> {selectedSolicitud.nombrePostulante} {selectedSolicitud.apellidoPostulante}</p>
-                  <p><span className="font-semibold">Tel. postulante:</span> {selectedSolicitud.telefonoPostulante || 'N/D'}</p>
-                  <p><span className="font-semibold">Correo postulante:</span> {selectedSolicitud.correoPostulante || 'N/D'}</p>
-                  <p><span className="font-semibold">Cédula:</span> {selectedSolicitud.identificadorPostulante || 'N/D'}</p>
+                  <p><span className="font-semibold">Fecha de nacimiento:</span> {getBirthYear(selectedSolicitud.fechaNacimientoPostulante)}</p>
                   <p><span className="font-semibold">Fecha de solicitud:</span> {new Date(selectedSolicitud.fechaCreacion).toLocaleString()}</p>
                 </div>
 
@@ -492,16 +555,6 @@ export function AdmisionDashboardPanel() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => saveTipoDocumento(tipo)}
-                        disabled={savingTipoId === tipo.id}
-                        className="inline-flex flex-1 items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
-                      >
-                        {savingTipoId === tipo.id ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                        Guardar
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={() => removeTipoDocumento(tipo)}
                         disabled={deletingTipoId === tipo.id}
                         className="inline-flex flex-1 items-center justify-center rounded-xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-70"
@@ -518,7 +571,89 @@ export function AdmisionDashboardPanel() {
                     No hay tipos documentales configurados.
                   </p>
                 ) : null}
+
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmSaveTipos(true)}
+                    disabled={savingAllTipos}
+                    className="inline-flex items-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
+                  >
+                    {savingAllTipos ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                    Guardar cambios
+                  </button>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showConfirmSaveTipos ? (
+        <div className="fixed inset-0 z-[300] grid place-items-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <p className="text-sm font-semibold text-slate-900">Confirmar guardado</p>
+            <p className="mt-2 text-sm text-slate-600">¿Deseas guardar los cambios realizados en los tipos de documento?</p>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmSaveTipos(false)}
+                className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  setSavingAllTipos(true)
+                  try {
+                    const updates = await Promise.all(tiposDocumento.map((tipo) => updateAdminTipoDocumento(token, tipo.id, { nombre: tipo.nombre, obligatorio: tipo.obligatorio })))
+                    setTiposDocumento(updates)
+                    toast.success('Tipos de documento actualizados')
+                    setShowConfirmSaveTipos(false)
+                  } catch (error) {
+                    toast.error(normalizeApiError(error, 'No se pudieron guardar los tipos'))
+                  } finally {
+                    setSavingAllTipos(false)
+                  }
+                }}
+                disabled={savingAllTipos}
+                className="inline-flex items-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
+              >
+                {savingAllTipos ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                Confirmar y guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {tipoToDelete ? (
+        <div className="fixed inset-0 z-[310] grid place-items-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <p className="text-sm font-semibold text-slate-900">Confirmar eliminación</p>
+            <p className="mt-2 text-sm text-slate-600">¿Eliminar "{tipoToDelete.nombre}"? Esta acción no se puede deshacer.</p>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTipoToDelete(null)}
+                className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={confirmDeleteTipo}
+                disabled={deletingTipoProcessing}
+                className="inline-flex items-center rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-70"
+              >
+                {deletingTipoProcessing ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+                Confirmar eliminación
+              </button>
             </div>
           </div>
         </div>

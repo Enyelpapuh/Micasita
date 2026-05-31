@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import toast from 'react-hot-toast'
 import { LoaderCircle, Plus, Trash2 } from 'lucide-react'
 import { createSolicitudAdmision, getLandingAdmisionConfig, type LandingAdmisionConfig, type TipoDocumento } from '../../admision/admision.api'
+import { useFieldArray, useForm } from 'react-hook-form'
 
 const ADMISION_FORM_DRAFT_KEY = 'micasita.admision.formDraft'
-
-type FormState = {
-  nombrePostulante: string
-  apellidoPostulante: string
-  fechaNacimientoPostulante: string
-  telefonoPostulante: string
-}
 
 type TutorFormState = {
   nombreTutor: string
@@ -23,11 +17,11 @@ type MatriculasSectionProps = {
   embedded?: boolean
 }
 
-const initialForm: FormState = {
-  nombrePostulante: '',
-  apellidoPostulante: '',
-  fechaNacimientoPostulante: '',
-  telefonoPostulante: '',
+type AdmissionFormValues = {
+  nombrePostulante: string
+  apellidoPostulante: string
+  fechaNacimientoPostulante: string
+  tutores: TutorFormState[]
 }
 
 const initialTutor: TutorFormState = {
@@ -37,14 +31,36 @@ const initialTutor: TutorFormState = {
   correoTutor: '',
 }
 
+const initialAdmissionValues: AdmissionFormValues = {
+  nombrePostulante: '',
+  apellidoPostulante: '',
+  fechaNacimientoPostulante: '',
+  tutores: [{ ...initialTutor }],
+}
+
 export default function MatriculasSection({ embedded = false }: MatriculasSectionProps) {
   const [config, setConfig] = useState<LandingAdmisionConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [form, setForm] = useState<FormState>(initialForm)
-  const [tutores, setTutores] = useState<TutorFormState[]>([initialTutor])
   const [filesByTipo, setFilesByTipo] = useState<Record<number, File | null>>({})
   const maxBirthDate = new Date().toISOString().split('T')[0]
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<AdmissionFormValues>({
+    defaultValues: initialAdmissionValues,
+    mode: 'onTouched',
+  })
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: 'tutores',
+  })
+
+  const watchedValues = watch()
 
   useEffect(() => {
     try {
@@ -52,21 +68,22 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
       if (!raw) {
         return
       }
-      const draft = JSON.parse(raw) as { form?: Partial<FormState>; tutores?: TutorFormState[] }
-      if (draft.form) {
-        setForm((prev) => ({ ...prev, ...draft.form }))
-      }
-      if (Array.isArray(draft.tutores) && draft.tutores.length > 0) {
-        setTutores(draft.tutores)
+      const draft = JSON.parse(raw) as Partial<AdmissionFormValues>
+      if (draft && typeof draft === 'object') {
+        reset({
+          ...initialAdmissionValues,
+          ...draft,
+          tutores: Array.isArray(draft.tutores) && draft.tutores.length > 0 ? draft.tutores : initialAdmissionValues.tutores,
+        })
       }
     } catch {
       sessionStorage.removeItem(ADMISION_FORM_DRAFT_KEY)
     }
-  }, [])
+  }, [reset])
 
   useEffect(() => {
-    sessionStorage.setItem(ADMISION_FORM_DRAFT_KEY, JSON.stringify({ form, tutores }))
-  }, [form, tutores])
+    sessionStorage.setItem(ADMISION_FORM_DRAFT_KEY, JSON.stringify(watchedValues))
+  }, [watchedValues])
 
   useEffect(() => {
     let cancelled = false
@@ -101,25 +118,15 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
     [config?.tiposDocumento],
   )
 
-  const updateForm = (key: keyof FormState, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const updateTutor = (index: number, key: keyof TutorFormState, value: string) => {
-    setTutores((prev) => prev.map((item, currentIndex) => (currentIndex === index ? { ...item, [key]: value } : item)))
-  }
-
   const addTutor = () => {
-    setTutores((prev) => [...prev, { ...initialTutor }])
+    append({ ...initialTutor })
   }
 
   const removeTutor = (index: number) => {
-    setTutores((prev) => {
-      if (prev.length === 1) {
-        return prev
-      }
-      return prev.filter((_, currentIndex) => currentIndex !== index)
-    })
+    if (fields.length === 1) {
+      return
+    }
+    remove(index)
   }
 
   const onFileChange = (tipo: TipoDocumento, event: ChangeEvent<HTMLInputElement>) => {
@@ -143,8 +150,7 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
     setFilesByTipo((prev) => ({ ...prev, [tipo.id]: file }))
   }
 
-  const submitSolicitud = async (event: FormEvent) => {
-    event.preventDefault()
+  const submitSolicitud = async (data: AdmissionFormValues) => {
     if (!config) {
       return
     }
@@ -154,23 +160,13 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
       return
     }
 
-    if (!form.nombrePostulante.trim() || !form.apellidoPostulante.trim() || !form.fechaNacimientoPostulante) {
-      toast.error('Completa los datos obligatorios del postulante.')
-      return
-    }
-
-    if (tutores.length === 0) {
+    if (!data.tutores || data.tutores.length === 0) {
       toast.error('Debes agregar al menos un padre, madre o tutor.')
       return
     }
 
-    if (form.telefonoPostulante.trim() && !/^\d{8}$/.test(form.telefonoPostulante.trim())) {
-      toast.error('El teléfono del postulante debe tener 8 dígitos.')
-      return
-    }
-
-    for (let index = 0; index < tutores.length; index += 1) {
-      const tutor = tutores[index]
+    for (let index = 0; index < data.tutores.length; index += 1) {
+      const tutor = data.tutores[index]
       if (!tutor.nombreTutor.trim() || !tutor.parentescoTutor.trim()) {
         toast.error(`Completa nombre y parentesco del tutor ${index + 1}.`)
         return
@@ -193,7 +189,7 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
       return
     }
 
-    const [tutorPrincipal, ...tutoresAdicionales] = tutores
+    const [tutorPrincipal, ...tutoresAdicionales] = data.tutores
     const tutoresAdicionalesResumen = tutoresAdicionales.length > 0
       ? tutoresAdicionales
           .map((tutor, index) => `${index + 2}) ${tutor.nombreTutor.trim()} | ${tutor.parentescoTutor.trim()} | Tel: ${tutor.telefonoTutor.trim() || 'N/D'} | Correo: ${tutor.correoTutor.trim() || 'N/D'}`)
@@ -204,10 +200,10 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
     try {
       await createSolicitudAdmision(
         {
-          nombrePostulante: form.nombrePostulante.trim(),
-          apellidoPostulante: form.apellidoPostulante.trim(),
-          fechaNacimientoPostulante: form.fechaNacimientoPostulante,
-          telefonoPostulante: form.telefonoPostulante.trim() || null,
+          nombrePostulante: data.nombrePostulante.trim(),
+          apellidoPostulante: data.apellidoPostulante.trim(),
+          fechaNacimientoPostulante: data.fechaNacimientoPostulante,
+          telefonoPostulante: null,
           nombreTutor: tutorPrincipal.nombreTutor.trim(),
           parentescoTutor: tutorPrincipal.parentescoTutor.trim(),
           telefonoTutor: tutorPrincipal.telefonoTutor.trim() || null,
@@ -216,8 +212,7 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
         },
         filesByTipo,
       )
-      setForm(initialForm)
-      setTutores([initialTutor])
+      reset(initialAdmissionValues)
       setFilesByTipo({})
       sessionStorage.removeItem(ADMISION_FORM_DRAFT_KEY)
       toast.success('Solicitud enviada correctamente. Dirección revisará tus documentos.')
@@ -253,15 +248,43 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
           ) : null}
 
           {!loading && config && config.formularioActivo ? (
-            <form className="space-y-6" onSubmit={submitSolicitud}>
+            <form className="space-y-6" onSubmit={handleSubmit(submitSolicitud)} noValidate>
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">Datos del postulante</h3>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  <input value={form.nombrePostulante} onChange={(e) => updateForm('nombrePostulante', e.target.value)} placeholder="Nombre" required className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                  <input value={form.apellidoPostulante} onChange={(e) => updateForm('apellidoPostulante', e.target.value)} placeholder="Apellido" required className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                  <input type="date" value={form.fechaNacimientoPostulante} onChange={(e) => updateForm('fechaNacimientoPostulante', e.target.value)} max={maxBirthDate} required className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                  <input value={form.telefonoPostulante} onChange={(e) => updateForm('telefonoPostulante', e.target.value)} placeholder="Teléfono (8 dígitos)" inputMode="numeric" pattern="[0-9]{8}" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium text-slate-700">Nombre del postulante</span>
+                        <input
+                          {...register('nombrePostulante', { required: 'El nombre del postulante es obligatorio.' })}
+                          required
+                          aria-invalid={Boolean(errors.nombrePostulante)}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                        />
+                        {errors.nombrePostulante ? <span className="mt-1 block text-xs text-rose-600">{errors.nombrePostulante.message}</span> : null}
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium text-slate-700">Apellido del postulante</span>
+                        <input
+                          {...register('apellidoPostulante', { required: 'El apellido del postulante es obligatorio.' })}
+                          required
+                          aria-invalid={Boolean(errors.apellidoPostulante)}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                        />
+                        {errors.apellidoPostulante ? <span className="mt-1 block text-xs text-rose-600">{errors.apellidoPostulante.message}</span> : null}
+                      </label>
+                      <label className="block">
+                        <span className="mb-1 block text-sm font-medium text-slate-700">Fecha de nacimiento</span>
+                        <input
+                          type="date"
+                          {...register('fechaNacimientoPostulante', { required: 'La fecha de nacimiento es obligatoria.' })}
+                          max={maxBirthDate}
+                          required
+                          aria-invalid={Boolean(errors.fechaNacimientoPostulante)}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                        />
+                        {errors.fechaNacimientoPostulante ? <span className="mt-1 block text-xs text-rose-600">{errors.fechaNacimientoPostulante.message}</span> : null}
+                      </label>
+                    </div>
               </div>
 
               <div>
@@ -278,11 +301,11 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
                 </div>
 
                 <div className="mt-3 space-y-3">
-                  {tutores.map((tutor, index) => (
-                    <div key={`tutor-${index}`} className="rounded-xl border border-slate-200 p-3">
+                  {fields.map((field, index) => (
+                    <div key={field.id} className="rounded-xl border border-slate-200 p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Tutor {index + 1}</p>
-                        {tutores.length > 1 ? (
+                        {fields.length > 1 ? (
                           <button
                             type="button"
                             onClick={() => removeTutor(index)}
@@ -295,10 +318,58 @@ export default function MatriculasSection({ embedded = false }: MatriculasSectio
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-2">
-                        <input value={tutor.nombreTutor} onChange={(e) => updateTutor(index, 'nombreTutor', e.target.value)} placeholder="Nombre del tutor" required className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                        <input value={tutor.parentescoTutor} onChange={(e) => updateTutor(index, 'parentescoTutor', e.target.value)} placeholder="Parentesco" required className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                        <input value={tutor.telefonoTutor} onChange={(e) => updateTutor(index, 'telefonoTutor', e.target.value)} placeholder="Teléfono tutor (8 dígitos)" inputMode="numeric" pattern="[0-9]{8}" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-                        <input type="email" value={tutor.correoTutor} onChange={(e) => updateTutor(index, 'correoTutor', e.target.value)} placeholder="Correo tutor" className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium text-slate-700">Nombre del tutor</span>
+                          <input
+                            {...register(`tutores.${index}.nombreTutor`, { required: 'El nombre del tutor es obligatorio.' })}
+                            required
+                            aria-invalid={Boolean(errors.tutores?.[index]?.nombreTutor)}
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                          />
+                          {errors.tutores?.[index]?.nombreTutor ? <span className="mt-1 block text-xs text-rose-600">{errors.tutores[index]?.nombreTutor?.message}</span> : null}
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium text-slate-700">Parentesco</span>
+                          <input
+                            {...register(`tutores.${index}.parentescoTutor`, { required: 'El parentesco es obligatorio.' })}
+                            required
+                            aria-invalid={Boolean(errors.tutores?.[index]?.parentescoTutor)}
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                          />
+                          {errors.tutores?.[index]?.parentescoTutor ? <span className="mt-1 block text-xs text-rose-600">{errors.tutores[index]?.parentescoTutor?.message}</span> : null}
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium text-slate-700">Teléfono del tutor</span>
+                          <input
+                            {...register(`tutores.${index}.telefonoTutor`, {
+                              pattern: {
+                                value: /^\d{8}$/,
+                                message: 'El teléfono del tutor debe tener exactamente 8 dígitos.',
+                              },
+                            })}
+                            inputMode="numeric"
+                            pattern="[0-9]{8}"
+                            aria-invalid={Boolean(errors.tutores?.[index]?.telefonoTutor)}
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                          />
+                          <span className="mt-1 block text-xs text-slate-500">8 dígitos numéricos</span>
+                          {errors.tutores?.[index]?.telefonoTutor ? <span className="mt-1 block text-xs text-rose-600">{errors.tutores[index]?.telefonoTutor?.message}</span> : null}
+                        </label>
+                        <label className="block">
+                          <span className="mb-1 block text-sm font-medium text-slate-700">Correo del tutor</span>
+                          <input
+                            type="email"
+                            {...register(`tutores.${index}.correoTutor`, {
+                              pattern: {
+                                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                                message: 'El correo del tutor no tiene un formato válido.',
+                              },
+                            })}
+                            aria-invalid={Boolean(errors.tutores?.[index]?.correoTutor)}
+                            className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none"
+                          />
+                          {errors.tutores?.[index]?.correoTutor ? <span className="mt-1 block text-xs text-rose-600">{errors.tutores[index]?.correoTutor?.message}</span> : null}
+                        </label>
                       </div>
                     </div>
                   ))}

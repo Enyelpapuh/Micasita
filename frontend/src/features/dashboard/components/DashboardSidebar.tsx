@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import {
-  BookOpen,
   ClipboardList,
   ChevronLeft,
   ChevronRight,
@@ -286,14 +285,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     permission: 'DASHBOARD_ACADEMICO',
     allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DEVELOPER'],
   },
-  {
-    icon: BookOpen,
-    label: 'Control de Notas',
-    view: 'grades',
-    category: 'operaciones',
-    permission: 'DASHBOARD_ACADEMICO',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DEVELOPER'],
-  },
+  // Procedencia del cambio: el módulo de notas quedó deshabilitado para todos los roles por instrucción del usuario.
   {
     icon: Inbox,
     label: 'Bandeja de Solicitudes',

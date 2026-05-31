@@ -99,6 +99,12 @@ export type CajaDashboardResponse = {
   mensualidades: CajaMensualidadItem[]
 }
 
+export type CajaHistorialResponse = {
+  pagosTaller: CajaPagoTallerItem[]
+  pagosMatricula: CajaPagoMatriculaItem[]
+  mensualidades: CajaMensualidadItem[]
+}
+
 export type CajaSessionInfo = {
   id: number
   codigo: string
@@ -164,6 +170,14 @@ export async function getCajaDashboard(token: string | null, limit = 25): Promis
   const response = await api.get<CajaDashboardResponse>('/finanzas/caja/dashboard', {
     headers: authHeaders(token),
     params: { limit },
+  })
+  return response.data
+}
+
+export async function getCajaHistorialGeneral(token: string | null, limit?: number): Promise<CajaHistorialResponse> {
+  const response = await api.get<CajaHistorialResponse>('/finanzas/caja/historial/general', {
+    headers: authHeaders(token),
+    params: limit ? { limit } : undefined,
   })
   return response.data
 }

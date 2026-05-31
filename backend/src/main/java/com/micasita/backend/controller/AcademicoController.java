@@ -4,7 +4,6 @@ import com.micasita.backend.service.AcademicoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -134,41 +133,6 @@ public class AcademicoController {
     @GetMapping("/catalogos/estados-asistencia")
     public ResponseEntity<List<AcademicoService.EstadoAsistenciaItem>> listEstadosAsistencia() {
         return ResponseEntity.ok(academicoService.listEstadosAsistencia());
-    }
-
-    @GetMapping("/docente/mis-clases")
-    public ResponseEntity<List<AcademicoService.ClaseProfesorItem>> listMisClasesDocente(Authentication authentication) {
-        return ResponseEntity.ok(academicoService.listMisClasesProfesor(authentication.getName()));
-    }
-
-    @GetMapping("/asistencia/sheet")
-    public ResponseEntity<AcademicoService.AsistenciaSheetResponse> getAsistenciaSheet(
-            @RequestParam Long grupoId,
-            @RequestParam Long asignaturaId,
-            @RequestParam String fecha
-    ) {
-        return ResponseEntity.ok(academicoService.getAsistenciaSheet(grupoId, asignaturaId, LocalDate.parse(fecha)));
-    }
-
-    @GetMapping("/asistencia/historial")
-    public ResponseEntity<List<AcademicoService.AsistenciaHistorialItem>> getAsistenciaHistorial(
-            @RequestParam Long grupoId,
-            @RequestParam Long asignaturaId,
-            @RequestParam(required = false) Integer limit
-    ) {
-        return ResponseEntity.ok(academicoService.listAsistenciaHistorial(grupoId, asignaturaId, limit));
-    }
-
-    @PostMapping("/asistencia/sheet")
-    public ResponseEntity<Void> registrarAsistenciaLote(@RequestBody AsistenciaSheetRegistroRequest request) {
-        List<AcademicoService.AsistenciaRegistroInput> registros = request.registros() == null
-                ? List.of()
-                : request.registros().stream()
-                    .map(r -> new AcademicoService.AsistenciaRegistroInput(r.estudianteId(), r.estadoAsistenciaId(), r.observaciones()))
-                    .toList();
-
-        academicoService.registrarAsistenciaLote(request.grupoId(), request.asignaturaId(), request.fecha(), registros);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
     @PostMapping("/trabajos")

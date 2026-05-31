@@ -5,10 +5,26 @@ const adminApi = axios.create({
   baseURL: API_BASE_URL,
 })
 
+function getStoredToken() {
+  try {
+    const raw = localStorage.getItem('micasita.auth')
+    if (!raw) {
+      return null
+    }
+
+    const parsed = JSON.parse(raw) as { token?: string }
+    return parsed.token ?? null
+  } catch {
+    return null
+  }
+}
+
 function authHeaders(token: string | null) {
-  return token
+  const nextToken = token ?? getStoredToken()
+
+  return nextToken
     ? {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${nextToken}`,
       }
     : {}
 }

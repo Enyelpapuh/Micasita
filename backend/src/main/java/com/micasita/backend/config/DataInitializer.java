@@ -619,7 +619,6 @@ public class DataInitializer implements CommandLineRunner {
         profesorGrupoRepository.save(ProfesorGrupo.builder()
                 .profesor(profesor)
                 .grupo(grupo)
-                .cantidadAlumnos(cantidadAlumnos)
                 .fechaInicio(fechaInicio)
                 .build());
     }

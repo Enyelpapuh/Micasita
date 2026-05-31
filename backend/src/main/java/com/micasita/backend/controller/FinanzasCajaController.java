@@ -262,6 +262,7 @@ public class FinanzasCajaController {
                         v.getPagoMatriculaId(),
                         v.getMatriculaId(),
                         clean(v.getEstudiante()),
+                        clean(v.getNumeroRecibo()),
                         v.getMonto(),
                         v.getFechaPago(),
                         clean(v.getEstado()),
@@ -278,6 +279,7 @@ public class FinanzasCajaController {
                         v.getMensualidadId(),
                         clean(v.getEstudiante()),
                         monthLabel(v.getMes()),
+                        clean(v.getNumeroRecibo()),
                         v.getMontoBase(),
                         v.getMontoMora(),
                         v.getMonto(),
@@ -399,6 +401,7 @@ public class FinanzasCajaController {
             Long pagoMatriculaId,
             Long matriculaId,
             String estudiante,
+            String numeroRecibo,
             BigDecimal monto,
             LocalDate fechaPago,
             String estado,
@@ -412,6 +415,7 @@ public class FinanzasCajaController {
             Long mensualidadId,
             String estudiante,
             String mes,
+            String numeroRecibo,
             BigDecimal montoBase,
             BigDecimal montoMora,
             BigDecimal monto,
@@ -551,6 +555,7 @@ public class FinanzasCajaController {
                                 v.getPagoMatriculaId(),
                                 v.getMatriculaId(),
                                 clean(v.getEstudiante()),
+                                clean(v.getNumeroRecibo()),
                                 v.getMonto(),
                                 v.getFechaPago(),
                                 clean(v.getEstado()),
@@ -567,6 +572,7 @@ public class FinanzasCajaController {
                                 v.getMensualidadId(),
                                 clean(v.getEstudiante()),
                                 monthLabel(v.getMes()),
+                                clean(v.getNumeroRecibo()),
                                 v.getMontoBase(),
                                 v.getMontoMora(),
                                 v.getMonto(),
@@ -581,4 +587,68 @@ public class FinanzasCajaController {
 
                 return ResponseEntity.ok(new CajaHistorialResponse(pagosTaller, pagosMatricula, mensualidades));
             }
+
+        @GetMapping("/historial/general")
+        public ResponseEntity<CajaHistorialResponse> historialGeneral(
+                Authentication authentication,
+                @RequestParam(name = "limit", required = false) Integer limit
+        ) {
+                String email = authentication.getName();
+                int safeLimit = limit == null || limit <= 0 ? Integer.MAX_VALUE : Math.max(1, Math.min(limit, 10000));
+
+                List<PagoCupoItem> pagosTaller = pagoCupoRepository.findRecentCaja(email).stream()
+                        .limit(safeLimit)
+                        .map(v -> new PagoCupoItem(
+                                v.getPagoCupoId(),
+                                v.getCupoId(),
+                                clean(v.getTaller()),
+                                clean(v.getParticipante()),
+                                clean(v.getNumeroRecibo()),
+                                v.getMonto(),
+                                v.getFechaPago(),
+                                clean(v.getEstado()),
+                                clean(v.getMetodoPago()),
+                                Boolean.TRUE.equals(v.getAnulado()),
+                                clean(v.getMotivoAnulacion())
+                        ))
+                        .toList();
+
+                List<PagoMatriculaItem> pagosMatricula = pagoMatriculaRepository.findRecentCaja(email).stream()
+                        .limit(safeLimit)
+                        .map(v -> new PagoMatriculaItem(
+                                v.getPagoMatriculaId(),
+                                v.getMatriculaId(),
+                                clean(v.getEstudiante()),
+                                clean(v.getNumeroRecibo()),
+                                v.getMonto(),
+                                v.getFechaPago(),
+                                clean(v.getEstado()),
+                                clean(v.getMetodoPago()),
+                                clean(v.getDetalle()),
+                                Boolean.TRUE.equals(v.getAnulado()),
+                                clean(v.getMotivoAnulacion())
+                        ))
+                        .toList();
+
+                List<MensualidadItem> mensualidades = mensualidadRepository.findRecentCaja(email).stream()
+                        .limit(safeLimit)
+                        .map(v -> new MensualidadItem(
+                                v.getMensualidadId(),
+                                clean(v.getEstudiante()),
+                                monthLabel(v.getMes()),
+                                clean(v.getNumeroRecibo()),
+                                v.getMontoBase(),
+                                v.getMontoMora(),
+                                v.getMonto(),
+                                v.getFechaPago(),
+                                clean(v.getEstado()),
+                                clean(v.getMetodoPago()),
+                                clean(v.getDetalle()),
+                                Boolean.TRUE.equals(v.getAnulado()),
+                                clean(v.getMotivoAnulacion())
+                        ))
+                        .toList();
+
+                return ResponseEntity.ok(new CajaHistorialResponse(pagosTaller, pagosMatricula, mensualidades));
+        }
 }

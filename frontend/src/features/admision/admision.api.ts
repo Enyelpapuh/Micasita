@@ -49,6 +49,7 @@ export type SolicitudAdmision = {
   personaId: number
   nombrePostulante: string
   apellidoPostulante: string
+  fechaNacimientoPostulante?: string | null
   telefonoPostulante?: string | null
   correoPostulante?: string | null
   identificadorPostulante?: string | null

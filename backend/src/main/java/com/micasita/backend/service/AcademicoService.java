@@ -199,7 +199,6 @@ public class AcademicoService {
                 .profesor(profesor)
                 .grupo(grupo)
                 .fechaInicio(fechaInicio != null ? fechaInicio : LocalDate.now())
-                .cantidadAlumnos(null)
                 .build());
     }
 
@@ -564,7 +563,7 @@ public class AcademicoService {
     }
 
     @Transactional
-    public void registrarAsistenciaLote(Long grupoId, Long asignaturaId, LocalDate fecha, List<AsistenciaRegistroInput> registros) {
+    public void registrarAsistenciaLote(String userEmail, Long grupoId, Long asignaturaId, LocalDate fecha, List<AsistenciaRegistroInput> registros) {
                 if (grupoId == null || asignaturaId == null) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_GRUPO_ASIGNATURA_REQUERIDOS");
                 }
@@ -588,6 +587,9 @@ public class AcademicoService {
         if (asistenciaGeneral == null) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "ACADEMICO_ASISTENCIA_GENERAL_ERROR");
         }
+
+        Usuario usuario = usuarioRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_SESSION_INVALID"));
 
         for (AsistenciaRegistroInput registro : registros) {
                         if (registro.estudianteId() == null || registro.estadoAsistenciaId() == null) {
@@ -618,10 +620,12 @@ public class AcademicoService {
                     .findByEstudianteAsignaturaIdAndFecha(estudianteAsignatura.getId(), fecha)
                     .orElseGet(() -> AsistenciaEstudiante.builder()
                             .estudianteAsignatura(estudianteAsignatura)
+                                                        .usuario(usuario)
                             .fecha(fecha)
                             .build());
 
             asistencia.setEstadoAsistencia(estado);
+                        asistencia.setUsuario(usuario);
             asistencia.setObservaciones(trimToNull(registro.observaciones()));
             asistenciaEstudianteRepository.save(asistencia);
         }

@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "framer-motion": "^12.38.0"
+    "framer-motion": "^12.38.0",
+    "react-hook-form": "^7.76.1"
   }
 }

@@ -11,6 +11,7 @@ import {
   closeCajaSession,
   getActiveCajaSession,
   getCajaDashboard,
+  getCajaHistorialGeneral,
   getCajaTarifas,
   getMensualidadMesesResumen,
   getMetodosPago,
@@ -25,6 +26,7 @@ import {
   type CajaMatriculaPendienteItem,
   type CajaMensualidadItem,
   type CajaOperacionResult,
+  type CajaHistorialResponse,
   type CajaPagoMatriculaItem,
   type CajaPagoTallerItem,
   type CajaTallerPendienteItem,
@@ -48,7 +50,7 @@ function formatDate(value?: string | null) {
   if (!value) {
     return '-'
   }
-  const date = new Date(value)
+  const date = parseDateValue(value)
   if (Number.isNaN(date.getTime())) {
     return value
   }
@@ -57,6 +59,15 @@ function formatDate(value?: string | null) {
     month: 'short',
     day: '2-digit',
   })
+}
+
+function parseDateValue(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number)
+    return new Date(year, month - 1, day)
+  }
+
+  return new Date(value)
 }
 
 function formatMoney(value?: number | null) {
@@ -122,6 +133,39 @@ function parseMonthNumber(value: string) {
   return parsed
 }
 
+function isSameLocalDay(value?: string | null, baseDate = new Date()) {
+  if (!value) {
+    return false
+  }
+  const date = parseDateValue(value)
+  if (Number.isNaN(date.getTime())) {
+    return false
+  }
+  return (
+    date.getFullYear() === baseDate.getFullYear() &&
+    date.getMonth() === baseDate.getMonth() &&
+    date.getDate() === baseDate.getDate()
+  )
+}
+
+function isSameLocalDateValue(value?: string | null, dateValue?: string) {
+  if (!value || !dateValue) {
+    return true
+  }
+
+  const date = parseDateValue(value)
+  if (Number.isNaN(date.getTime())) {
+    return false
+  }
+
+  const [year, month, day] = dateValue.split('-').map(Number)
+  if (!year || !month || !day) {
+    return true
+  }
+
+  return date.getFullYear() === year && date.getMonth() + 1 === month && date.getDate() === day
+}
+
 function calculateMoraPeriods(mesDePago: string, diaLimitePago: string, now = new Date()) {
   const month = parseMonthNumber(mesDePago)
   if (!month) {
@@ -170,8 +214,12 @@ type CajaHistorialItem = {
   mensualidadId?: number
 }
 
-function buildCajaHistorial(data?: CajaDashboardResponse | null): CajaHistorialItem[] {
-  const historialTaller = (data?.pagosTaller ?? []).map((item) => ({
+function buildCajaHistorialFromParts(
+  pagosTaller: CajaPagoTallerItem[],
+  pagosMatricula: CajaPagoMatriculaItem[],
+  mensualidades: CajaMensualidadItem[],
+): CajaHistorialItem[] {
+  const historialTaller = pagosTaller.map((item) => ({
     key: `taller-${item.pagoCupoId}`,
     tipo: 'Taller' as const,
     titulo: item.taller || 'Taller',
@@ -186,7 +234,7 @@ function buildCajaHistorial(data?: CajaDashboardResponse | null): CajaHistorialI
     pagoCupoId: item.pagoCupoId,
   }))
 
-  const historialMatricula = (data?.pagosMatricula ?? []).map((item) => ({
+  const historialMatricula = pagosMatricula.map((item) => ({
     key: `matricula-${item.pagoMatriculaId}`,
     tipo: 'Matrícula' as const,
     titulo: item.estudiante || 'Matrícula',
@@ -201,7 +249,7 @@ function buildCajaHistorial(data?: CajaDashboardResponse | null): CajaHistorialI
     pagoMatriculaId: item.pagoMatriculaId,
   }))
 
-  const historialMensualidad = (data?.mensualidades ?? []).map((item) => ({
+  const historialMensualidad = mensualidades.map((item) => ({
     key: `mensualidad-${item.mensualidadId}`,
     tipo: 'Mensualidad' as const,
     titulo: item.estudiante || 'Mensualidad',
@@ -227,10 +275,6 @@ function CompactSessionBar({
   session,
   onOpenSession,
   onCloseSession,
-  openSaldo,
-  setOpenSaldo,
-  openObservacion,
-  setOpenObservacion,
   busy,
   showAdminAction,
   onCloseAllOpenCajas,
@@ -238,10 +282,6 @@ function CompactSessionBar({
   session: CajaSessionInfo | null
   onOpenSession: () => void
   onCloseSession: () => void
-  openSaldo: string
-  setOpenSaldo: (v: string) => void
-  openObservacion: string
-  setOpenObservacion: (v: string) => void
   busy: boolean
   showAdminAction: boolean
   onCloseAllOpenCajas: () => void
@@ -257,24 +297,11 @@ function CompactSessionBar({
               <p>Estado: {session.estado}</p>
               <p>Apertura: {formatDate(session.fechaApertura)}</p>
               <p>Saldo inicial: {formatMoney(session.saldoInicial)}</p>
+              {session.observacionApertura ? <p>Observación: {session.observacionApertura}</p> : null}
             </div>
           ) : (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <input
-                value={openSaldo}
-                onChange={(e) => setOpenSaldo(e.target.value)}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="Saldo inicial"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-              />
-              <input
-                value={openObservacion}
-                onChange={(e) => setOpenObservacion(e.target.value)}
-                placeholder="Observación de apertura"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-              />
+            <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-600">
+              Presiona "Abrir caja" para ingresar monto de apertura y observación en el modal.
             </div>
           )}
         </div>
@@ -352,6 +379,18 @@ function TalleresTab({
   const montoRecibidoNumber = Number(montoRecibido) || 0
   const vuelto = montoRecibidoNumber - montoCobroNumber
   const puedeCobrar = !!selectedPendiente && montoCobroNumber > 0 && !!metodoPagoId && vuelto >= 0 && !busy && Number(selectedPendiente?.montoEsperado ?? 0) > 0
+
+  const pagosFiltrados = useMemo(() => {
+    const term = (search || '').trim().toLocaleLowerCase('es-NI')
+    if (!term) {
+      return pagos
+    }
+    return pagos.filter((item) => {
+      return [item.participante, item.taller, item.numeroRecibo, item.metodoPago, item.estado]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase('es-NI').includes(term))
+    })
+  }, [pagos, search])
 
   const abrirModal = (item: CajaTallerPendienteItem) => {
     setSelectedPago(null)
@@ -572,7 +611,7 @@ function TalleresTab({
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Pagos de talleres recientes</h3>
         <div className="mt-3 space-y-2">
-          {pagos.map((item) => (
+          {pagosFiltrados.map((item) => (
             <article key={item.pagoCupoId} className="rounded-xl border border-slate-200 p-3 text-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -605,7 +644,7 @@ function TalleresTab({
               </div>
             </article>
           ))}
-          {pagos.length === 0 ? <EmptyState message="No hay pagos de talleres registrados todavía." /> : null}
+          {pagosFiltrados.length === 0 ? <EmptyState message="No hay pagos de talleres que coincidan con la búsqueda." /> : null}
         </div>
       </section>
     </div>
@@ -657,6 +696,18 @@ function MatriculaTab({
     }
     return pendientes.filter((item) => (item.estudiante || '').toLocaleLowerCase('es-NI').includes(term))
   }, [busqueda, pendientes, externalBusqueda])
+
+  const pagosFiltrados = useMemo(() => {
+    const term = (externalBusqueda ?? busqueda).trim().toLocaleLowerCase('es-NI')
+    if (!term) {
+      return pagos
+    }
+    return pagos.filter((item) => {
+      return [item.estudiante, item.numeroRecibo, item.detalle, item.metodoPago, item.estado]
+        .filter(Boolean)
+        .some((value) => String(value).toLocaleLowerCase('es-NI').includes(term))
+    })
+  }, [pagos, busqueda, externalBusqueda])
 
   const montoCobroNumber = Number(montoCobro) || 0
   const montoRecibidoNumber = Number(montoRecibido) || 0
@@ -751,7 +802,7 @@ function MatriculaTab({
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Pagos de matrícula recientes</h3>
         <div className="mt-3 space-y-2">
-          {pagos.map((item) => (
+          {pagosFiltrados.map((item) => (
             <article key={item.pagoMatriculaId} className="rounded-xl border border-slate-200 p-3 text-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -782,7 +833,7 @@ function MatriculaTab({
               </div>
             </article>
           ))}
-          {pagos.length === 0 ? <EmptyState message="No hay pagos de matrícula registrados todavía." /> : null}
+          {pagosFiltrados.length === 0 ? <EmptyState message="No hay pagos de matrícula que coincidan con la búsqueda." /> : null}
         </div>
       </section>
 
@@ -955,6 +1006,7 @@ function MensualidadTab({
   mensualidadMesActual,
   estudiantesActivos,
   estudiantesPendientesMensualidad,
+  globalSearchTerm,
   onBuscarPendientes,
 }: {
   mensualidades: CajaMensualidadItem[]
@@ -982,6 +1034,7 @@ function MensualidadTab({
   mensualidadMesActual?: number
   estudiantesActivos?: EstudianteItem[]
   estudiantesPendientesMensualidad?: ResumenPendientesMensualidadResponse[]
+  globalSearchTerm?: string
   onBuscarPendientes?: (estudianteId: string) => void
 }) {
   const [selectedMensualidad, setSelectedMensualidad] = useState<CajaMensualidadItem | null>(null)
@@ -1009,11 +1062,20 @@ function MensualidadTab({
   const mensualidadesFiltradas = mensualidades.filter((item) => {
     const matchEstado =
       filtroEstado === 'todos' || (filtroEstado === 'anulados' ? item.anulado : !item.anulado)
-    const term = buscarEstudiante.trim().toLocaleLowerCase('es-NI')
-    if (!term) {
+    const termLocal = buscarEstudiante.trim().toLocaleLowerCase('es-NI')
+    const termGlobal = (globalSearchTerm ?? '').trim().toLocaleLowerCase('es-NI')
+    const haystack = [item.estudiante, item.numeroRecibo, item.detalle, item.metodoPago, item.estado, item.mes]
+      .filter(Boolean)
+      .map((value) => String(value).toLocaleLowerCase('es-NI'))
+      .join(' ')
+
+    if (!termLocal && !termGlobal) {
       return matchEstado
     }
-    return matchEstado && item.estudiante?.toLocaleLowerCase('es-NI').includes(term)
+
+    const matchLocal = !termLocal || haystack.includes(termLocal)
+    const matchGlobal = !termGlobal || haystack.includes(termGlobal)
+    return matchEstado && matchLocal && matchGlobal
   })
 
   const mensualidadesActivas = mensualidades.filter((item) => !item.anulado)
@@ -1131,6 +1193,10 @@ function MensualidadTab({
             <option value="anulados">Solo anulados</option>
           </select>
         </div>
+
+        {globalSearchTerm?.trim() ? (
+          <p className="mt-2 text-xs text-slate-500">Aplicando búsqueda global por recibo/estudiante: "{globalSearchTerm.trim()}"</p>
+        ) : null}
 
         <p className="mt-3 text-xs text-slate-600">
           Mensualidades activas: <span className="font-semibold">{mensualidadesActivas.length}</span> de{' '}
@@ -1268,6 +1334,7 @@ export function CajaDashboardPanel() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<CajaDashboardResponse | null>(null)
+  const [generalHistorialData, setGeneralHistorialData] = useState<CajaHistorialResponse | null>(null)
   const [activeSession, setActiveSession] = useState<CajaSessionInfo | null>(null)
   const [metodosPago, setMetodosPago] = useState<MetodoPagoOption[]>([])
   const [tarifas, setTarifas] = useState<CajaTarifasResponse | null>(null)
@@ -1276,10 +1343,7 @@ export function CajaDashboardPanel() {
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [openSaldo, setOpenSaldo] = useState('0')
   const [openObservacion, setOpenObservacion] = useState('')
-  const closeSaldoState = useState('0')
-  const closeSaldo = closeSaldoState[0]
-  const closeObservacionState = useState('')
-  const closeObservacion = closeObservacionState[0]
+  const [closeObservacion, setCloseObservacion] = useState('')
   const [mensualidadEstudianteId, setMensualidadEstudianteId] = useState('')
   const [pendientesMensualidadesList, setPendientesMensualidadesList] = useState<Array<import('./caja.api').PendienteMensualidadResponse>>([])
   const [mensualidadMesesResumen, setMensualidadMesesResumen] = useState<MensualidadMesesResumenResponse>({ mesesPagados: [], mesActual: new Date().getMonth() + 1 })
@@ -1299,6 +1363,11 @@ export function CajaDashboardPanel() {
   const [historialModalOpen, setHistorialModalOpen] = useState(false)
   const [showPreCloseModal, setShowPreCloseModal] = useState(false)
   const [preCloseCounted, setPreCloseCounted] = useState('')
+  const [preCloseCambioDevuelto, setPreCloseCambioDevuelto] = useState('0')
+  const [showOpenSessionModal, setShowOpenSessionModal] = useState(false)
+  const [periodFilter, setPeriodFilter] = useState<'hoy' | 'todo'>('hoy')
+  const [historialTipoFiltro, setHistorialTipoFiltro] = useState<'todos' | 'Taller' | 'Matrícula' | 'Mensualidad'>('todos')
+  const [historialFechaFiltro, setHistorialFechaFiltro] = useState('')
 
   const moraPeriodosSugeridos = useMemo(
     () => calculateMoraPeriods(mensualidadMes, mensualidadDiaLimitePago),
@@ -1313,19 +1382,91 @@ export function CajaDashboardPanel() {
   const moraAplicadaFormulario = mensualidadMoraAutomatica ? moraSugerida : Number(mensualidadMontoMora)
 
   const isCajaAdmin = Boolean(user?.roles?.some((role) => ['ADMIN', 'DEVELOPER'].includes(role.toUpperCase())))
-  const historialGeneral = useMemo(() => buildCajaHistorial(data), [data])
+  const totalCobradoGeneralPreClose =
+    sumPaid(data?.pagosTaller ?? []) +
+    sumPaid(data?.pagosMatricula ?? []) +
+    sumPaid(data?.mensualidades ?? [])
+  const aperturaSesion = Number(activeSession?.saldoInicial ?? 0)
+  const cambioDevuelto = Number(preCloseCambioDevuelto) || 0
+  const ingresoNetoTurno = totalCobradoGeneralPreClose - cambioDevuelto
+  const efectivoEsperadoPreCierre = aperturaSesion + ingresoNetoTurno
+  const efectivoContadoPreCierre = Number(preCloseCounted) || 0
+  const diferenciaPreCierre = efectivoContadoPreCierre - efectivoEsperadoPreCierre
+
+  const pagosTallerSource = useMemo(() => {
+    if (periodFilter === 'todo') {
+      return generalHistorialData?.pagosTaller ?? []
+    }
+    return data?.pagosTaller ?? []
+  }, [data, generalHistorialData, periodFilter])
+
+  const pagosMatriculaSource = useMemo(() => {
+    if (periodFilter === 'todo') {
+      return generalHistorialData?.pagosMatricula ?? []
+    }
+    return data?.pagosMatricula ?? []
+  }, [data, generalHistorialData, periodFilter])
+
+  const mensualidadesSource = useMemo(() => {
+    if (periodFilter === 'todo') {
+      return generalHistorialData?.mensualidades ?? []
+    }
+    return data?.mensualidades ?? []
+  }, [data, generalHistorialData, periodFilter])
+
+  const historialGeneral = useMemo(() => {
+    const full = buildCajaHistorialFromParts(pagosTallerSource, pagosMatriculaSource, mensualidadesSource)
+    if (periodFilter === 'todo') {
+      return full
+    }
+    return full.filter((item) => isSameLocalDay(item.fecha))
+  }, [pagosTallerSource, pagosMatriculaSource, mensualidadesSource, periodFilter])
+
+  const pagosTallerFiltradosPeriodo = useMemo(() => {
+    const items = pagosTallerSource
+    if (periodFilter === 'todo') {
+      return items
+    }
+    return items.filter((item) => isSameLocalDay(item.fechaPago))
+  }, [pagosTallerSource, periodFilter])
+
+  const pagosMatriculaFiltradosPeriodo = useMemo(() => {
+    const items = pagosMatriculaSource
+    if (periodFilter === 'todo') {
+      return items
+    }
+    return items.filter((item) => isSameLocalDay(item.fechaPago))
+  }, [pagosMatriculaSource, periodFilter])
+
+  const mensualidadesFiltradasPeriodo = useMemo(() => {
+    const items = mensualidadesSource
+    if (periodFilter === 'todo') {
+      return items
+    }
+    return items.filter((item) => isSameLocalDay(item.fechaPago))
+  }, [mensualidadesSource, periodFilter])
+
   const historialFiltrado = useMemo(() => {
     const term = searchTerm.trim().toLocaleLowerCase('es-NI')
-    if (!term) {
-      return historialGeneral
-    }
-
     return historialGeneral.filter((item) => {
+      const matchTipo = historialTipoFiltro === 'todos' || item.tipo === historialTipoFiltro
+      if (!matchTipo) {
+        return false
+      }
+
+      if (!isSameLocalDateValue(item.fecha, historialFechaFiltro)) {
+        return false
+      }
+
+      if (!term) {
+        return true
+      }
+
       return [item.tipo, item.titulo, item.numeroRecibo, item.detalle, item.metodoPago, item.estado]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('es-NI').includes(term))
     })
-  }, [historialGeneral, searchTerm])
+  }, [historialGeneral, searchTerm, historialTipoFiltro, historialFechaFiltro])
 
   const totalCobradoTalleres = sumPaid(data?.pagosTaller ?? [])
   const totalCobradoMatriculas = sumPaid(data?.pagosMatricula ?? [])
@@ -1367,13 +1508,38 @@ export function CajaDashboardPanel() {
     }
   }
 
+  const loadGeneralHistorialData = async () => {
+    try {
+      const payload = await getCajaHistorialGeneral(token)
+      setGeneralHistorialData(payload)
+    } catch {
+      toast.error('No se pudo cargar el historial general completo de caja.')
+      setGeneralHistorialData(null)
+    }
+  }
+
   useEffect(() => {
     void loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
+  useEffect(() => {
+    if (periodFilter !== 'todo') {
+      return
+    }
+    if (generalHistorialData) {
+      return
+    }
+    void loadGeneralHistorialData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodFilter, token, generalHistorialData])
+
   const refreshAll = async () => {
     await loadData()
+    setGeneralHistorialData(null)
+    if (periodFilter === 'todo') {
+      await loadGeneralHistorialData()
+    }
   }
 
   const runAction = async (action: string, executor: () => Promise<CajaOperacionResult>) => {
@@ -1394,6 +1560,11 @@ export function CajaDashboardPanel() {
   }
 
   const handleOpenSession = async () => {
+    setShowOpenSessionModal(true)
+  }
+
+  const confirmOpenSession = async () => {
+    setShowOpenSessionModal(false)
     await runAction('open-session', () => openCajaSession(token, { saldoInicial: readNumber(openSaldo), observacion: openObservacion }))
   }
 
@@ -1417,7 +1588,8 @@ export function CajaDashboardPanel() {
 
   const handleCloseSession = async () => {
     // open pre-close modal first
-    setPreCloseCounted(closeSaldo)
+    setPreCloseCambioDevuelto('0')
+    setPreCloseCounted(String(efectivoEsperadoPreCierre > 0 ? efectivoEsperadoPreCierre : 0))
     setShowPreCloseModal(true)
   }
 
@@ -1595,10 +1767,6 @@ export function CajaDashboardPanel() {
         session={activeSession}
         onOpenSession={handleOpenSession}
         onCloseSession={handleCloseSession}
-        openSaldo={openSaldo}
-        setOpenSaldo={setOpenSaldo}
-        openObservacion={openObservacion}
-        setOpenObservacion={setOpenObservacion}
         busy={busyAction === 'open-session' || busyAction === 'close-session' || busyAction === 'close-all-open-cajas'}
         showAdminAction={isCajaAdmin}
         onCloseAllOpenCajas={handleCloseAllOpenCajas}
@@ -1619,12 +1787,39 @@ export function CajaDashboardPanel() {
       </div>
 
       {/* Search central */}
-      <div className="mt-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_220px]">
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           placeholder="Buscar por estudiante, tutor o número de recibo"
           className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-teal-500"
+        />
+
+        <select
+          value={periodFilter}
+          onChange={(e) => setPeriodFilter(e.target.value as 'hoy' | 'todo')}
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+        >
+          <option value="hoy">Movimientos de hoy</option>
+          <option value="todo">Todo el tiempo</option>
+        </select>
+
+        <select
+          value={historialTipoFiltro}
+          onChange={(e) => setHistorialTipoFiltro(e.target.value as 'todos' | 'Taller' | 'Matrícula' | 'Mensualidad')}
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+        >
+          <option value="todos">Todos los tipos</option>
+          <option value="Taller">Taller</option>
+          <option value="Matrícula">Matrícula</option>
+          <option value="Mensualidad">Mensualidad</option>
+        </select>
+
+        <input
+          value={historialFechaFiltro}
+          onChange={(e) => setHistorialFechaFiltro(e.target.value)}
+          type="date"
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
         />
       </div>
 
@@ -1667,7 +1862,7 @@ export function CajaDashboardPanel() {
                 {tab === 'talleres' ? (
                   <TalleresTab
                     pendientes={data.talleresPendientes}
-                    pagos={data.pagosTaller}
+                    pagos={pagosTallerFiltradosPeriodo}
                     onPay={handlePayTaller}
                     onAnnul={requestAnnulTaller}
                     metodoPagoId={tallerMetodoPagoId}
@@ -1681,7 +1876,7 @@ export function CajaDashboardPanel() {
                 {tab === 'matricula' ? (
                   <MatriculaTab
                     pendientes={data.matriculasPendientes}
-                    pagos={data.pagosMatricula}
+                    pagos={pagosMatriculaFiltradosPeriodo}
                     onPay={handlePayMatricula}
                     onAnnul={requestAnnulMatricula}
                     metodosPago={metodosPago}
@@ -1701,7 +1896,7 @@ export function CajaDashboardPanel() {
 
                 {tab === 'mensualidad' ? (
                   <MensualidadTab
-                    mensualidades={data.mensualidades}
+                    mensualidades={mensualidadesFiltradasPeriodo}
                     mensualidadesPendientes={metricas?.mensualidadesPendientes ?? 0}
                     estudianteId={mensualidadEstudianteId}
                     mesDePago={mensualidadMes}
@@ -1723,6 +1918,7 @@ export function CajaDashboardPanel() {
                     mensualidadMesActual={mensualidadMesesResumen.mesActual}
                     estudiantesActivos={estudiantesActivos}
                     estudiantesPendientesMensualidad={mensualidadesPendientesEstudiantes}
+                    globalSearchTerm={searchTerm}
                     onBuscarPendientes={async (estId: string) => {
                       if (!token || !estId) return
                       try {
@@ -1753,6 +1949,9 @@ export function CajaDashboardPanel() {
                           <button type="button" onClick={openHistorialModal} className="rounded-xl border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ver todos</button>
                         </div>
                       </div>
+                      {historialFechaFiltro ? (
+                        <p className="mt-2 text-xs text-slate-500">Filtrando por fecha de pago: {historialFechaFiltro}</p>
+                      ) : null}
                   <div className="mt-3 space-y-2">
                     {historialFiltrado.map((item) => (
                       <article
@@ -1862,6 +2061,70 @@ export function CajaDashboardPanel() {
             </div>
           </div>
         ) : null}
+
+        {showOpenSessionModal ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900">Apertura de caja</h4>
+                  <p className="text-sm text-slate-600">Ingresa los datos de apertura para esta sesión.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOpenSessionModal(false)}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Monto de apertura</label>
+                  <input
+                    value={openSaldo}
+                    onChange={(e) => setOpenSaldo(e.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Ej. 2500"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Observación de apertura</label>
+                  <input
+                    value={openObservacion}
+                    onChange={(e) => setOpenObservacion(e.target.value)}
+                    placeholder="Caja inicial del turno"
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOpenSessionModal(false)}
+                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmOpenSession}
+                  disabled={busyAction === 'open-session'}
+                  className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {busyAction === 'open-session' ? 'Procesando...' : 'Confirmar apertura'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         {showPreCloseModal ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
             <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
@@ -1876,7 +2139,7 @@ export function CajaDashboardPanel() {
               <div className="mt-4 grid gap-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                   <p className="text-sm text-slate-600">Arqueo sugerido</p>
-                  <p className="mt-1 font-semibold text-slate-900">Efectivo esperado: {formatMoney(totalCobradoTalleres + totalCobradoMatriculas + totalCobradoMensualidades)}</p>
+                  <p className="mt-1 font-semibold text-slate-900">Efectivo esperado: {formatMoney(efectivoEsperadoPreCierre)}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
@@ -1898,9 +2161,52 @@ export function CajaDashboardPanel() {
                   <p className="font-semibold text-rose-800">{anulacionesTotales}</p>
                 </div>
 
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                    <p className="text-xs text-slate-500">Apertura de caja</p>
+                    <p className="font-semibold text-slate-900">{formatMoney(aperturaSesion)}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                    <p className="text-xs text-slate-500">Dinero ingresado (cobrado)</p>
+                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoGeneralPreClose)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Sencillo devuelto estimado</label>
+                  <input
+                    value={preCloseCambioDevuelto}
+                    onChange={(e) => setPreCloseCambioDevuelto(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    placeholder="Ingrese sencillo devuelto"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">Se restará del ingreso para estimar el efectivo neto antes de confirmar cierre.</p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                  <p className="text-slate-700">Ingreso neto estimado: <span className="font-semibold">{formatMoney(ingresoNetoTurno)}</span></p>
+                  {diferenciaPreCierre > 0 ? (
+                    <p className="text-emerald-700">Sobrante estimado: <span className="font-semibold">{formatMoney(diferenciaPreCierre)}</span></p>
+                  ) : diferenciaPreCierre < 0 ? (
+                    <p className="text-rose-700">Faltante estimado: <span className="font-semibold">{formatMoney(Math.abs(diferenciaPreCierre))}</span></p>
+                  ) : (
+                    <p className="text-slate-700">Sin diferencia estimada.</p>
+                  )}
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad física contada</label>
                   <input value={preCloseCounted} onChange={(e) => setPreCloseCounted(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" placeholder="Ingrese monto contado" />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Descripción/observación de cierre</label>
+                  <input
+                    value={closeObservacion}
+                    onChange={(e) => setCloseObservacion(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    placeholder="Ej. Cierre de turno sin incidencias"
+                  />
                 </div>
               </div>
 
@@ -1918,7 +2224,7 @@ export function CajaDashboardPanel() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Historial completo</h4>
-                  <p className="text-sm text-slate-600">Listado cronológico de todos los pagos. Usa búsqueda para filtrar.</p>
+                  <p className="text-sm text-slate-600">Listado cronológico de pagos con filtros por período, tipo y recibo.</p>
                 </div>
                 <button type="button" onClick={closeHistorialModal} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Cerrar</button>
               </div>
@@ -1940,7 +2246,7 @@ export function CajaDashboardPanel() {
                       </tr>
                     </thead>
                     <tbody>
-                      {historialGeneral.map((item) => (
+                      {historialFiltrado.map((item) => (
                         <tr key={item.key} className={`border-b ${item.anulado ? 'bg-rose-50' : ''}`}>
                           <td className="px-2 py-3">{item.tipo}</td>
                           <td className="px-2 py-3">{item.titulo}</td>
@@ -1961,9 +2267,9 @@ export function CajaDashboardPanel() {
                     </tbody>
                   </table>
                 </div>
-                {historialGeneral.length === 0 ? (
+                {historialFiltrado.length === 0 ? (
                   <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                    No hay registros en el historial.
+                    No hay registros en el historial con los filtros seleccionados.
                   </div>
                 ) : null}
               </div>

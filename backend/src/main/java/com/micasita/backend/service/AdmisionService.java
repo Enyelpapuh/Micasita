@@ -391,6 +391,7 @@ public class AdmisionService {
                 persona != null ? persona.getId() : null,
             nombrePostulante,
             apellidoPostulante,
+            solicitud.getFechaNacimientoPostulante(),
             telefonoPostulante,
             correoPostulante,
             identificadorPostulante,
