@@ -33,7 +33,7 @@ const API_MESSAGE_MAP: Record<string, string> = {
   AUTH_PASSWORD_SAME_AS_CURRENT: 'La nueva contraseña debe ser diferente a la actual.',
   AUTH_CURRENT_PASSWORD_INVALID: 'La contraseña actual no coincide.',
   PASSWORD_REQUIRED: 'La contraseña es obligatoria.',
-  PASSWORD_LENGTH_INVALID: 'La contraseña debe tener entre 10 y 64 caracteres.',
+  PASSWORD_LENGTH_INVALID: 'La contraseña debe tener entre 8 y 64 caracteres.',
   PASSWORD_UPPERCASE_REQUIRED: 'La contraseña debe incluir al menos una letra mayúscula.',
   PASSWORD_LOWERCASE_REQUIRED: 'La contraseña debe incluir al menos una letra minúscula.',
   PASSWORD_DIGIT_REQUIRED: 'La contraseña debe incluir al menos un número.',

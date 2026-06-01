@@ -414,11 +414,11 @@ export function SettingsPanel() {
   const [isSaving, setIsSaving] = useState(false)
   const [isSavingProfile, setIsSavingProfile] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
-  const canEditFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION'].includes(role?.toUpperCase?.() ?? role))
+  
 
   const validateStrongPassword = (password: string) => {
-    if (password.length < 10 || password.length > 64) {
-      return 'La contraseña debe tener entre 10 y 64 caracteres.'
+    if (password.length < 8 || password.length > 64) {
+      return 'La contraseña debe tener entre 8 y 64 caracteres.'
     }
     if (!/[A-Z]/.test(password)) {
       return 'La contraseña debe incluir al menos una letra mayúscula.'
@@ -595,7 +595,7 @@ export function SettingsPanel() {
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
                 className="w-full text-sm outline-none"
-                placeholder="10-64, mayúscula, minúscula, número y símbolo"
+                placeholder="8-64, mayúscula, minúscula, número y símbolo"
               />
               <button type="button" onClick={() => setShowNewPassword((prev) => !prev)} className="text-slate-500 hover:text-slate-700">
                 {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -631,17 +631,7 @@ export function SettingsPanel() {
         </div>
       </div>
 
-      {canEditFinanzas ? (
-        <div className="mt-6 max-w-4xl">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.12em] text-slate-700">Sistema</p>
-              <p className="text-sm text-slate-600">Parámetros financieros visibles sólo para roles administradores.</p>
-            </div>
-          </div>
-          <AdminFinanzasPanel />
-        </div>
-      ) : null}
+      {/* Removed embedded AdminFinanzasPanel: financial system config moved to its own panel */}
     </PanelShell>
   )
 }
