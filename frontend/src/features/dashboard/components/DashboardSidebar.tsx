@@ -326,14 +326,15 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     permission: 'DASHBOARD_ADMISION',
     allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'CAJA', 'DEVELOPER'],
   },
-  {
-    icon: Inbox,
-    label: 'Noticias y Avisos',
-    view: 'noticias',
-    category: 'reportes',
-    permission: 'DASHBOARD_OVERVIEW',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'CAJA', 'DEVELOPER'],
-  },
+  // Módulo de noticias desactivado a solicitud del usuario
+  // {
+  //   icon: Inbox,
+  //   label: 'Noticias y Avisos',
+  //   view: 'noticias',
+  //   category: 'reportes',
+  //   permission: 'DASHBOARD_OVERVIEW',
+  //   allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'CAJA', 'DEVELOPER'],
+  // },
   {
     icon: Settings,
     label: 'Config. Precios',

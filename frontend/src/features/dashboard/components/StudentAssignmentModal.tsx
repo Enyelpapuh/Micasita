@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronsRight, GraduationCap, School, UserCircle2, X } from 'lucide-react'
 import type { EstudianteDetailItem, GrupoItem, ProfesorItem } from './academico.api'
 
@@ -81,7 +82,7 @@ export function StudentAssignmentModal({
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div
         className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`}
@@ -221,5 +222,5 @@ export function StudentAssignmentModal({
         </div>
       </section>
     </div>
-  )
+  , document.body)
 }

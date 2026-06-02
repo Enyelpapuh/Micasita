@@ -11,6 +11,7 @@ const MatriculasSection = lazy(() => import('./features/landing/components/matri
 const ContactForm = lazy(() => import('./features/landing/components/ContactForm').then(m => ({ default: m.default })) )
 const TalleresView = lazy(() => import('./features/talleres/components/TalleresView').then(m => ({ default: m.TalleresView })) )
 const LoginPage = lazy(() => import('./features/auth/LoginPage').then(m => ({ default: m.LoginPage })) )
+const PasswordRecoveryPage = lazy(() => import('./features/auth/PasswordRecoveryPage').then(m => ({ default: m.PasswordRecoveryPage })) )
 
 function NotFoundPage() {
   return (
@@ -92,6 +93,18 @@ function App() {
             <Suspense fallback={<div className="py-12">Cargando...</div>}>
               <PageWrapper>
                 <LoginPage />
+              </PageWrapper>
+            </Suspense>
+          </BaseLayout>
+        }
+      />
+      <Route
+        path="/recover-password"
+        element={
+          <BaseLayout>
+            <Suspense fallback={<div className="py-12">Cargando...</div>}>
+              <PageWrapper>
+                <PasswordRecoveryPage />
               </PageWrapper>
             </Suspense>
           </BaseLayout>

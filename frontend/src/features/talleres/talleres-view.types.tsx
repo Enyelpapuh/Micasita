@@ -5,6 +5,8 @@ export type CupoTaller = {
   idParticipante?: number
   participanteNombre?: string | null
   participanteApellido?: string | null
+  participanteTelefono?: string | null
+  participanteCorreo?: string | null
 }
 
 export type Taller = {

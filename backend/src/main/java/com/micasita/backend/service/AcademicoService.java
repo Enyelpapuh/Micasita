@@ -15,6 +15,7 @@ import com.micasita.backend.entities.academico.Profesor;
 import com.micasita.backend.entities.academico.ProfesorGrupo;
 import com.micasita.backend.entities.academico.Trabajo;
 import com.micasita.backend.entities.academico.Tutor;
+import com.micasita.backend.entities.core.Persona;
 import com.micasita.backend.entities.core.Usuario;
 import com.micasita.backend.repositories.academico.AsignaturaRepository;
 import com.micasita.backend.repositories.academico.AsistenciaEstudianteRepository;
@@ -32,6 +33,7 @@ import com.micasita.backend.repositories.academico.ProfesorRepository;
 import com.micasita.backend.repositories.academico.TrabajoRepository;
 import com.micasita.backend.repositories.academico.TutorRepository;
 import com.micasita.backend.repositories.core.UsuarioRepository;
+import com.micasita.backend.repositories.core.PersonaRepository;
 import com.micasita.backend.repositories.finanzas.MatriculaRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -45,6 +47,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class AcademicoService {
@@ -66,6 +69,7 @@ public class AcademicoService {
     private final EstudianteTutorRepository estudianteTutorRepository;
         private final MatriculaRepository matriculaRepository;
         private final UsuarioRepository usuarioRepository;
+    private final PersonaRepository personaRepository;
 
     public AcademicoService(
             GrupoRepository grupoRepository,
@@ -84,7 +88,8 @@ public class AcademicoService {
             TutorRepository tutorRepository,
             EstudianteTutorRepository estudianteTutorRepository,
             MatriculaRepository matriculaRepository,
-            UsuarioRepository usuarioRepository
+            UsuarioRepository usuarioRepository,
+            PersonaRepository personaRepository
     ) {
         this.grupoRepository = grupoRepository;
         this.asignaturaRepository = asignaturaRepository;
@@ -103,6 +108,7 @@ public class AcademicoService {
         this.estudianteTutorRepository = estudianteTutorRepository;
         this.matriculaRepository = matriculaRepository;
         this.usuarioRepository = usuarioRepository;
+        this.personaRepository = personaRepository;
     }
 
     @Transactional(readOnly = true)
@@ -284,15 +290,36 @@ public class AcademicoService {
                 .build());
     }
 
+    @Transactional
+    public void desvincularEstudianteTutor(Long estudianteId, Long tutorId) {
+        if (estudianteId == null || tutorId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_ESTUDIANTE_TUTOR_REQUERIDOS");
+        }
+        
+        List<EstudianteTutor> vinculaciones = estudianteTutorRepository.findByEstudianteIdOrderByIdAsc(estudianteId);
+        vinculaciones.stream()
+                .filter(v -> v.getTutor() != null && v.getTutor().getId().equals(tutorId))
+                .forEach(estudianteTutorRepository::delete);
+    }
+
     @Transactional(readOnly = true)
     public List<EstudianteSimpleItem> listEstudiantes() {
+        List<EstudianteGrupo> allEG = estudianteGrupoRepository.findAll();
+        Map<Long, List<String>> gruposMap = allEG.stream()
+                .filter(eg -> eg.getEstudiante() != null && eg.getGrupo() != null)
+                .collect(Collectors.groupingBy(
+                        eg -> eg.getEstudiante().getId(),
+                        Collectors.mapping(eg -> eg.getGrupo().getNombre(), Collectors.toList())
+                ));
+
         return estudianteRepository.findAll().stream()
                 .sorted(Comparator.comparing(Estudiante::getId))
                 .map(estudiante -> new EstudianteSimpleItem(
                         estudiante.getId(),
                         estudiante.getPersona() != null ? estudiante.getPersona().getId() : null,
                         estudiante.getPersona() != null ? estudiante.getPersona().getNombre() : null,
-                        estudiante.getPersona() != null ? estudiante.getPersona().getApellido() : null))
+                        estudiante.getPersona() != null ? estudiante.getPersona().getApellido() : null,
+                        gruposMap.getOrDefault(estudiante.getId(), List.of())))
                 .toList();
     }
 
@@ -317,12 +344,21 @@ public class AcademicoService {
                 ? String.valueOf(LocalDate.now().getYear())
                 : anioLectivo.trim();
 
+        List<EstudianteGrupo> allEG = estudianteGrupoRepository.findAll();
+        Map<Long, List<String>> gruposMap = allEG.stream()
+                .filter(eg -> eg.getEstudiante() != null && eg.getGrupo() != null)
+                .collect(Collectors.groupingBy(
+                        eg -> eg.getEstudiante().getId(),
+                        Collectors.mapping(eg -> eg.getGrupo().getNombre(), Collectors.toList())
+                ));
+
         return matriculaRepository.findActivosByAnioLectivo(year).stream()
                 .map(item -> new EstudianteSimpleItem(
                         item.getId(),
                         item.getPersonaId(),
                         item.getNombre(),
-                        item.getApellido()))
+                        item.getApellido(),
+                        gruposMap.getOrDefault(item.getId(), List.of())))
                 .sorted(Comparator.comparing(EstudianteSimpleItem::nombre, Comparator.nullsLast(String::compareToIgnoreCase))
                         .thenComparing(EstudianteSimpleItem::apellido, Comparator.nullsLast(String::compareToIgnoreCase))
                         .thenComparing(EstudianteSimpleItem::id))
@@ -416,6 +452,29 @@ public class AcademicoService {
                         tutor.getPersona() != null ? tutor.getPersona().getCorreo() : null,
                         tutor.getPersona() != null ? tutor.getPersona().getTelefono() : null))
                 .toList();
+    }
+
+    @Transactional
+    public TutorSimpleItem createTutor(CreateTutorRequest request) {
+        if (request == null || isBlank(request.nombre()) || isBlank(request.apellido())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TUTOR_NOMBRE_APELLIDO_REQUERIDOS");
+        }
+
+        Persona persona = new Persona();
+        persona.setNombre(request.nombre().trim());
+        persona.setApellido(request.apellido().trim());
+        persona.setCorreo(trimToNull(request.correo()));
+        persona.setTelefono(trimToNull(request.telefono()));
+        persona.setActivo(true);
+        persona = personaRepository.save(persona);
+
+        Tutor tutor = new Tutor();
+        tutor.setPersona(persona);
+        tutor.setCedula(trimToNull(request.cedula()));
+        tutor.setDireccion(trimToNull(request.direccion()));
+        tutor = tutorRepository.save(tutor);
+
+        return new TutorSimpleItem(tutor.getId(), persona.getNombre(), persona.getApellido(), persona.getCorreo(), persona.getTelefono());
     }
 
     @Transactional(readOnly = true)
@@ -776,7 +835,7 @@ public class AcademicoService {
 
     public record HojaAsignaturaItem(Long id, Long asignaturaId, String asignaturaNombre, String nombre) {}
 
-    public record EstudianteSimpleItem(Long id, Long personaId, String nombre, String apellido) {}
+    public record EstudianteSimpleItem(Long id, Long personaId, String nombre, String apellido, List<String> grupos) {}
 
     public record EstudianteDetailItem(
             Long id,
@@ -877,5 +936,14 @@ public class AcademicoService {
             String asignaturaNombre,
             LocalDate periodo,
             Integer notaFinal
+    ) {}
+
+    public record CreateTutorRequest(
+            String nombre,
+            String apellido,
+            String correo,
+            String telefono,
+            String cedula,
+            String direccion
     ) {}
 }

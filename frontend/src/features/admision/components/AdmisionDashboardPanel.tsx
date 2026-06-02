@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { ExternalLink, Eye, LoaderCircle, X } from 'lucide-react'
 import { normalizeApiError, useAuth } from '../../auth/AuthContext'
@@ -34,6 +35,8 @@ export function AdmisionDashboardPanel() {
   const [newTipoNombre, setNewTipoNombre] = useState('')
   const [newTipoObligatorio, setNewTipoObligatorio] = useState(true)
   const [previewDoc, setPreviewDoc] = useState<DocumentoSolicitud | null>(null)
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null)
+  const [previewDocLoading, setPreviewDocLoading] = useState(false)
   const [selectedSolicitudId, setSelectedSolicitudId] = useState<number | null>(null)
   const [filterMode, setFilterMode] = useState<'all' | 'pendiente' | 'procesado'>('all')
   const [searchTerm, setSearchTerm] = useState<string>('')
@@ -161,7 +164,9 @@ export function AdmisionDashboardPanel() {
     if (rutaArchivo.startsWith('http://') || rutaArchivo.startsWith('https://')) {
       return rutaArchivo
     }
-    return `${apiBaseUrl}${rutaArchivo}`
+    const baseUrl = apiBaseUrl.replace('/api', '')
+    const normalizedPath = rutaArchivo.replace(/\\/g, '/')
+    return `${baseUrl}/${normalizedPath.startsWith('/') ? normalizedPath.slice(1) : normalizedPath}`
   }
 
   const isImageDoc = (rutaArchivo: string) => /\.(png|jpe?g|webp|gif)$/i.test(rutaArchivo)
@@ -235,6 +240,43 @@ export function AdmisionDashboardPanel() {
 
     return date.toLocaleDateString()
   }
+
+  useEffect(() => {
+    if (!previewDoc) return
+
+    let cancelled = false
+    let objectUrl: string | null = null
+
+    setPreviewDocLoading(true)
+
+    const fetchDoc = async () => {
+      try {
+        const targetUrl = getDocUrl(previewDoc.rutaArchivo)
+        const response = await fetch(targetUrl, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        if (!response.ok) throw new Error('No se pudo cargar el documento')
+        
+        const blob = await response.blob()
+        objectUrl = URL.createObjectURL(blob)
+        
+        if (!cancelled) setPreviewDocUrl(objectUrl)
+      } catch (err) {
+        if (!cancelled) toast.error('No se pudo descargar el documento seguro.')
+      } finally {
+        if (!cancelled) setPreviewDocLoading(false)
+      }
+    }
+
+    void fetchDoc()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setPreviewDocUrl(null)
+    }
+  }, [previewDoc, token])
 
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
@@ -349,7 +391,7 @@ export function AdmisionDashboardPanel() {
         </div>
       ) : null}
 
-      {selectedSolicitud ? (
+      {selectedSolicitud ? createPortal(
         <div className="fixed inset-0 z-[500] grid place-items-center bg-slate-950/60 px-4">
           <div className="w-full max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -482,9 +524,9 @@ export function AdmisionDashboardPanel() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {tipoDocumentoPanelOpen ? (
+      {tipoDocumentoPanelOpen ? createPortal(
         <div className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/60 px-4">
           <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -587,9 +629,9 @@ export function AdmisionDashboardPanel() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {showConfirmSaveTipos ? (
+      {showConfirmSaveTipos ? createPortal(
         <div className="fixed inset-0 z-[300] grid place-items-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <p className="text-sm font-semibold text-slate-900">Confirmar guardado</p>
@@ -628,9 +670,9 @@ export function AdmisionDashboardPanel() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {tipoToDelete ? (
+      {tipoToDelete ? createPortal(
         <div className="fixed inset-0 z-[310] grid place-items-center bg-black/40 px-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <p className="text-sm font-semibold text-slate-900">Confirmar eliminación</p>
@@ -657,9 +699,9 @@ export function AdmisionDashboardPanel() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {previewDoc ? (
+      {previewDoc ? createPortal(
         <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/60 p-4">
           <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
@@ -669,10 +711,10 @@ export function AdmisionDashboardPanel() {
               </div>
               <div className="flex items-center gap-2">
                 <a
-                  href={getDocUrl(previewDoc.rutaArchivo)}
+                  href={previewDocUrl || '#'}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                  className={`inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 ${!previewDocUrl ? 'pointer-events-none opacity-50' : ''}`}
                 >
                   <ExternalLink className="mr-1 h-3.5 w-3.5" />
                   Abrir aparte
@@ -688,31 +730,44 @@ export function AdmisionDashboardPanel() {
             </div>
 
             <div className="max-h-[calc(90vh-64px)] overflow-auto bg-slate-50 p-3">
-              {isImageDoc(previewDoc.rutaArchivo) ? (
-                <img
-                  src={getDocUrl(previewDoc.rutaArchivo)}
-                  alt={previewDoc.tipoDocumento}
-                  className="mx-auto max-h-[75vh] rounded-lg border border-slate-200 object-contain"
-                />
-              ) : null}
-
-              {isPdfDoc(previewDoc.rutaArchivo) ? (
-                <iframe
-                  src={getDocUrl(previewDoc.rutaArchivo)}
-                  title={previewDoc.tipoDocumento}
-                  className="h-[75vh] w-full rounded-lg border border-slate-200 bg-white"
-                />
-              ) : null}
-
-              {!isImageDoc(previewDoc.rutaArchivo) && !isPdfDoc(previewDoc.rutaArchivo) ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  No se puede previsualizar este formato aquí. Usa "Abrir aparte".
+              {previewDocLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                  <LoaderCircle className="mb-2 h-8 w-8 animate-spin" />
+                  <p className="text-sm">Descargando documento seguro...</p>
                 </div>
-              ) : null}
+              ) : previewDocUrl ? (
+                <>
+                  {isImageDoc(previewDoc.rutaArchivo) ? (
+                    <img
+                      src={previewDocUrl}
+                      alt={previewDoc.tipoDocumento}
+                      className="mx-auto max-h-[75vh] rounded-lg border border-slate-200 object-contain"
+                    />
+                  ) : null}
+
+                  {isPdfDoc(previewDoc.rutaArchivo) ? (
+                    <iframe
+                      src={previewDocUrl}
+                      title={previewDoc.tipoDocumento}
+                      className="h-[75vh] w-full rounded-lg border border-slate-200 bg-white"
+                    />
+                  ) : null}
+
+                  {!isImageDoc(previewDoc.rutaArchivo) && !isPdfDoc(previewDoc.rutaArchivo) ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      No se puede previsualizar este formato aquí. Usa "Abrir aparte".
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                  Hubo un problema cargando el archivo.
+                </div>
+              )}
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
     </section>
   )
 }

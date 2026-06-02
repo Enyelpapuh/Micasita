@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { useAuth } from './AuthContext'
 
@@ -106,6 +106,13 @@ export function LoginPage() {
               {!loading ? <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" /> : null}
             </button>
           </form>
+
+          <div className="mt-6 text-center text-sm text-slate-400">
+            ¿Olvidaste tu contraseña?{' '}
+            <Link to="/recover-password" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">
+              Recupérala aquí
+            </Link>
+          </div>
         </section>
       </div>
     </div>

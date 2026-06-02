@@ -1,5 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react'
-import { CreditCard, LoaderCircle, ReceiptText } from 'lucide-react'
+﻿﻿import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Check, CreditCard, LoaderCircle, ReceiptText, UserCircle, Wallet, X, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../auth/AuthContext'
 import { listEstudiantesActivos, type EstudianteItem } from './academico.api'
@@ -79,17 +80,19 @@ function formatMoney(value?: number | null) {
 
 function SectionCard({ title, value, detail }: { title: string; value: string; detail: string }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-sm text-slate-500">{title}</p>
-      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
-      <p className="mt-1 text-xs text-slate-600">{detail}</p>
+    <article className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{title}</p>
+        <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+      </div>
+      <p className="mt-2 text-xs text-slate-500">{detail}</p>
     </article>
   )
 }
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
       {message}
     </div>
   )
@@ -287,9 +290,9 @@ function CompactSessionBar({
   onCloseAllOpenCajas: () => void
 }) {
   return (
-    <div className="mt-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_auto] xl:items-end">
-        <div className="rounded-2xl bg-slate-50 p-4">
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sesión de caja</p>
           {session ? (
             <div className="mt-3 space-y-1 text-sm text-slate-600">
@@ -395,6 +398,7 @@ function TalleresTab({
   const abrirModal = (item: CajaTallerPendienteItem) => {
     setSelectedPago(null)
     setSelectedPendiente(item)
+    setMontoCobro(String(Number(item.montoEsperado ?? 0)))
     setMontoRecibido('')
   }
 
@@ -429,50 +433,43 @@ function TalleresTab({
           <MetodoPagoSelect value={metodoPagoId} onChange={onMetodoPagoChange} metodosPago={metodosPago} />
           <p className="text-xs text-slate-500">Selecciona el metodo cargado por el sistema antes de cobrar.</p>
         </div>
-        <div className="mt-3">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-slate-500">
-                  <th className="px-2 py-2">Estudiante</th>
-                  <th className="px-2 py-2">Concepto</th>
-                  <th className="px-2 py-2">Monto</th>
-                  <th className="px-2 py-2 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendientes
-                  .filter((item) => {
-                    const term = (search || '').trim().toLocaleLowerCase('es-NI')
-                    if (!term) return true
-                    return (
-                      (item.participante || '').toLocaleLowerCase('es-NI').includes(term) ||
-                      (item.taller || '').toLocaleLowerCase('es-NI').includes(term)
-                    )
-                  })
-                  .map((item) => (
-                    <tr key={item.cupoId} className="border-b border-slate-100">
-                      <td className="px-2 py-3">{item.participante || 'Sin nombre'}</td>
-                      <td className="px-2 py-3">{item.taller}</td>
-                      <td className="px-2 py-3">{formatMoney(item.montoEsperado)}</td>
-                      <td className="px-2 py-3 text-right">
-                        <div className="inline-flex gap-2">
-                          <button type="button" onClick={() => abrirModal(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700">Ver</button>
-                          <button type="button" disabled={!puedeCobrar} onClick={() => abrirModal(item)} className="rounded-xl bg-teal-600 px-3 py-1 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60">Cobrar</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-            {pendientes.length === 0 ? <div className="mt-3"><EmptyState message="No hay inscripciones de talleres pendientes de pago." /></div> : null}
-          </div>
+        <div className="mt-4 grid gap-3">
+          {pendientes
+            .filter((item) => {
+              const term = (search || '').trim().toLocaleLowerCase('es-NI')
+              if (!term) return true
+              return (
+                (item.participante || '').toLocaleLowerCase('es-NI').includes(term) ||
+                (item.taller || '').toLocaleLowerCase('es-NI').includes(term)
+              )
+            })
+            .map((item) => (
+              <article key={item.cupoId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition-all hover:border-teal-300 hover:shadow-md">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+                    <ReceiptText className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900">{item.participante || 'Sin nombre'}</p>
+                    <p className="text-xs text-slate-500">{item.taller}</p>
+                    <p className="mt-1 text-sm font-semibold text-teal-700">{formatMoney(item.montoEsperado)}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 sm:shrink-0">
+                  <button type="button" onClick={() => abrirModal(item)} className="rounded-xl bg-teal-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-teal-700">
+                    Cobrar
+                  </button>
+                </div>
+              </article>
+            ))}
+          {pendientes.length === 0 ? <EmptyState message="No hay inscripciones de talleres pendientes de pago." /> : null}
         </div>
       </section>
 
-      {selectedPendiente ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      {selectedPendiente ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarModal} />
+          <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900">Cobro de taller</h4>
@@ -547,11 +544,12 @@ function TalleresTab({
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {selectedPago ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      {selectedPago ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarModal} />
+          <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900">Detalle de pago de taller</h4>
@@ -606,26 +604,29 @@ function TalleresTab({
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Pagos de talleres recientes</h3>
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-3">
           {pagosFiltrados.map((item) => (
-            <article key={item.pagoCupoId} className="rounded-xl border border-slate-200 p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{item.taller}</p>
-                  <p className="text-slate-600">Participante: {item.participante || 'Sin nombre'}</p>
-                  <p className="text-slate-600">Recibo: {item.numeroRecibo || '-'}</p>
-                  <p className="text-slate-600">Monto: {formatMoney(item.monto)}</p>
-                  <p className="text-slate-500">{item.metodoPago || '-'} | {formatDate(item.fechaPago)} | {item.estado || '-'}</p>
+            <article key={item.pagoCupoId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 transition-all hover:border-teal-300 hover:bg-white hover:shadow-md">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{item.taller}</p>
+                <p className="text-sm text-slate-600">Participante: {item.participante || 'Sin nombre'}</p>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">Recibo: {item.numeroRecibo || '-'}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{item.metodoPago || '-'}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{formatDate(item.fechaPago)}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{item.estado || '-'}</span>
                 </div>
-                <div className="flex flex-col gap-2">
+                <p className="mt-2 text-sm font-semibold text-slate-900">Monto: {formatMoney(item.monto)}</p>
+              </div>
+              <div className="flex items-center gap-2 sm:shrink-0">
                   <button
                     type="button"
                     onClick={() => abrirDetallePago(item)}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Ver
                   </button>
@@ -633,14 +634,13 @@ function TalleresTab({
                     <button
                       type="button"
                       onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo)}
-                      className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
                     >
                       Anular
                     </button>
                   ) : (
-                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
+                    <span className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                   )}
-                </div>
               </div>
             </article>
           ))}
@@ -679,6 +679,7 @@ function MatriculaTab({
   const [montoRecibido, setMontoRecibido] = useState('')
   const [metodoPagoId, setMetodoPagoId] = useState('')
   const [detalle, setDetalle] = useState('Cobro de matrícula en caja')
+  const [isMatriculaModalVisible, setIsMatriculaModalVisible] = useState(false)
 
   useEffect(() => {
     if (!metodosPago.length) {
@@ -688,6 +689,15 @@ function MatriculaTab({
 
     setMetodoPagoId((current) => (metodosPago.some((item) => String(item.id) === current) ? current : String(metodosPago[0].id)))
   }, [metodosPago])
+
+  useEffect(() => {
+    if (selectedMatricula) {
+      const frame = requestAnimationFrame(() => setIsMatriculaModalVisible(true))
+      return () => cancelAnimationFrame(frame)
+    } else {
+      setIsMatriculaModalVisible(false)
+    }
+  }, [selectedMatricula])
 
   const pendientesFiltradas = useMemo(() => {
     const term = (externalBusqueda ?? busqueda).trim().toLocaleLowerCase('es-NI')
@@ -775,23 +785,24 @@ function MatriculaTab({
             className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
           />
         </div>
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 grid gap-3">
           {pendientesFiltradas.map((item) => (
-            <article key={item.matriculaId} className="rounded-xl border border-slate-200 p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
-                  <p className="text-slate-600">Año lectivo: {item.anioLectivo || '-'}</p>
-                  <p className="text-slate-500">Estado: {item.estado || '-'} | {formatDate(item.fechaMatricula)}</p>
-                  <p className="text-slate-500">Monto base: {formatMoney(item.montoEsperado)}</p>
+            <article key={item.matriculaId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition-all hover:border-teal-300 hover:shadow-md">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                  <CreditCard className="h-5 w-5" />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => abrirModal(item)}
-                  className="rounded-xl bg-teal-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-700"
-                >
-                  Cobrar
-                </button>
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
+                  <div className="mt-1 flex gap-2">
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">Año lectivo: {item.anioLectivo || '-'}</span>
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">Estado: {item.estado || '-'}</span>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-teal-700">{formatMoney(item.montoEsperado)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 sm:shrink-0">
+                <button type="button" onClick={() => abrirModal(item)} className="rounded-xl bg-teal-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-teal-700">Cobrar</button>
               </div>
             </article>
           ))}
@@ -801,20 +812,23 @@ function MatriculaTab({
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Pagos de matrícula recientes</h3>
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-3">
           {pagosFiltrados.map((item) => (
-            <article key={item.pagoMatriculaId} className="rounded-xl border border-slate-200 p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
-                  <p className="text-slate-600">Monto: {formatMoney(item.monto)}</p>
-                  <p className="text-slate-500">{item.metodoPago || '-'} | {formatDate(item.fechaPago)} | {item.estado || '-'}</p>
+            <article key={item.pagoMatriculaId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 transition-all hover:border-teal-300 hover:bg-white hover:shadow-md">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{item.metodoPago || '-'}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{formatDate(item.fechaPago)}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{item.estado || '-'}</span>
                 </div>
-                <div className="flex flex-col gap-2">
+                <p className="mt-2 text-sm font-semibold text-slate-900">Monto: {formatMoney(item.monto)}</p>
+              </div>
+              <div className="flex items-center gap-2 sm:shrink-0">
                   <button
                     type="button"
                     onClick={() => abrirDetallePago(item)}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Ver
                   </button>
@@ -822,14 +836,13 @@ function MatriculaTab({
                     <button
                       type="button"
                       onClick={() => onAnnul(item.pagoMatriculaId)}
-                      className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
                     >
                       Anular
                     </button>
                   ) : (
-                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
+                    <span className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                   )}
-                </div>
               </div>
             </article>
           ))}
@@ -837,90 +850,165 @@ function MatriculaTab({
         </div>
       </section>
 
-      {selectedMatricula ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h4 className="text-lg font-semibold text-slate-900">Cobro de matrícula</h4>
-                <p className="text-sm text-slate-600">{selectedMatricula.estudiante || 'Sin nombre'} | {selectedMatricula.anioLectivo || '-'}</p>
+      {selectedMatricula ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div 
+            className={`absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity duration-300 ${isMatriculaModalVisible ? 'opacity-100' : 'opacity-0'}`} 
+            onClick={cerrarModal} 
+          />
+          
+          <div className={`relative w-full max-w-4xl overflow-hidden rounded-[2rem] bg-white shadow-2xl transition-all duration-300 ${isMatriculaModalVisible ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-8 scale-95 opacity-0'}`}>
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-100 text-teal-700">
+                  <CreditCard className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">Cobro de Matrícula</h2>
+                  <p className="text-sm text-slate-500">Registra el pago de matrícula del estudiante</p>
+                </div>
               </div>
-              <button
+              <button 
                 type="button"
-                onClick={cerrarModal}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                onClick={cerrarModal} 
+                className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
               >
-                Cerrar
+                <X className="h-6 w-6" />
               </button>
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <input
-                value={montoCobro}
-                onChange={(event) => setMontoCobro(event.target.value)}
-                placeholder="Monto a cobrar"
-                type="number"
-                step="0.01"
-                min="0"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-              />
-              <input
-                value={montoRecibido}
-                onChange={(event) => setMontoRecibido(event.target.value)}
-                placeholder="Monto entregado por el cliente"
-                type="number"
-                step="0.01"
-                min="0"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-              />
-              <MetodoPagoSelect value={metodoPagoId} onChange={setMetodoPagoId} metodosPago={metodosPago} />
-              <input
-                value={detalle}
-                onChange={(event) => setDetalle(event.target.value)}
-                placeholder="Detalle"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-              />
-            </div>
+            {/* Content */}
+            <div className="grid gap-6 p-6 lg:grid-cols-[1fr_1fr]">
+              
+              {/* Left Column */}
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <UserCircle className="h-5 w-5 text-slate-400" />
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Estudiante seleccionado</p>
+                  </div>
+                  <p className="text-xl font-bold text-slate-900">{selectedMatricula.estudiante || 'Sin nombre'}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">Año lectivo: {selectedMatricula.anioLectivo || '-'}</span>
+                  </div>
+                </div>
 
-            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p className="text-slate-500">Precio base de matrícula consultado desde API</p>
-              <p className="text-lg font-semibold text-slate-900">{formatMoney(selectedMatricula!.montoEsperado)}</p>
-            </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Precio base consultado</p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">{formatMoney(selectedMatricula.montoEsperado)}</p>
+                  <p className="mt-2 text-sm text-slate-500">Monto consultado automáticamente desde la configuración del sistema para este año lectivo.</p>
+                </div>
+              </div>
 
-            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-              <p className="text-slate-700">Total a pagar: <span className="font-semibold">{formatMoney(montoCobroNumber)}</span></p>
-              <p className="text-slate-700">Monto recibido: <span className="font-semibold">{formatMoney(montoRecibidoNumber)}</span></p>
-              {saldoCaja >= 0 ? (
-                <p className="text-emerald-700">Vuelto: <span className="font-semibold">{formatMoney(saldoCaja)}</span></p>
-              ) : (
-                <p className="text-rose-700">Faltante: <span className="font-semibold">{formatMoney(Math.abs(saldoCaja))}</span></p>
-              )}
-            </div>
+              {/* Right Column */}
+              <div className="flex h-full flex-col space-y-4">
+                <div className="flex-1 rounded-2xl border border-teal-100 bg-teal-50/50 p-5">
+                  <div className="mb-5 flex items-center gap-2 border-b border-teal-100 pb-4">
+                    <Wallet className="h-5 w-5 text-teal-600" />
+                    <p className="text-sm font-bold uppercase tracking-wider text-teal-800">Detalle de Cobro</p>
+                  </div>
 
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={cerrarModal}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={!puedeCobrar}
-                onClick={confirmarCobro}
-                className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {busy ? 'Procesando...' : 'Confirmar cobro'}
-              </button>
+                  <div className="space-y-5">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Monto a cobrar (C$)</label>
+                      <input
+                        type="number"
+                        value={montoCobro}
+                        onChange={(e) => setMontoCobro(e.target.value)}
+                        step="0.01"
+                        min="0"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Método de pago</label>
+                      <select
+                        value={metodoPagoId}
+                        onChange={(e) => setMetodoPagoId(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                      >
+                        <option value="">Seleccionar método de pago</option>
+                        {metodosPago.map((m) => (
+                          <option key={m.id} value={String(m.id)}>
+                            {m.nombre}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Efectivo recibido (C$)</label>
+                      <input
+                        type="number"
+                        value={montoRecibido}
+                        onChange={(e) => setMontoRecibido(e.target.value)}
+                        placeholder="Monto entregado por el cliente"
+                        step="0.01"
+                        min="0"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-600">Detalle</label>
+                      <input
+                        value={detalle}
+                        onChange={(e) => setDetalle(e.target.value)}
+                        placeholder="Detalle (ej. Cobro de matrícula)"
+                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-5 flex items-end justify-between border-b border-slate-100 pb-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Total a cobrar</p>
+                      <p className="text-4xl font-black text-slate-900">C$ {montoCobroNumber.toFixed(2)}</p>
+                    </div>
+                    {montoRecibidoNumber > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Vuelto</p>
+                        <p className={`text-2xl font-bold ${saldoCaja >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          C$ {saldoCaja >= 0 ? saldoCaja.toFixed(2) : Math.abs(saldoCaja).toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={cerrarModal}
+                      className="flex-1 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!puedeCobrar}
+                      onClick={confirmarCobro}
+                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {busy ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />} Confirmar cobro
+                    </button>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {selectedPagoMatricula ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      {selectedPagoMatricula ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarModal} />
+          <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900">Detalle de pago de matrícula</h4>
@@ -975,7 +1063,7 @@ function MatriculaTab({
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
     </div>
   )
 }
@@ -1120,35 +1208,39 @@ function MensualidadTab({
               estudiantesFiltrados.map((item) => {
                 const pendiente = pendientesPorEstudiante.get(item.id)
                 return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => abrirCobroEstudiante(item.id)}
-                  className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-teal-300 hover:bg-teal-50/40"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-900">{`${item.nombre ?? ''} ${item.apellido ?? ''}`.trim() || `Estudiante ${item.id}`}</p>
-                    <p className="text-xs text-slate-600">Año activo • ID: {item.id}</p>
-                    {pendiente ? (
-                      <p className="text-xs text-slate-500">Pagados: {pendiente.mesesPagados} • Pendientes: {pendiente.mesesPendientes}</p>
-                    ) : (
-                      <p className="text-xs text-slate-500">Pagados: 0 • Pendientes: 0</p>
-                    )}
-                  </div>
-                  {pendiente ? (
-                    <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-800">
-                      {pendiente.mesesPendientes} pendiente(s)
-                    </span>
-                  ) : (
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">
-                      Al día
-                    </span>
-                  )}
-                </button>
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => abrirCobroEstudiante(item.id)}
+                    className="group flex w-full flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-left transition-all hover:border-teal-300 hover:shadow-md"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 transition-colors group-hover:bg-teal-100 group-hover:text-teal-700">
+                        {(item.nombre?.[0] ?? 'U').toUpperCase()}{(item.apellido?.[0] ?? '').toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{`${item.nombre ?? ''} ${item.apellido ?? ''}`.trim() || `Estudiante ${item.id}`}</p>
+                        <p className="text-xs text-slate-500">ID: {item.id} • Año activo</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {pendiente ? (
+                            <span className="inline-flex rounded-md bg-rose-50 px-2 py-1 text-[10px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20">{pendiente.mesesPendientes} pendiente(s)</span>
+                          ) : (
+                            <span className="inline-flex rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">Al día</span>
+                          )}
+                          {pendiente && pendiente.mesesPagados > 0 ? (
+                            <span className="inline-flex rounded-md bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/20">{pendiente.mesesPagados} pagados</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 transition-colors group-hover:bg-teal-50 group-hover:text-teal-600">
+                      <ChevronRight className="h-4 w-4" />
+                    </div>
+                  </button>
                 )
               })
             ) : (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-500">
                 No hay estudiantes activos que coincidan con la búsqueda.
               </div>
             )}
@@ -1203,20 +1295,24 @@ function MensualidadTab({
           <span className="font-semibold">{mensualidades.length}</span> registros.
         </p>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-3">
           {mensualidadesFiltradas.map((item) => (
-            <article key={item.mensualidadId} className="rounded-xl border border-slate-200 p-3 text-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
-                  <p className="text-slate-600">Mes: {item.mes || '-'} | Monto: {formatMoney(item.monto)}</p>
-                  <p className="text-slate-500">{item.metodoPago || '-'} | {formatDate(item.fechaPago)} | {item.estado || '-'}</p>
+            <article key={item.mensualidadId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 transition-all hover:border-teal-300 hover:bg-white hover:shadow-md">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{item.estudiante || 'Sin nombre'}</p>
+                <p className="text-sm font-medium text-slate-600">Mes: {item.mes || '-'}</p>
+                <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{item.metodoPago || '-'}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{formatDate(item.fechaPago)}</span>
+                  <span className="rounded-md bg-white px-2 py-1 text-slate-600 ring-1 ring-inset ring-slate-200">{item.estado || '-'}</span>
                 </div>
-                <div className="flex flex-col gap-2">
+                <p className="mt-2 text-sm font-semibold text-slate-900">Monto: {formatMoney(item.monto)}</p>
+              </div>
+              <div className="flex items-center gap-2 sm:shrink-0">
                   <button
                     type="button"
                     onClick={() => abrirDetalleMensualidad(item)}
-                    className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Ver
                   </button>
@@ -1224,14 +1320,13 @@ function MensualidadTab({
                     <button
                       type="button"
                       onClick={() => onAnnul(item.mensualidadId)}
-                      className="rounded-xl border border-rose-300 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
                     >
                       Anular
                     </button>
                   ) : (
-                    <span className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">Anulado</span>
+                    <span className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                   )}
-                </div>
               </div>
             </article>
           ))}
@@ -1239,9 +1334,10 @@ function MensualidadTab({
         </div>
       </section>
 
-      {selectedMensualidad ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+      {selectedMensualidad ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarDetalleMensualidad} />
+          <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h4 className="text-lg font-semibold text-slate-900">Detalle de mensualidad</h4>
@@ -1300,7 +1396,7 @@ function MensualidadTab({
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
       {/* Mensualidad payment panel modal */}
       <MensualidadPaymentPanel
         open={showMensualidadPanel}
@@ -1501,8 +1597,11 @@ export function CajaDashboardPanel() {
       const firstMethodId = methods[0] ? String(methods[0].id) : ''
       setTallerMetodoPagoId((current) => (methods.some((method) => String(method.id) === current) ? current : firstMethodId))
       setMensualidadMetodoPagoId((current) => (methods.some((method) => String(method.id) === current) ? current : firstMethodId))
+
+      return dashboard
     } catch {
       setError('No se pudo cargar la información de caja.')
+      return null
     } finally {
       setIsLoading(false)
     }
@@ -1535,25 +1634,29 @@ export function CajaDashboardPanel() {
   }, [periodFilter, token, generalHistorialData])
 
   const refreshAll = async () => {
-    await loadData()
+    const newData = await loadData()
     setGeneralHistorialData(null)
     if (periodFilter === 'todo') {
       await loadGeneralHistorialData()
     }
+    return newData
   }
 
   const runAction = async (action: string, executor: () => Promise<CajaOperacionResult>) => {
     setBusyAction(action)
     setPaymentMessage(null)
+    const oldData = data
     try {
       const response = await executor()
       toast.success(response.mensaje)
       setPaymentMessage(response.mensaje)
-      await refreshAll()
+      const newData = await refreshAll()
+      return { success: true, oldData, newData }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'No se pudo completar la operacion.'
       toast.error(message)
       setPaymentMessage(message)
+      return { success: false, oldData: null, newData: null }
     } finally {
       setBusyAction(null)
     }
@@ -1599,25 +1702,45 @@ export function CajaDashboardPanel() {
   }
 
   const handlePayTaller = async (cupoId: number, monto: number) => {
-    await runAction(`pay-taller-${cupoId}`, () => payTaller(token, {
+    const result = await runAction(`pay-taller-${cupoId}`, () => payTaller(token, {
       cupoId,
       monto,
       metodoPagoId: Number(tallerMetodoPagoId),
       detalle: 'Cobro desde caja',
     }))
+
+    if (result.success && result.newData && result.oldData) {
+      const oldIds = new Set(result.oldData.pagosTaller?.map((p) => p.pagoCupoId) || [])
+      const newPayment = result.newData.pagosTaller?.find((p) => !oldIds.has(p.pagoCupoId))
+      
+      if (newPayment) {
+        const item = buildCajaHistorialFromParts([newPayment], [], [])[0]
+        if (item) openReceipt(item)
+      }
+    }
   }
 
   const handlePayMatricula = async (payload: { matriculaId: number; monto: number; metodoPagoId: number; detalle: string }) => {
-    await runAction('pay-matricula', () => payMatricula(token, {
+    const result = await runAction('pay-matricula', () => payMatricula(token, {
       matriculaId: payload.matriculaId,
       monto: payload.monto,
       metodoPagoId: payload.metodoPagoId,
       detalle: payload.detalle,
     }))
+
+    if (result.success && result.newData && result.oldData) {
+      const oldIds = new Set(result.oldData.pagosMatricula?.map((p) => p.pagoMatriculaId) || [])
+      const newPayment = result.newData.pagosMatricula?.find((p) => !oldIds.has(p.pagoMatriculaId))
+      
+      if (newPayment) {
+        const item = buildCajaHistorialFromParts([], [newPayment], [])[0]
+        if (item) openReceipt(item)
+      }
+    }
   }
 
   const handlePayMensualidad = async () => {
-    await runAction('pay-mensualidad', () => payMensualidad(token, {
+    const result = await runAction('pay-mensualidad', () => payMensualidad(token, {
       estudianteId: Number(mensualidadEstudianteId),
       mesDePago: Number(mensualidadMes),
       montoBase: Number(mensualidadMontoBase),
@@ -1625,6 +1748,16 @@ export function CajaDashboardPanel() {
       metodoPagoId: Number(mensualidadMetodoPagoId),
       detalle: 'Cobro desde caja',
     }))
+
+    if (result.success && result.newData && result.oldData) {
+      const oldIds = new Set(result.oldData.mensualidades?.map((p) => p.mensualidadId) || [])
+      const newPayment = result.newData.mensualidades?.find((p) => !oldIds.has(p.mensualidadId))
+      
+      if (newPayment) {
+        const item = buildCajaHistorialFromParts([], [], [newPayment])[0]
+        if (item) openReceipt(item)
+      }
+    }
   }
 
   const handleAnnulTaller = async (pagoCupoId: number, motivo: string) => {
@@ -1715,11 +1848,98 @@ export function CajaDashboardPanel() {
   const closeHistorialModal = () => setHistorialModalOpen(false)
 
   function buildReceiptHtml(item: CajaHistorialItem) {
-    const anuladoBadge = item.anulado ? `<div style="color: #b91c1c; font-weight:700;">ANULADO: ${item.motivoAnulacion || 'Sin motivo'}</div>` : ''
-    return `<!doctype html><html><head><meta charset="utf-8"><title>Recibo ${item.numeroRecibo}</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:24px;color:#111} .header{display:flex;justify-content:space-between;align-items:center} .meta{margin-top:12px;color:#444} .line{margin:8px 0;padding:8px;border-bottom:1px solid #eee}</style></head><body><div class="header"><h2>Recibo - ${item.numeroRecibo}</h2><div>${formatDate(item.fecha) || ''}</div></div><div class="meta">Tipo: ${item.tipo} • ${item.titulo}</div>${anuladoBadge}<div style="margin-top:16px"> <div class="line"><strong>Detalle:</strong> ${item.detalle || '-'}</div><div class="line"><strong>Monto:</strong> ${formatMoney(item.monto)}</div><div class="line"><strong>Método:</strong> ${item.metodoPago || '-'}</div><div class="line"><strong>Estado:</strong> ${item.estado || '-'}</div></div><footer style="margin-top:28px;color:#666;font-size:12px">Generado desde Micasita • ${new Date().toLocaleString()}</footer></body></html>`
+    const anuladoBadge = item.anulado ? `<div style="color: #b91c1c; font-weight:700; text-align: center; margin-top: 10px; border: 2px dashed #b91c1c; padding: 10px; border-radius: 8px;">RECIBO ANULADO<br><span style="font-size: 12px; font-weight: normal;">Motivo: ${item.motivoAnulacion || 'Sin motivo'}</span></div>` : ''
+    const cashierName = user?.nombre ? `${user.nombre} ${user.apellido || ''}`.trim() : 'Caja Principal'
+
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Recibo ${item.numeroRecibo || 'Pendiente'}</title>
+  <style>
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 0; margin: 0; color: #333; background-color: #f9f9f9; }
+    .receipt-container { max-width: 600px; margin: 40px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #eaeaea; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f766e; padding-bottom: 20px; margin-bottom: 30px; }
+    .header-left { display: flex; flex-direction: column; }
+    .logo-placeholder { font-size: 24px; font-weight: 800; color: #0f766e; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
+    .school-info { font-size: 12px; color: #666; margin-top: 5px; line-height: 1.4; }
+    .header-right { text-align: right; }
+    .receipt-title { font-size: 28px; font-weight: bold; color: #111; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 2px; }
+    .receipt-number { font-size: 16px; color: #0f766e; font-weight: bold; }
+    .date-info { font-size: 13px; color: #555; margin-top: 8px; }
+    .customer-section { margin-bottom: 30px; padding: 15px 20px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #0ea5e9; }
+    .customer-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 1px; margin-bottom: 5px; }
+    .customer-name { font-size: 18px; font-weight: bold; color: #0f172a; margin: 0; }
+    .details-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+    .details-table th { text-align: left; padding: 12px 15px; background-color: #f1f5f9; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1; }
+    .details-table td { padding: 15px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 14px; }
+    .item-desc { font-weight: bold; color: #0f172a; display: block; margin-bottom: 4px; }
+    .item-meta { font-size: 12px; color: #64748b; }
+    .totals-section { display: flex; justify-content: flex-end; margin-bottom: 40px; }
+    .totals-box { width: 300px; }
+    .total-line { display: flex; justify-content: space-between; padding: 10px 15px; font-size: 14px; color: #475569; }
+    .total-line.grand-total { background-color: #0f766e; color: white; font-weight: bold; font-size: 18px; border-radius: 8px; margin-top: 10px; }
+    .payment-info { display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px dashed #cbd5e1; font-size: 13px; color: #64748b; }
+    .payment-info div { flex: 1; }
+    .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eaeaea; font-size: 12px; color: #94a3b8; }
+    @media print {
+      body { background-color: #fff; }
+      .receipt-container { box-shadow: none; border: none; margin: 0; padding: 20px; max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt-container">
+    <div class="header">
+      <div class="header-left">
+        <div class="logo-placeholder">🏫 MI CASITA</div>
+        <div class="school-info">Centro Integral de Estimulación Temprana<br>Managua, Nicaragua<br>Tel: +505 1234 5678</div>
+      </div>
+      <div class="header-right">
+        <h1 class="receipt-title">RECIBO</h1>
+        <div class="receipt-number">Nº ${item.numeroRecibo || 'Pendiente'}</div>
+        <div class="date-info">Fecha: ${formatDate(item.fecha) || 'No registrada'}</div>
+      </div>
+    </div>
+    ${anuladoBadge}
+    <div class="customer-section">
+      <div class="customer-label">Recibí de / Estudiante:</div>
+      <h2 class="customer-name">${item.titulo || 'Cliente General'}</h2>
+    </div>
+    <table class="details-table">
+      <thead>
+        <tr><th>Concepto</th><th style="text-align: right;">Importe</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="item-desc">Pago de ${item.tipo}</span><span class="item-meta">${item.detalle || '-'}</span></td>
+          <td style="text-align: right; font-weight: bold;">${formatMoney(item.monto)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="totals-section">
+      <div class="totals-box">
+        <div class="total-line"><span>Subtotal:</span><span>${formatMoney(item.monto)}</span></div>
+        <div class="total-line grand-total"><span>TOTAL:</span><span>${formatMoney(item.monto)}</span></div>
+      </div>
+    </div>
+    <div class="payment-info">
+      <div><strong>Método de pago:</strong><br>${item.metodoPago || 'No especificado'}</div>
+      <div><strong>Estado:</strong><br>${item.estado || 'Procesado'}</div>
+      <div style="text-align: right;"><strong>Atendido por:</strong><br>${cashierName}</div>
+    </div>
+    <div class="footer">
+      ¡Gracias por confiar en Mi Casita!<br>Este documento es un comprobante de pago válido.<br>Generado el ${new Date().toLocaleString('es-NI')}
+    </div>
+  </div>
+</body>
+</html>`
   }
 
   const openReceipt = (item: CajaHistorialItem) => {
+    // 1. Descargar copia de respaldo automáticamente en formato HTML
+    downloadReceipt(item)
+
     const html = buildReceiptHtml(item)
     const w = window.open('', '_blank')
     if (!w) {
@@ -1952,24 +2172,36 @@ export function CajaDashboardPanel() {
                       {historialFechaFiltro ? (
                         <p className="mt-2 text-xs text-slate-500">Filtrando por fecha de pago: {historialFechaFiltro}</p>
                       ) : null}
-                  <div className="mt-3 space-y-2">
+                  <div className="mt-4 space-y-3">
                     {historialFiltrado.map((item) => (
                       <article
                         key={item.key}
-                        className={`rounded-xl border p-3 text-sm ${item.anulado ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-slate-50'}`}
+                        className={`rounded-2xl border p-4 transition-all hover:shadow-sm ${item.anulado ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-teal-200'}`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold text-slate-900">{item.titulo}</p>
-                            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{item.tipo}</p>
-                            <p className="mt-1 text-slate-600">Recibo: {item.numeroRecibo}</p>
-                            <p className="text-slate-600">{item.detalle}</p>
-                            <p className="text-slate-500">{formatMoney(item.monto)} | {item.metodoPago || '-'} | {formatDate(item.fecha)} | {item.estado || '-'}</p>
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-900">{item.titulo}</p>
+                              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">{item.tipo}</p>
+                            </div>
+                            <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
+                              {item.numeroRecibo}
+                            </span>
                           </div>
-                          <div className="flex flex-col gap-2">
-                                <div className="flex flex-col gap-2">
-                                  <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Ver recibo</button>
-                                  <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Descargar</button>
+                          
+                          <div className="text-sm text-slate-600">
+                            <p className="line-clamp-2">{item.detalle}</p>
+                            <p className="mt-1 font-medium text-slate-900">{formatMoney(item.monto)}</p>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                            <span className="rounded-md bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">{item.metodoPago || '-'}</span>
+                            <span className="rounded-md bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">{formatDate(item.fecha)}</span>
+                          </div>
+
+                          <div className="mt-2 flex items-center gap-2">
+                            <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Imprimir</button>
+                            <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Descargar</button>
                                   {!item.anulado ? (
                                     <button
                                       type="button"
@@ -1982,14 +2214,13 @@ export function CajaDashboardPanel() {
                                           requestAnnulMensualidad(item.mensualidadId)
                                         }
                                       }}
-                                      className="rounded-xl border border-rose-300 px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                                      className="ml-auto rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
                                     >
                                       Anular
                                     </button>
                                   ) : (
-                                    <span className="rounded-xl bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-700">Anulado</span>
+                                    <span className="ml-auto rounded-xl bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                                   )}
-                                </div>
                           </div>
                         </div>
                       </article>
@@ -2002,9 +2233,10 @@ export function CajaDashboardPanel() {
           </>
         ) : null}
 
-        {annulModal ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        {annulModal ? createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={closeAnnulModal} />
+            <div className="relative w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Motivo de anulación</h4>
@@ -2060,11 +2292,12 @@ export function CajaDashboardPanel() {
               </div>
             </div>
           </div>
-        ) : null}
+        , document.body) : null}
 
-        {showOpenSessionModal ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        {showOpenSessionModal ? createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setShowOpenSessionModal(false)} />
+            <div className="relative w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Apertura de caja</h4>
@@ -2123,11 +2356,12 @@ export function CajaDashboardPanel() {
               </div>
             </div>
           </div>
-        ) : null}
+        , document.body) : null}
 
-        {showPreCloseModal ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        {showPreCloseModal ? createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setShowPreCloseModal(false)} />
+            <div className="relative w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Pre-cierre de caja</h4>
@@ -2216,11 +2450,12 @@ export function CajaDashboardPanel() {
               </div>
             </div>
           </div>
-        ) : null}
+        , document.body) : null}
 
-        {historialModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+        {historialModalOpen ? createPortal(
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={closeHistorialModal} />
+            <div className="relative w-full max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Historial completo</h4>
@@ -2275,9 +2510,8 @@ export function CajaDashboardPanel() {
               </div>
             </div>
           </div>
-        ) : null}
+        , document.body) : null}
       </div>
     </section>
   )
 }
-

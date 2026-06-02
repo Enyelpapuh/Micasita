@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
-import { LoaderCircle, MessageSquare, Save } from 'lucide-react'
+import { LoaderCircle, MessageSquare, Save, X, Mail, Phone, Users, Search, Printer } from 'lucide-react'
 import { normalizeApiError, useAuth } from '../../auth/AuthContext'
 import {
   actualizarNotaFinal,
@@ -18,10 +19,8 @@ import {
   listEstudiantes,
   listGrupos,
   listProfesores,
-  listTutores,
   registrarAsistenciaSheet,
   registrarTrabajo,
-  vincularEstudianteTutor,
   type AsistenciaRowItem,
   type AsistenciaHistorialItem,
   type AsistenciaSheetResponse,
@@ -30,22 +29,112 @@ import {
   type EstadoAsistenciaItem,
   type EstudianteItem,
   type GrupoItem,
+  getEstudianteDetail,
+  type EstudianteDetailItem,
 } from './academico.api'
 
-function SectionCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="mb-3">
-        <p className="text-sm font-semibold text-slate-900">{title}</p>
-        <p className="text-xs text-slate-500">{subtitle}</p>
-      </div>
-      {children}
-    </article>
-  )
-}
+function StudentProfileModal({
+  estudianteId,
+  onClose,
+}: {
+  estudianteId: number
+  onClose: () => void
+}) {
+  const { token } = useAuth()
+  const [detail, setDetail] = useState<EstudianteDetailItem | null>(null)
+  const [loading, setLoading] = useState(true)
 
-function FieldHint({ children }: { children: React.ReactNode }) {
-  return <p className="text-[11px] text-slate-500">{children}</p>
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    getEstudianteDetail(token, estudianteId)
+      .then((data) => {
+        if (!cancelled) setDetail(data)
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('No se pudo cargar la ficha del estudiante')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [estudianteId, token])
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+      <div 
+        className="absolute inset-0"
+        onClick={onClose}
+      />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+          <h2 className="text-xl font-bold text-slate-900">Ficha personal</h2>
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div className="p-6">
+          {loading ? (
+             <div className="flex items-center justify-center py-10 text-slate-500">
+               <LoaderCircle className="h-6 w-6 animate-spin mr-2" /> Cargando ficha...
+             </div>
+          ) : detail ? (
+             <div className="space-y-6">
+               <div className="flex items-center gap-4">
+                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-teal-100 text-xl font-bold text-teal-700">
+                   {(detail.nombre?.[0] ?? 'U').toUpperCase()}{(detail.apellido?.[0] ?? '').toUpperCase()}
+                 </div>
+                 <div>
+                   <h3 className="text-2xl font-bold text-slate-900">{detail.nombre} {detail.apellido}</h3>
+                   <p className="text-sm text-slate-500">ID Estudiante: {detail.id}</p>
+                 </div>
+               </div>
+
+               <div className="grid gap-4 sm:grid-cols-2">
+                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Contacto</p>
+                   <div className="mt-2 space-y-2 text-sm text-slate-700">
+                     <p className="flex items-center gap-2"><Mail className="h-4 w-4 text-slate-400" /> {detail.correo || 'Sin correo'}</p>
+                     <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-slate-400" /> {detail.telefono || 'Sin teléfono'}</p>
+                   </div>
+                 </div>
+                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Información Médica</p>
+                   <div className="mt-2 space-y-2 text-sm text-slate-700">
+                     {detail.alergiasGraves ? <p className="text-rose-700"><span className="font-semibold">Alergias:</span> {detail.alergiasGraves}</p> : null}
+                     {detail.observacionMedicaCorta ? <p className="text-amber-700"><span className="font-semibold">Nota:</span> {detail.observacionMedicaCorta}</p> : null}
+                     {!detail.alergiasGraves && !detail.observacionMedicaCorta ? <p className="text-slate-500">Sin observaciones médicas</p> : null}
+                   </div>
+                 </div>
+               </div>
+
+               <div className="rounded-2xl border border-slate-200 p-4">
+                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Tutores / Padres</p>
+                 <div className="space-y-3">
+                   {detail.tutores.length > 0 ? detail.tutores.map(tutor => (
+                     <div key={tutor.id} className="flex items-start gap-3 rounded-xl bg-slate-50 p-3">
+                       <Users className="h-5 w-5 text-teal-600 shrink-0 mt-0.5" />
+                       <div>
+                         <p className="font-semibold text-slate-900">{tutor.nombre} {tutor.apellido}</p>
+                         <p className="text-sm text-slate-600">{tutor.correo || 'Sin correo'} • {tutor.telefono || 'Sin teléfono'}</p>
+                       </div>
+                     </div>
+                   )) : <p className="text-sm text-slate-500">No hay tutores vinculados.</p>}
+                 </div>
+               </div>
+             </div>
+          ) : (
+             <div className="py-10 text-center text-sm text-slate-500">No se encontró la información del estudiante.</div>
+          )}
+        </div>
+      </div>
+    </div>
+  , document.body)
 }
 
 type AcademicoRowState = AsistenciaRowItem & {
@@ -63,6 +152,8 @@ function AcademicoAsistenciaSegment({
   onObservacionChange,
   onToggleObservation,
   onSave,
+  onViewProfile,
+  onPrint,
 }: {
   rows: AcademicoRowState[]
   estados: EstadoAsistenciaItem[]
@@ -71,6 +162,8 @@ function AcademicoAsistenciaSegment({
   onObservacionChange: (estudianteId: number, observaciones: string) => void
   onToggleObservation: (estudianteId: number) => void
   onSave: () => void
+  onViewProfile: (estudianteId: number) => void
+  onPrint: () => void
 }) {
   const getEstadoMeta = (estadoId?: number | null) => {
     const estado = estados.find((item) => item.id === estadoId)
@@ -99,108 +192,126 @@ function AcademicoAsistenciaSegment({
 
   return (
     <>
-      <div className="mt-4 rounded-2xl border border-teal-200 bg-teal-50 p-3">
-        <p className="text-sm font-semibold text-teal-900">Segmento 1: Asistencia</p>
-        <p className="text-xs text-teal-800">Marca estado por estudiante y guarda toda la asistencia del día en un solo paso.</p>
+      <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-teal-200 bg-teal-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-teal-900">Registro de Asistencia</p>
+          <p className="text-xs text-teal-800">Marca el estado por estudiante y guarda toda la asistencia del día.</p>
+        </div>
+        <button
+          type="button"
+          onClick={onPrint}
+          className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50"
+        >
+          <Printer className="mr-2 h-4 w-4" />
+          Imprimir hoja de asistencia
+        </button>
       </div>
 
-      <div className="mt-4 grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {rows.length > 0 ? rows.map((row) => {
-          const estadoMeta = getEstadoMeta(row.selectedEstadoId)
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+        <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-600">
+            <tr>
+              <th className="px-4 py-3 text-left">Estudiante</th>
+              <th className="px-4 py-3 text-center">Asistencia</th>
+              <th className="px-4 py-3 text-left">Observaciones / Notas</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {rows.length > 0 ? rows.map((row) => {
+              const estadoMeta = getEstadoMeta(row.selectedEstadoId)
 
-          return (
-            <article
-              key={row.estudianteId}
-              className={`flex h-full flex-col rounded-2xl border p-4 shadow-sm transition-all duration-200 ${estadoMeta.className}`}
-            >
-              <div className="flex items-start gap-3">
-                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border text-sm font-bold ${estadoMeta.button}`}>
-                  {initials(row.estudianteNombre, row.estudianteApellido)}
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">
-                    {row.estudianteNombre} {row.estudianteApellido}
-                  </p>
-                  <p className="text-[11px] uppercase tracking-[0.14em] opacity-70">ID {row.estudianteId}</p>
-                  {row.estudianteAlergiasGraves || row.estudianteObservacionMedicaCorta ? (
-                    <div className="mt-2 space-y-2">
-                      {row.estudianteAlergiasGraves ? (
-                        <p className="line-clamp-2 rounded-xl border border-rose-200/80 bg-rose-50/80 px-2.5 py-2 text-xs text-rose-900">
-                          <span className="font-semibold uppercase tracking-[0.12em]">Alergia:</span> {row.estudianteAlergiasGraves}
-                        </p>
-                      ) : null}
-                      {row.estudianteObservacionMedicaCorta ? (
-                        <p className="line-clamp-3 rounded-xl border border-amber-200/80 bg-amber-50/80 px-2.5 py-2 text-xs text-amber-950">
-                          <span className="font-semibold uppercase tracking-[0.12em]">Nota:</span> {row.estudianteObservacionMedicaCorta}
+              return (
+                <tr key={row.estudianteId} className="transition-colors hover:bg-slate-50/50">
+                  <td className="px-4 py-4 align-top">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${estadoMeta.button}`}>
+                        {initials(row.estudianteNombre, row.estudianteApellido)}
+                      </div>
+                      <div className="min-w-0">
+                        <button 
+                          type="button"
+                          onClick={() => onViewProfile(row.estudianteId)}
+                          className="truncate text-sm font-semibold hover:text-teal-600 hover:underline text-left"
+                        >
+                          {row.estudianteNombre} {row.estudianteApellido}
+                        </button>
+                        <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">ID {row.estudianteId}</p>
+                        {row.estudianteAlergiasGraves || row.estudianteObservacionMedicaCorta ? (
+                          <div className="mt-1">
+                            <span 
+                              className="inline-flex cursor-help items-center rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20" 
+                              title={`${row.estudianteAlergiasGraves ? 'Alergia: ' + row.estudianteAlergiasGraves + '\n' : ''}${row.estudianteObservacionMedicaCorta ? 'Nota: ' + row.estudianteObservacionMedicaCorta : ''}`.trim()}
+                            >
+                              Alerta médica
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {estados.map((estado) => {
+                        const normalized = estado.nombre.trim().toUpperCase()
+                        const buttonClass = normalized === 'PRESENTE'
+                          ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                          : normalized === 'AUSENTE' || normalized === 'INASISTENCIA'
+                            ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                            : normalized === 'JUSTIFICADO'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                        const isSelected = row.selectedEstadoId === estado.id
+                        
+                        return (
+                          <button
+                            key={`${row.estudianteId}-${estado.id}`}
+                            type="button"
+                            title={estado.nombre}
+                            onClick={() => onEstadoChange(row.estudianteId, estado.id)}
+                            className={`inline-flex h-9 w-9 items-center justify-center rounded-full border text-xs font-bold transition ${isSelected ? `${buttonClass} ring-2 ring-offset-1 ring-current/20 scale-110 shadow-sm` : buttonClass}`}
+                          >
+                            {normalized === 'PRESENTE' ? 'P' : normalized === 'AUSENTE' || normalized === 'INASISTENCIA' ? 'I' : normalized === 'JUSTIFICADO' ? 'J' : estado.nombre.slice(0, 1).toUpperCase()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4 align-top">
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onToggleObservation(row.estudianteId)}
+                        className={`inline-flex items-center self-start gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition ${row.observacionesOpen || row.observaciones ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        {row.observaciones ? 'Ver / Editar nota' : 'Agregar nota'}
+                      </button>
+                      {row.observacionesOpen ? (
+                        <textarea
+                          value={row.observaciones ?? ''}
+                          onChange={(e) => onObservacionChange(row.estudianteId, e.target.value)}
+                          rows={2}
+                          placeholder="Motivo de tardanza, salud o aviso..."
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-teal-500"
+                        />
+                      ) : row.observaciones ? (
+                        <p className="line-clamp-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                          {row.observaciones}
                         </p>
                       ) : null}
                     </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-2">
-                {estados.map((estado) => {
-                  const normalized = estado.nombre.trim().toUpperCase()
-                  const buttonClass = normalized === 'PRESENTE'
-                    ? 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
-                    : normalized === 'AUSENTE' || normalized === 'INASISTENCIA'
-                      ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                      : normalized === 'JUSTIFICADO'
-                        ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
-                        : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
-
-                  return (
-                    <button
-                      key={`${row.estudianteId}-${estado.id}`}
-                      type="button"
-                      title={estado.nombre}
-                      onClick={() => onEstadoChange(row.estudianteId, estado.id)}
-                      className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-[11px] font-bold transition ${row.selectedEstadoId === estado.id ? `${buttonClass} ring-2 ring-offset-1 ring-current/20` : buttonClass}`}
-                    >
-                      {normalized === 'PRESENTE' ? 'P' : normalized === 'AUSENTE' || normalized === 'INASISTENCIA' ? 'I' : normalized === 'JUSTIFICADO' ? 'J' : estado.nombre.slice(0, 1).toUpperCase()}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => onToggleObservation(row.estudianteId)}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/70 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white"
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  Observación
-                </button>
-                <span className="rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-600">
-                  {estadoMeta.label}
-                </span>
-              </div>
-
-              {row.observacionesOpen ? (
-                <div className="mt-3">
-                  <textarea
-                    value={row.observaciones ?? ''}
-                    onChange={(e) => onObservacionChange(row.estudianteId, e.target.value)}
-                    rows={2}
-                    placeholder="Motivo de tardanza, salud o aviso..."
-                    className="w-full rounded-xl border border-white/60 bg-white/90 px-3 py-2 text-sm outline-none ring-0 placeholder:text-slate-400 focus:border-slate-300"
-                  />
-                </div>
-              ) : row.observaciones ? (
-                <p className="mt-3 line-clamp-2 rounded-xl border border-white/60 bg-white/60 px-3 py-2 text-xs text-slate-700">
-                  {row.observaciones}
-                </p>
-              ) : null}
-            </article>
-          )
-        }) : (
-          <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-16 text-center text-sm text-slate-500">
-            Carga una hoja para comenzar.
-          </div>
-        )}
+                  </td>
+                </tr>
+              )
+            }) : (
+              <tr>
+                <td colSpan={3} className="px-6 py-16 text-center text-sm text-slate-500">
+                  <p>Carga una hoja para comenzar a tomar asistencia.</p>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <div className="mt-4 flex justify-end">
@@ -223,11 +334,13 @@ function AcademicoNotasSegment({
   onTrabajoChange,
   onNotaFinalChange,
   onSave,
+  onViewProfile,
 }: {
   rows: AcademicoRowState[]
   onTrabajoChange: (estudianteId: number, value: string) => void
   onNotaFinalChange: (estudianteId: number, value: string) => void
   onSave: (row: AcademicoRowState) => void
+  onViewProfile: (estudianteId: number) => void
 }) {
   return (
     <>
@@ -249,7 +362,15 @@ function AcademicoNotasSegment({
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.map((row) => (
               <tr key={`notas-${row.estudianteId}`}>
-                <td className="px-3 py-2">{row.estudianteNombre} {row.estudianteApellido}</td>
+                <td className="px-3 py-2">
+                  <button 
+                    type="button"
+                    onClick={() => onViewProfile(row.estudianteId)}
+                    className="font-semibold text-slate-800 hover:text-teal-600 hover:underline text-left"
+                  >
+                    {row.estudianteNombre} {row.estudianteApellido}
+                  </button>
+                </td>
                 <td className="px-3 py-2">
                   <input
                     value={row.noteTrabajo ?? ''}
@@ -292,6 +413,203 @@ function AcademicoNotasSegment({
   )
 }
 
+function ConfigGruposModal({ isOpen, onClose, grupos, profesores, token, reloadCatalogs }: { isOpen: boolean, onClose: () => void, grupos: GrupoItem[], profesores: Array<{id: number, nombre?: string | null, apellido?: string | null}>, token: string | null, reloadCatalogs: () => Promise<void> }) {
+  const [nombre, setNombre] = useState('')
+  const [profesorNew, setProfesorNew] = useState('')
+  const [grupoExisting, setGrupoExisting] = useState('')
+  const [profesorExisting, setProfesorExisting] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!isOpen) return null;
+
+  const handleCrear = async () => {
+    if (!nombre.trim()) { toast.error('El nombre del grupo es requerido'); return; }
+    setBusy(true)
+    try {
+      const created = await createGrupo(token, { nombre })
+      if (profesorNew) {
+        await asignarProfesorGrupo(token, { profesorId: Number(profesorNew), grupoId: created.id })
+      }
+      toast.success('Grupo creado' + (profesorNew ? ' y profesor asignado' : ''))
+      setNombre('')
+      setProfesorNew('')
+      await reloadCatalogs()
+      onClose()
+    } catch (e) {
+      toast.error(normalizeApiError(e, 'Error al crear grupo'))
+    } finally { setBusy(false) }
+  }
+
+  const handleAsignar = async () => {
+    if (!grupoExisting || !profesorExisting) { toast.error('Selecciona un grupo y un profesor'); return; }
+    setBusy(true)
+    try {
+      await asignarProfesorGrupo(token, { profesorId: Number(profesorExisting), grupoId: Number(grupoExisting) })
+      toast.success('Profesor asignado al grupo')
+      setGrupoExisting('')
+      setProfesorExisting('')
+      await reloadCatalogs()
+      onClose()
+    } catch (e) {
+      toast.error(normalizeApiError(e, 'Error al asignar profesor'))
+    } finally { setBusy(false) }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+          <h2 className="text-xl font-bold text-slate-900">Configurar Grupos</h2>
+          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <section className="rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Crear un nuevo grupo</h3>
+            <p className="mt-1 text-sm text-slate-500">Puedes crear el grupo y asignarle de inmediato un profesor titular.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Nombre del grupo</label>
+                <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej. 5to A" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Profesor (Opcional)</label>
+                <select value={profesorNew} onChange={e=>setProfesorNew(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Sin profesor</option>
+                  {profesores.map(p=><option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleCrear} disabled={busy} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-70">
+                {busy ? 'Guardando...' : 'Crear Grupo'}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Asignar profesor a grupo existente</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Grupo</label>
+                <select value={grupoExisting} onChange={e=>setGrupoExisting(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Selecciona grupo</option>
+                  {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Profesor</label>
+                <select value={profesorExisting} onChange={e=>setProfesorExisting(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Selecciona profesor</option>
+                  {profesores.map(p=><option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleAsignar} disabled={busy} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-70">
+                {busy ? 'Asignando...' : 'Asignar Profesor'}
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  , document.body)
+}
+
+function ConfigAsignaturasModal({ isOpen, onClose, grupos, asignaturas, token, reloadCatalogs }: { isOpen: boolean, onClose: () => void, grupos: GrupoItem[], asignaturas: AsignaturaItem[], token: string | null, reloadCatalogs: () => Promise<void> }) {
+  const [nombre, setNombre] = useState('')
+  const [descripcion, setDescripcion] = useState('')
+  const [grupoId, setGrupoId] = useState('')
+  const [asignaturaId, setAsignaturaId] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  if (!isOpen) return null;
+
+  const handleCrear = async () => {
+    if (!nombre.trim()) { toast.error('El nombre es requerido'); return; }
+    setBusy(true)
+    try {
+      await createAsignatura(token, { nombre, descripcion: descripcion || null })
+      toast.success('Asignatura creada')
+      setNombre(''); setDescripcion('');
+      await reloadCatalogs()
+      onClose()
+    } catch (e) { toast.error(normalizeApiError(e, 'Error al crear asignatura')) } finally { setBusy(false) }
+  }
+
+  const handleVincular = async () => {
+    if (!grupoId || !asignaturaId) { toast.error('Selecciona grupo y asignatura'); return; }
+    setBusy(true)
+    try {
+      await asignarGrupoAsignatura(token, { grupoId: Number(grupoId), asignaturaId: Number(asignaturaId) })
+      toast.success('Asignatura vinculada al grupo')
+      setGrupoId(''); setAsignaturaId('');
+      await reloadCatalogs()
+      onClose()
+    } catch (e) { toast.error(normalizeApiError(e, 'Error al vincular')) } finally { setBusy(false) }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+      <div className="absolute inset-0" onClick={onClose} />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+          <h2 className="text-xl font-bold text-slate-900">Configurar Asignaturas</h2>
+          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
+        </div>
+        <div className="p-6 space-y-6">
+          <section className="rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Crear nueva asignatura</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Nombre de asignatura</label>
+                <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej. Matemática" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Descripción</label>
+                <input value={descripcion} onChange={e=>setDescripcion(e.target.value)} placeholder="Opcional" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleCrear} disabled={busy} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-70">
+                {busy ? 'Guardando...' : 'Crear Asignatura'}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Vincular asignatura a un grupo</h3>
+            <p className="mt-1 text-xs text-slate-500">Esto habilita a la asignatura para que aparezca en la asistencia del grupo.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Grupo</label>
+                <select value={grupoId} onChange={e=>setGrupoId(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Selecciona grupo</option>
+                  {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Asignatura</label>
+                <select value={asignaturaId} onChange={e=>setAsignaturaId(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Selecciona asignatura</option>
+                  {asignaturas.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleVincular} disabled={busy} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-70">
+                {busy ? 'Vinculando...' : 'Vincular Asignatura'}
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  , document.body)
+}
+
 export function AcademicoGestionPanel() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -299,19 +617,13 @@ export function AcademicoGestionPanel() {
   const [asignaturas, setAsignaturas] = useState<AsignaturaItem[]>([])
   const [estudiantes, setEstudiantes] = useState<EstudianteItem[]>([])
   const [profesores, setProfesores] = useState<Array<{ id: number; nombre?: string | null; apellido?: string | null }>>([])
-  const [tutores, setTutores] = useState<Array<{ id: number; nombre?: string | null; apellido?: string | null }>>([])
 
-  const [grupoNombre, setGrupoNombre] = useState('')
-  const [asignaturaNombre, setAsignaturaNombre] = useState('')
-  const [asignaturaDescripcion, setAsignaturaDescripcion] = useState('')
-
-  const [selectedGrupoId, setSelectedGrupoId] = useState<number | null>(null)
-  const [selectedAsignaturaId, setSelectedAsignaturaId] = useState<number | null>(null)
-  const [selectedProfesorId, setSelectedProfesorId] = useState<number | null>(null)
-  const [selectedEstudianteId, setSelectedEstudianteId] = useState<number | null>(null)
-  const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null)
   const [studentsSearch, setStudentsSearch] = useState('')
-  const [savingAction, setSavingAction] = useState<string | null>(null)
+  const [viewingStudentId, setViewingStudentId] = useState<number | null>(null)
+
+  const [isConfigGruposOpen, setIsConfigGruposOpen] = useState(false)
+  const [isConfigAsignaturasOpen, setIsConfigAsignaturasOpen] = useState(false)
+  const [studentToInscribe, setStudentToInscribe] = useState<EstudianteItem | null>(null)
 
   const filteredStudents = useMemo(() => {
     const term = studentsSearch.trim().toLocaleLowerCase('es-NI')
@@ -320,7 +632,8 @@ export function AcademicoGestionPanel() {
     }
     return estudiantes.filter((item) => {
       const name = `${item.nombre ?? ''} ${item.apellido ?? ''}`.toLocaleLowerCase('es-NI')
-      return name.includes(term)
+      const idText = String(item.id)
+      return name.includes(term) || idText.includes(term)
     })
   }, [estudiantes, studentsSearch])
 
@@ -329,12 +642,11 @@ export function AcademicoGestionPanel() {
     const load = async () => {
       setLoading(true)
       try {
-        const [g, a, e, p, t] = await Promise.all([
+        const [g, a, e, p] = await Promise.all([
           listGrupos(token),
           listAsignaturas(token),
           listEstudiantes(token),
           listProfesores(token),
-          listTutores(token),
         ])
 
         if (!cancelled) {
@@ -342,12 +654,6 @@ export function AcademicoGestionPanel() {
           setAsignaturas(a)
           setEstudiantes(e)
           setProfesores(p)
-          setTutores(t)
-          setSelectedGrupoId(g[0]?.id ?? null)
-          setSelectedAsignaturaId(a[0]?.id ?? null)
-          setSelectedProfesorId(p[0]?.id ?? null)
-          setSelectedEstudianteId(e[0]?.id ?? null)
-          setSelectedTutorId(t[0]?.id ?? null)
         }
       } catch (error) {
         if (!cancelled) {
@@ -367,40 +673,33 @@ export function AcademicoGestionPanel() {
   }, [token])
 
   const reloadCatalogs = async () => {
-    const [g, a, e, p, t] = await Promise.all([
+    const [g, a, e, p] = await Promise.all([
       listGrupos(token),
       listAsignaturas(token),
       listEstudiantes(token),
       listProfesores(token),
-      listTutores(token),
     ])
     setGrupos(g)
     setAsignaturas(a)
     setEstudiantes(e)
     setProfesores(p)
-    setTutores(t)
   }
-
-  const runAction = async (key: string, action: () => Promise<void>, successMessage: string) => {
-    setSavingAction(key)
-    try {
-      await action()
-      await reloadCatalogs()
-      toast.success(successMessage)
-    } catch (error) {
-      toast.error(normalizeApiError(error, 'No se pudo completar la operación'))
-    } finally {
-      setSavingAction(null)
-    }
-  }
-
-  const hasValidId = (value: number | null) => Number.isFinite(value ?? NaN) && Number(value) > 0
 
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
-      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Académico</p>
-      <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Gestión académica</h2>
-      <p className="mt-2 text-sm text-slate-600">Configura grupos, asignaturas y vínculos académicos principales.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Académico</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Matrículas y Alumnos</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
+            Gestiona las inscripciones de los estudiantes a sus grupos, asignaturas y configura el catálogo académico.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          <button onClick={() => setIsConfigGruposOpen(true)} className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Configurar Grupos</button>
+          <button onClick={() => setIsConfigAsignaturasOpen(true)} className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 transition hover:-translate-y-[1px]">Configurar Asignaturas</button>
+        </div>
+      </div>
 
       {loading ? (
         <div className="mt-6 flex items-center text-slate-600">
@@ -408,234 +707,125 @@ export function AcademicoGestionPanel() {
           Cargando datos académicos...
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 xl:grid-cols-2">
-          <SectionCard title="Listado de estudiantes" subtitle="Vista separada para consulta rápida">
-            <div className="grid gap-2">
+        <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+            <Search className="h-5 w-5 text-slate-400" />
               <input
                 value={studentsSearch}
                 onChange={(event) => setStudentsSearch(event.target.value)}
-                placeholder="Buscar estudiante por nombre"
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                placeholder="Buscar estudiante por nombre o ID..."
+                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
               />
-              <FieldHint>
-                Mostrando {filteredStudents.length} de {estudiantes.length} estudiantes cargados.
-              </FieldHint>
+          </div>
 
-              <div className="max-h-64 overflow-y-auto rounded-xl border border-slate-200">
-                <ul className="divide-y divide-slate-100 text-sm">
-                  {filteredStudents.map((item) => (
-                    <li key={item.id} className="px-3 py-2">
-                      <p className="font-semibold text-slate-800">{item.nombre} {item.apellido}</p>
-                      <p className="text-xs text-slate-500">ID estudiante: {item.id}</p>
-                    </li>
-                  ))}
-                  {filteredStudents.length === 0 ? (
-                    <li className="px-3 py-6 text-center text-xs text-slate-500">
-                      No hay estudiantes que coincidan con la búsqueda.
-                    </li>
-                  ) : null}
-                </ul>
+          <div className="mt-6 flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <span>Estudiantes ({filteredStudents.length})</span>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3">
+            {filteredStudents.length > 0 ? (
+              filteredStudents.map(student => (
+                <article key={student.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition-all hover:border-teal-300 hover:shadow-md">
+                   <div className="flex items-center gap-4">
+                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 transition-colors">
+                       {(student.nombre?.[0] ?? 'U').toUpperCase()}{(student.apellido?.[0] ?? '').toUpperCase()}
+                     </div>
+                     <div className="min-w-0">
+                       <p className="truncate font-semibold text-slate-900">{student.nombre} {student.apellido}</p>
+                       <p className="text-xs text-slate-500">ID estudiante: {student.id}</p>
+                       <div className="mt-2 flex flex-wrap gap-2">
+                         {student.grupos && student.grupos.length > 0 ? (
+                           student.grupos.map((g, i) => (
+                             <span key={i} className="inline-flex rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">{g}</span>
+                           ))
+                         ) : (
+                           <span className="inline-flex rounded-md bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/20">Sin grupo asignado</span>
+                         )}
+                       </div>
+                     </div>
+                   </div>
+                   <div className="flex items-center gap-2 sm:shrink-0">
+                      <button onClick={() => setViewingStudentId(student.id)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Ver ficha</button>
+                      <button onClick={() => setStudentToInscribe(student)} className="rounded-xl bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100">Inscribir</button>
+                   </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                No hay estudiantes que coincidan con la búsqueda.
               </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Crear grupo" subtitle="RF-AC-01">
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-700">Nombre del grupo</label>
-              <input value={grupoNombre} onChange={(e) => setGrupoNombre(e.target.value)} placeholder="Ej. 5to A" className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <FieldHint>Este campo define cómo verá el profesor el grupo en asistencia e inscripciones.</FieldHint>
-              <button
-                type="button"
-                onClick={() => runAction('crear-grupo', async () => {
-                  if (!grupoNombre.trim()) {
-                    toast.error('El nombre del grupo es requerido')
-                    return
-                  }
-                  const created = await createGrupo(token, { nombre: grupoNombre })
-                  setGrupoNombre('')
-                  setSelectedGrupoId(created.id)
-                }, 'Grupo creado')}
-                disabled={savingAction === 'crear-grupo'}
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
-              >
-                {savingAction === 'crear-grupo' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                Guardar grupo
-              </button>
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Crear asignatura" subtitle="RF-AC-01">
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-700">Nombre de asignatura</label>
-              <input value={asignaturaNombre} onChange={(e) => setAsignaturaNombre(e.target.value)} placeholder="Ej. Matemática" className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <label className="text-xs font-semibold text-slate-700">Descripción</label>
-              <input value={asignaturaDescripcion} onChange={(e) => setAsignaturaDescripcion(e.target.value)} placeholder="Descripción" className="rounded-xl border border-slate-300 px-3 py-2 text-sm" />
-              <FieldHint>La descripción ayuda a diferenciar asignaturas similares en la planificación.</FieldHint>
-              <button
-                type="button"
-                onClick={() => runAction('crear-asignatura', async () => {
-                  if (!asignaturaNombre.trim()) {
-                    toast.error('El nombre de la asignatura es requerido')
-                    return
-                  }
-                  const created = await createAsignatura(token, { nombre: asignaturaNombre, descripcion: asignaturaDescripcion || null })
-                  setAsignaturaNombre('')
-                  setAsignaturaDescripcion('')
-                  setSelectedAsignaturaId(created.id)
-                }, 'Asignatura creada')}
-                disabled={savingAction === 'crear-asignatura'}
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
-              >
-                {savingAction === 'crear-asignatura' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                Guardar asignatura
-              </button>
-            </div>
-          </SectionCard>
-
-          <SectionCard title="Asignar profesor a grupo" subtitle="RF-AC-02">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-700">Profesor</label>
-              <select value={selectedProfesorId ?? ''} onChange={(e) => setSelectedProfesorId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                {profesores.map((p) => <option key={p.id} value={p.id}>{p.nombre} {p.apellido}</option>)}
-              </select>
-              </div>
-              <div className="grid gap-1">
-                <label className="text-xs font-semibold text-slate-700">Grupo</label>
-              <select value={selectedGrupoId ?? ''} onChange={(e) => setSelectedGrupoId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                {grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-              </select>
-              </div>
-            </div>
-            <FieldHint>Esta acción define qué docente tomará asistencia y notas para el grupo.</FieldHint>
-            <button
-              type="button"
-              onClick={() => runAction('profesor-grupo', async () => {
-                  if (!hasValidId(selectedProfesorId) || !hasValidId(selectedGrupoId)) {
-                    toast.error('Selecciona profesor y grupo para continuar')
-                    return
-                  }
-                  const profesorId = Number(selectedProfesorId)
-                  const grupoId = Number(selectedGrupoId)
-                  await asignarProfesorGrupo(token, { profesorId, grupoId })
-              }, 'Profesor asignado al grupo')}
-              disabled={savingAction === 'profesor-grupo'}
-              className="mt-2 inline-flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
-            >
-              {savingAction === 'profesor-grupo' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-              Confirmar asignación
-            </button>
-          </SectionCard>
-
-          <SectionCard title="Inscripciones y vínculos" subtitle="RF-AC-03 y RF-AC-06">
-            <div className="grid gap-2">
-              <label className="text-xs font-semibold text-slate-700">Estudiante</label>
-              <select value={selectedEstudianteId ?? ''} onChange={(e) => setSelectedEstudianteId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                {estudiantes.map((e) => <option key={e.id} value={e.id}>{e.nombre} {e.apellido}</option>)}
-              </select>
-              <FieldHint>Selecciona el estudiante base para las operaciones de inscripción y tutoría.</FieldHint>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="grid gap-1">
-                  <label className="text-xs font-semibold text-slate-700">Grupo a inscribir</label>
-                <select value={selectedGrupoId ?? ''} onChange={(e) => setSelectedGrupoId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                  {grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-                </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => runAction('inscribir-grupo', async () => {
-                    if (!hasValidId(selectedEstudianteId) || !hasValidId(selectedGrupoId)) {
-                      toast.error('Selecciona estudiante y grupo para inscribir')
-                      return
-                    }
-                    const estudianteId = Number(selectedEstudianteId)
-                    const grupoId = Number(selectedGrupoId)
-                    await inscribirEstudianteGrupo(token, { estudianteId, grupoId })
-                  }, 'Estudiante inscrito al grupo')}
-                  disabled={savingAction === 'inscribir-grupo'}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
-                >
-                  {savingAction === 'inscribir-grupo' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                  Inscribir a grupo
-                </button>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="grid gap-1">
-                  <label className="text-xs font-semibold text-slate-700">Asignatura a inscribir</label>
-                <select value={selectedAsignaturaId ?? ''} onChange={(e) => setSelectedAsignaturaId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                  {asignaturas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-                </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => runAction('inscribir-asignatura', async () => {
-                    if (!hasValidId(selectedEstudianteId) || !hasValidId(selectedAsignaturaId)) {
-                      toast.error('Selecciona estudiante y asignatura para inscribir')
-                      return
-                    }
-                    const estudianteId = Number(selectedEstudianteId)
-                    const asignaturaId = Number(selectedAsignaturaId)
-                    await inscribirEstudianteAsignatura(token, { estudianteId, asignaturaId })
-                  }, 'Estudiante inscrito a asignatura')}
-                  disabled={savingAction === 'inscribir-asignatura'}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
-                >
-                  {savingAction === 'inscribir-asignatura' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                  Inscribir a asignatura
-                </button>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="grid gap-1">
-                  <label className="text-xs font-semibold text-slate-700">Tutor</label>
-                <select value={selectedTutorId ?? ''} onChange={(e) => setSelectedTutorId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
-                  {tutores.map((t) => <option key={t.id} value={t.id}>{t.nombre} {t.apellido}</option>)}
-                </select>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => runAction('vincular-tutor', async () => {
-                    if (!hasValidId(selectedEstudianteId) || !hasValidId(selectedTutorId)) {
-                      toast.error('Selecciona estudiante y tutor para vincular')
-                      return
-                    }
-                    const estudianteId = Number(selectedEstudianteId)
-                    const tutorId = Number(selectedTutorId)
-                    await vincularEstudianteTutor(token, { estudianteId, tutorId })
-                  }, 'Tutor vinculado al estudiante')}
-                  disabled={savingAction === 'vincular-tutor'}
-                  className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-70"
-                >
-                  {savingAction === 'vincular-tutor' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                  Vincular tutor
-                </button>
-              </div>
-
-              <FieldHint>Vincular grupo y asignatura habilita la hoja de asistencia para esa combinación.</FieldHint>
-
-              <button
-                type="button"
-                onClick={() => runAction('grupo-asignatura', async () => {
-                  if (!hasValidId(selectedGrupoId) || !hasValidId(selectedAsignaturaId)) {
-                    toast.error('Selecciona grupo y asignatura para vincular')
-                    return
-                  }
-                  const grupoId = Number(selectedGrupoId)
-                  const asignaturaId = Number(selectedAsignaturaId)
-                  await asignarGrupoAsignatura(token, { grupoId, asignaturaId })
-                }, 'Asignatura vinculada al grupo')}
-                disabled={savingAction === 'grupo-asignatura'}
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-70"
-              >
-                {savingAction === 'grupo-asignatura' ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
-                Vincular asignatura al grupo
-              </button>
-            </div>
-          </SectionCard>
+            )}
+          </div>
         </div>
       )}
+
+      {viewingStudentId !== null ? (
+        <StudentProfileModal 
+          estudianteId={viewingStudentId} 
+          onClose={() => setViewingStudentId(null)} 
+        />
+      ) : null}
+
+      <ConfigGruposModal 
+        isOpen={isConfigGruposOpen} 
+        onClose={() => setIsConfigGruposOpen(false)} 
+        grupos={grupos} 
+        profesores={profesores} 
+        token={token} 
+        reloadCatalogs={reloadCatalogs} 
+      />
+
+      <ConfigAsignaturasModal 
+        isOpen={isConfigAsignaturasOpen} 
+        onClose={() => setIsConfigAsignaturasOpen(false)} 
+        grupos={grupos} 
+        asignaturas={asignaturas} 
+        token={token} 
+        reloadCatalogs={reloadCatalogs} 
+      />
+
+      {studentToInscribe ? createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+          <div className="absolute inset-0" onClick={() => setStudentToInscribe(null)} />
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">Inscripciones y vinculación</h2>
+                <p className="text-sm text-slate-500">{studentToInscribe.nombre} {studentToInscribe.apellido}</p>
+              </div>
+              <button onClick={() => setStudentToInscribe(null)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
+            </div>
+            <div className="p-6">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <h3 className="font-semibold text-slate-900 text-sm">Inscribir a Grupo</h3>
+                  <select id="selGrupo" className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                    <option value="">Selecciona grupo</option>
+                    {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
+                  </select>
+                  <button onClick={async () => {
+                    const v = (document.getElementById('selGrupo') as HTMLSelectElement).value;
+                    if(!v) { toast.error('Selecciona un grupo'); return; }
+                    try { await inscribirEstudianteGrupo(token, { estudianteId: studentToInscribe.id, grupoId: Number(v) }); toast.success('Inscrito al grupo'); await reloadCatalogs(); setStudentToInscribe(null); } catch (e) { toast.error(normalizeApiError(e, 'Error al inscribir')) }
+                  }} className="mt-3 w-full rounded-xl bg-teal-600 py-2 text-sm font-semibold text-white hover:bg-teal-500">Inscribir Grupo</button>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <h3 className="font-semibold text-slate-900 text-sm">Inscribir a Asignatura</h3>
+                  <select id="selAsig" className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                    <option value="">Selecciona asignatura</option>
+                    {asignaturas.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
+                  </select>
+                  <button onClick={async () => {
+                    const v = (document.getElementById('selAsig') as HTMLSelectElement).value;
+                    if(!v) { toast.error('Selecciona asignatura'); return; }
+                    try { await inscribirEstudianteAsignatura(token, { estudianteId: studentToInscribe.id, asignaturaId: Number(v) }); toast.success('Inscrito a asignatura'); await reloadCatalogs(); setStudentToInscribe(null); } catch (e) { toast.error(normalizeApiError(e, 'Error al inscribir')) }
+                  }} className="mt-3 w-full rounded-xl bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Inscribir Asignatura</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      , document.body) : null}
     </section>
   )
 }
@@ -670,6 +860,7 @@ export function AcademicoAsistenciaNotasPanel({
   const [loadingHistorial, setLoadingHistorial] = useState(false)
   const [savingAttendance, setSavingAttendance] = useState(false)
   const sheetCacheRef = useRef<Map<string, AsistenciaSheetResponse>>(new Map())
+  const [viewingStudentId, setViewingStudentId] = useState<number | null>(null)
 
   const isProfesor = useMemo(() => {
     const roles = user?.roles ?? []
@@ -981,6 +1172,140 @@ export function AcademicoAsistenciaNotasPanel({
     }
   }
 
+  const printDocument = useCallback((title: string, subtitle: string, date: string, tableRows: string) => {
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${title}</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 30px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          h1 { color: #0f766e; margin: 0 0 10px 0; font-size: 24px; text-transform: uppercase; }
+          p { margin: 5px 0; font-size: 14px; color: #555; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; }
+          th { background-color: #f8fafc; color: #334155; text-transform: uppercase; font-size: 12px; }
+          .status { font-weight: bold; }
+          .present { color: #15803d; }
+          .absent { color: #b91c1c; }
+          .justified { color: #b45309; }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Mi Casita</h1>
+          <p><strong>${title}</strong></p>
+          <p>${subtitle}</p>
+          <p><strong>Fecha:</strong> ${date}</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th>Estudiante</th>
+              <th style="width: 150px;">Estado</th>
+              <th>Observación / Alerta</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast.error('Permite las ventanas emergentes (popups) para poder imprimir')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => {
+      w.focus()
+      w.print()
+    }, 300)
+  }, [])
+
+  const formatRowForPrint = (estudianteNombre?: string | null, estudianteApellido?: string | null, estadoNombre?: string, nota?: string, i?: number) => {
+    let estadoClass = ''
+    const status = estadoNombre?.toUpperCase() || 'NO MARCADO'
+    if (status === 'PRESENTE') estadoClass = 'present'
+    else if (status === 'AUSENTE' || status === 'INASISTENCIA') estadoClass = 'absent'
+    else if (status === 'JUSTIFICADO') estadoClass = 'justified'
+
+    return `
+      <tr>
+        <td>${(i ?? 0) + 1}</td>
+        <td>${estudianteNombre || ''} ${estudianteApellido || ''}</td>
+        <td class="status ${estadoClass}">${status}</td>
+        <td>${nota || ''}</td>
+      </tr>
+    `
+  }
+
+  const handlePrintCurrentAttendance = () => {
+    if (rows.length === 0) {
+      toast.error('No hay estudiantes en la lista para imprimir')
+      return
+    }
+    const grupo = gruposVisibles.find(g => g.id === selectedGrupoId)?.nombre || 'Sin Grupo'
+    const asignatura = asignaturasVisibles.find(a => a.id === selectedAsignaturaId)?.nombre || 'Sin Asignatura'
+    
+    const tableRows = rows.map((row, i) => {
+      const estadoNombre = estados.find(e => e.id === row.selectedEstadoId)?.nombre
+      const nota = [row.observaciones, row.estudianteAlergiasGraves, row.estudianteObservacionMedicaCorta].filter(Boolean).join(' | ')
+      return formatRowForPrint(row.estudianteNombre, row.estudianteApellido, estadoNombre, nota, i)
+    }).join('')
+    
+    const dateStr = new Date(selectedFecha + 'T00:00:00').toLocaleDateString('es-NI')
+    printDocument('Registro de Asistencia', `Grupo: ${grupo} | Asignatura: ${asignatura}`, dateStr, tableRows)
+  }
+
+  const handlePrintClassList = () => {
+    const grupo = gruposVisibles.find(g => g.id === selectedGrupoId)?.nombre || 'Sin Grupo'
+    const tableRows = estudiantesClaseSeleccionada.map((est, i) => {
+      const nota = [est.alergiasGraves, est.observacionMedicaCorta].filter(Boolean).join(' | ')
+      return formatRowForPrint(est.nombre, est.apellido, '-', nota, i)
+    }).join('')
+    printDocument('Listado de Estudiantes', `Grupo: ${grupo}`, new Date().toLocaleDateString('es-NI'), tableRows)
+  }
+
+  const handlePrintHistory = async (item: AsistenciaHistorialItem) => {
+    const cacheKey = buildSheetCacheKey(item.grupoId, item.asignaturaId, item.fecha)
+    let sheet = sheetCacheRef.current.get(cacheKey)
+    
+    if (!sheet) {
+      try {
+        const loadingToast = toast.loading('Obteniendo datos...')
+        sheet = await getAsistenciaSheet(token, {
+          grupoId: item.grupoId,
+          asignaturaId: item.asignaturaId,
+          fecha: item.fecha,
+        })
+        sheetCacheRef.current.set(cacheKey, sheet)
+        toast.dismiss(loadingToast)
+      } catch (error) {
+        toast.error('No se pudo cargar la asistencia para imprimir')
+        return
+      }
+    }
+
+    const tableRows = sheet.rows.map((row, i) => {
+      const estadoNombre = estados.find(e => e.id === row.estadoAsistenciaId)?.nombre
+      const nota = [row.observaciones, row.estudianteAlergiasGraves, row.estudianteObservacionMedicaCorta].filter(Boolean).join(' | ')
+      return formatRowForPrint(row.estudianteNombre, row.estudianteApellido, estadoNombre, nota, i)
+    }).join('')
+    
+    const dateStr = new Date(item.fecha + 'T00:00:00').toLocaleDateString('es-NI')
+    printDocument('Histórico de Asistencia', `Grupo: ${item.grupoNombre} | Asignatura: ${item.asignaturaNombre}`, dateStr, tableRows)
+  }
+
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Académico</p>
@@ -1036,24 +1361,36 @@ export function AcademicoAsistenciaNotasPanel({
 
             {isProfesor ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">Estudiantes asignados en esta clase</p>
-                <p className="text-xs text-slate-500">Vista rápida por grupo para preparar asistencia.</p>
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">Estudiantes asignados en esta clase</p>
+                    <p className="text-xs text-slate-500">Vista rápida por grupo para preparar asistencia.</p>
+                  </div>
+                  <button type="button" onClick={handlePrintClassList} className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
+                    <Printer className="h-4 w-4" />
+                    Imprimir listado
+                  </button>
+                </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {estudiantesClaseSeleccionada.length > 0 ? estudiantesClaseSeleccionada.map((estudiante) => (
                     <article key={estudiante.estudianteId} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-sm font-semibold text-slate-900">
+                      <button 
+                        type="button"
+                        onClick={() => setViewingStudentId(estudiante.estudianteId)}
+                        className="text-sm font-semibold text-slate-900 hover:text-teal-600 hover:underline text-left"
+                      >
                         {estudiante.nombre} {estudiante.apellido}
-                      </p>
+                      </button>
                       <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500">ID {estudiante.estudianteId}</p>
-                      {estudiante.alergiasGraves ? (
-                        <p className="mt-2 line-clamp-2 rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-900">
-                          Alergia: {estudiante.alergiasGraves}
-                        </p>
-                      ) : null}
-                      {estudiante.observacionMedicaCorta ? (
-                        <p className="mt-2 line-clamp-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
-                          Nota: {estudiante.observacionMedicaCorta}
-                        </p>
+                      {estudiante.alergiasGraves || estudiante.observacionMedicaCorta ? (
+                        <div className="mt-1.5">
+                          <span 
+                            className="inline-flex cursor-help items-center rounded-md bg-rose-50 px-2 py-1 text-[10px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20" 
+                            title={`${estudiante.alergiasGraves ? 'Alergia: ' + estudiante.alergiasGraves + '\n' : ''}${estudiante.observacionMedicaCorta ? 'Nota: ' + estudiante.observacionMedicaCorta : ''}`.trim()}
+                          >
+                            Alerta médica
+                          </span>
+                        </div>
                       ) : null}
                     </article>
                   )) : (
@@ -1107,6 +1444,8 @@ export function AcademicoAsistenciaNotasPanel({
                   setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, observacionesOpen: !item.observacionesOpen } : item))
                 }}
                 onSave={saveAttendance}
+                onViewProfile={setViewingStudentId}
+                onPrint={handlePrintCurrentAttendance}
               />
 
               <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
@@ -1155,6 +1494,19 @@ export function AcademicoAsistenciaNotasPanel({
                       {item.ultimaObservacion ? (
                         <p className="mt-3 line-clamp-2 text-xs text-slate-600">{item.ultimaObservacion}</p>
                       ) : null}
+
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void handlePrintHistory(item)
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                        >
+                          <Printer className="h-3.5 w-3.5" /> Imprimir
+                        </button>
+                      </div>
                     </button>
                   )) : (
                     <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-sm text-slate-500">
@@ -1174,10 +1526,18 @@ export function AcademicoAsistenciaNotasPanel({
                 setRows((prev) => prev.map((item) => item.estudianteId === estudianteId ? { ...item, notaFinal: value } : item))
               }}
               onSave={saveTrabajoAndNota}
+              onViewProfile={setViewingStudentId}
             />
           )}
         </>
       )}
+
+      {viewingStudentId !== null ? (
+        <StudentProfileModal 
+          estudianteId={viewingStudentId} 
+          onClose={() => setViewingStudentId(null)} 
+        />
+      ) : null}
     </section>
   )
 }

@@ -4,6 +4,7 @@ import heroImage from '../../../assets/hero.png'
 import axios from 'axios'
 import { getTalleres, inscribirEnTaller, resolveTallerImageUrl } from '../../talleres/talleres-view.api'
 import type { Taller } from '../../talleres/talleres-view.types'
+import { useForm } from 'react-hook-form'
 
 const colores = [
   'from-amber-400 to-orange-400',
@@ -39,16 +40,6 @@ type InscripcionFormValues = {
   fechaNacimiento: string
   telefono: string
   correo: string
-  identificador: string
-}
-
-const emptyInscripcionForm: InscripcionFormValues = {
-  nombre: '',
-  apellido: '',
-  fechaNacimiento: '',
-  telefono: '',
-  correo: '',
-  identificador: '',
 }
 
 function calculateAgeFromBirthDate(value: string): number | null {
@@ -98,7 +89,12 @@ export default function TalleresSection() {
   const [talleres, setTalleres] = useState<Taller[]>([])
   const [loading, setLoading] = useState(true)
   const [tallerSeleccionado, setTallerSeleccionado] = useState<Taller | null>(null)
-  const [form, setForm] = useState<InscripcionFormValues>(emptyInscripcionForm)
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<InscripcionFormValues>()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -171,53 +167,21 @@ export default function TalleresSection() {
 
   const abrirFormulario = (taller: Taller) => {
     setTallerSeleccionado(taller)
-    setForm(emptyInscripcionForm)
+    reset({ nombre: '', apellido: '', fechaNacimiento: '', telefono: '', correo: '' })
     setSubmitError(null)
     setSubmitSuccess(null)
   }
 
   const cerrarFormulario = () => {
     setTallerSeleccionado(null)
-    setForm(emptyInscripcionForm)
+    reset()
     setSubmitError(null)
     setSubmitSuccess(null)
     setIsSubmitting(false)
   }
 
-  const validarFormulario = () => {
-    if (!form.nombre.trim() || !form.apellido.trim()) {
-      return 'Nombre y apellido son requeridos.'
-    }
-
-    const edadCalculada = calculateAgeFromBirthDate(form.fechaNacimiento)
-    if (edadCalculada === null) {
-      return 'La fecha de nacimiento debe ser valida.'
-    }
-
-    if (tallerSeleccionado && edadCalculada < tallerSeleccionado.edadMinima) {
-      return `La edad minima permitida es ${tallerSeleccionado.edadMinima} anos.`
-    }
-
-    if (tallerSeleccionado && edadCalculada > tallerSeleccionado.edadMaxima) {
-      return `La edad maxima permitida es ${tallerSeleccionado.edadMaxima} anos.`
-    }
-
-    if (form.identificador.trim() && !/^(\d{3}-\d{6}-\d{4}[A-Za-z]|\d{13}[A-Za-z])$/.test(form.identificador.trim())) {
-      return 'La cedula es invalida. Usa formato nicaraguense ###-######-####L o sin guiones.'
-    }
-
-    return null
-  }
-
-  const enviarInscripcion = async () => {
+  const enviarInscripcion = async (data: InscripcionFormValues) => {
     if (!tallerSeleccionado) {
-      return
-    }
-
-    const validationError = validarFormulario()
-    if (validationError) {
-      setSubmitError(validationError)
-      setSubmitSuccess(null)
       return
     }
 
@@ -226,17 +190,16 @@ export default function TalleresSection() {
 
     try {
       const result = await inscribirEnTaller(tallerSeleccionado.id, {
-        nombre: form.nombre.trim(),
-        apellido: form.apellido.trim(),
-        fechaNacimiento: form.fechaNacimiento,
-        telefono: form.telefono.trim() || undefined,
-        correo: form.correo.trim() || undefined,
-        identificador: form.identificador.trim() || undefined,
+        nombre: data.nombre.trim(),
+        apellido: data.apellido.trim(),
+        fechaNacimiento: data.fechaNacimiento,
+        telefono: data.telefono.trim(),
+        correo: data.correo.trim() || undefined,
       })
 
       setSubmitSuccess(result.mensaje)
       setSubmitError(null)
-      setForm(emptyInscripcionForm)
+      reset()
 
       const refreshed = await getTalleres(null)
       const activos = refreshed.filter((item) => item.activo)
@@ -324,7 +287,7 @@ export default function TalleresSection() {
                       <span className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-[10px] font-bold text-teal-700">
                         E
                       </span>
-                      <span className="text-slate-600">Edad: {taller.edadMinima} - {taller.edadMaxima} anos</span>
+                      <span className="text-slate-600">Edad: {taller.edadMinima} - {taller.edadMaxima} años</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <span className="inline-flex rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
@@ -398,7 +361,7 @@ export default function TalleresSection() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Inscripcion</p>
                   <h3 className="mt-1 text-xl font-bold text-slate-900">{tallerSeleccionado.nombre}</h3>
                   <p className="mt-1 text-sm text-slate-600">
-                    Rango edad: {tallerSeleccionado.edadMinima} - {tallerSeleccionado.edadMaxima} anos
+                    Rango edad: {tallerSeleccionado.edadMinima} - {tallerSeleccionado.edadMaxima} años
                   </p>
                 </div>
                 <button
@@ -411,47 +374,65 @@ export default function TalleresSection() {
                 </button>
               </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <form className="mt-4" onSubmit={handleSubmit(enviarInscripcion)} noValidate>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="block">
                 <input
-                  value={form.nombre}
-                  onChange={(event) => setForm((prev) => ({ ...prev, nombre: event.target.value }))}
+                  {...register('nombre', { required: 'El nombre es obligatorio.' })}
                   placeholder="Nombre"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
+                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.nombre ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
                 />
+                {errors.nombre && <span className="mt-1 block text-xs text-rose-600">{errors.nombre.message}</span>}
+              </label>
+              <label className="block">
                 <input
-                  value={form.apellido}
-                  onChange={(event) => setForm((prev) => ({ ...prev, apellido: event.target.value }))}
+                  {...register('apellido', { required: 'El apellido es obligatorio.' })}
                   placeholder="Apellido"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
+                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.apellido ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
                 />
+                {errors.apellido && <span className="mt-1 block text-xs text-rose-600">{errors.apellido.message}</span>}
+              </label>
+              <label className="block">
                 <input
                   type="date"
-                  value={form.fechaNacimiento}
-                  onChange={(event) => setForm((prev) => ({ ...prev, fechaNacimiento: event.target.value }))}
-                  placeholder="Fecha de nacimiento"
+                  {...register('fechaNacimiento', {
+                    required: 'La fecha de nacimiento es obligatoria.',
+                    validate: (value) => {
+                      const edadCalculada = calculateAgeFromBirthDate(value)
+                      if (edadCalculada === null) return 'La fecha debe ser válida y anterior a hoy.'
+                      if (tallerSeleccionado && edadCalculada < tallerSeleccionado.edadMinima) return `La edad mínima permitida es ${tallerSeleccionado.edadMinima} años.`
+                      if (tallerSeleccionado && edadCalculada > tallerSeleccionado.edadMaxima) return `La edad máxima permitida es ${tallerSeleccionado.edadMaxima} años.`
+                      return true
+                    }
+                  })}
                   max={new Date().toISOString().split('T')[0]}
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
+                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.fechaNacimiento ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
                 />
+                {errors.fechaNacimiento && <span className="mt-1 block text-xs text-rose-600">{errors.fechaNacimiento.message}</span>}
+              </label>
+              <label className="block">
                 <input
-                  value={form.telefono}
-                  onChange={(event) => setForm((prev) => ({ ...prev, telefono: event.target.value }))}
-                  placeholder="Telefono (opcional)"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
+                  {...register('telefono', {
+                    required: 'El teléfono es obligatorio.',
+                    pattern: { value: /^\d{8}$/, message: 'El teléfono debe tener exactamente 8 dígitos numéricos.' }
+                  })}
+                  placeholder="Teléfono"
+                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.telefono ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
                 />
+                {errors.telefono && <span className="mt-1 block text-xs text-rose-600">{errors.telefono.message}</span>}
+              </label>
+              <label className="block md:col-span-2">
                 <input
                   type="email"
-                  value={form.correo}
-                  onChange={(event) => setForm((prev) => ({ ...prev, correo: event.target.value }))}
+                  {...register('correo', {
+                    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'El correo no tiene un formato válido.' }
+                  })}
                   placeholder="Correo (opcional)"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
+                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.correo ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
                 />
-                <input
-                  value={form.identificador}
-                  onChange={(event) => setForm((prev) => ({ ...prev, identificador: event.target.value }))}
-                  placeholder="Cedula ###-######-####L (opcional)"
-                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none ring-teal-300 focus:ring"
-                />
-              </div>
+                {errors.correo && <span className="mt-1 block text-xs text-rose-600">{errors.correo.message}</span>}
+              </label>
+            </div>
 
               {submitError ? (
                 <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{submitError}</p>
@@ -472,8 +453,7 @@ export default function TalleresSection() {
                   Cancelar
                 </button>
                 <button
-                  type="button"
-                  onClick={enviarInscripcion}
+                type="submit"
                   disabled={isSubmitting}
                   className="inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -481,6 +461,7 @@ export default function TalleresSection() {
                   Enviar inscripcion
                 </button>
               </div>
+          </form>
             </div>
           </div>
         ) : null}

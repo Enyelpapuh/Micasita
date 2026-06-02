@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { CalendarDays, Check, Edit2, ImagePlus, LoaderCircle, Trash2, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../auth/AuthContext'
@@ -364,8 +365,8 @@ export default function NoticiasPanel() {
         </div>
       )}
 
-      {deleteTarget ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
+      {deleteTarget ? createPortal(
+        <div className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/50 px-4">
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -409,7 +410,7 @@ export default function NoticiasPanel() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
     </section>
   )
 }

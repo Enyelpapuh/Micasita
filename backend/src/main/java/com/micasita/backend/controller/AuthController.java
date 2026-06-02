@@ -19,10 +19,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
+@CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173","http://localhost:4000"})
 public class AuthController {
 
     private final AuthService authService;
@@ -66,4 +67,19 @@ public class AuthController {
     ) {
         return ResponseEntity.ok(authService.uploadMyAvatar(authentication.getName(), file));
     }
+
+    @PostMapping("/recover-password/request")
+    public ResponseEntity<Map<String, String>> requestPasswordReset(@RequestBody PasswordRecoveryRequest request) {
+        authService.requestPasswordReset(request.email());
+        return ResponseEntity.ok(Map.of("message", "Código enviado con éxito."));
+    }
+
+    @PostMapping("/recover-password/reset")
+    public ResponseEntity<Map<String, String>> resetPasswordWithCode(@RequestBody PasswordResetWithCodeRequest request) {
+        authService.resetPasswordWithCode(request.email(), request.codigo(), request.newPassword());
+        return ResponseEntity.ok(Map.of("message", "Contraseña actualizada correctamente. Ya puedes iniciar sesión."));
+    }
 }
+
+record PasswordRecoveryRequest(String email) {}
+record PasswordResetWithCodeRequest(String email, String codigo, String newPassword) {}

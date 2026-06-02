@@ -1,21 +1,57 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Mail, Phone, MapPin } from 'lucide-react'
+import axios from 'axios'
+
+const CONTACT_API_URL = import.meta.env.VITE_CONTACT_API_URL ?? 'http://localhost:4000/api'
 
 export default function ContactForm() {
   const [nombre, setNombre] = useState('')
   const [correo, setCorreo] = useState('')
   const [asunto, setAsunto] = useState('')
   const [mensaje, setMensaje] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [statusType, setStatusType] = useState<'success' | 'error' | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-    // Vista: no enviamos al backend todavía. Podríamos validar o mostrar modal.
-    // Por ahora solo limpiamos el formulario para simular envío.
-    setNombre('')
-    setCorreo('')
-    setAsunto('')
-    setMensaje('')
-    alert('Formulario simulado: los datos se han limpiado (no hay envío).')
+
+    const nextNombre = nombre.trim()
+    const nextCorreo = correo.trim()
+    const nextAsunto = asunto.trim()
+    const nextMensaje = mensaje.trim()
+
+    if (!nextNombre || !nextCorreo || !nextAsunto || !nextMensaje) {
+      setStatusType('error')
+      setStatusMessage('Completa todos los campos antes de enviar.')
+      return
+    }
+
+    setIsSubmitting(true)
+    setStatusMessage(null)
+
+    try {
+      const response = await axios.post<{ message?: string }>(`${CONTACT_API_URL}/contact/messages`, {
+        nombre: nextNombre,
+        correo: nextCorreo,
+        asunto: nextAsunto,
+        mensaje: nextMensaje,
+      })
+      console.log('SUCCESS!', response.status, response.data)
+
+      setNombre('')
+      setCorreo('')
+      setAsunto('')
+      setMensaje('')
+      setStatusType('success')
+      setStatusMessage(response.data?.message || 'Mensaje enviado correctamente.')
+    } catch (error: any) {
+      console.log('FAILED...', error)
+      setStatusType('error')
+      setStatusMessage(error.response?.data?.message || error.message || 'No se pudo enviar el mensaje')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -25,7 +61,7 @@ export default function ContactForm() {
           {/* Formulario */}
           <div>
             <h1 className="text-3xl font-semibold text-slate-900">Contacto</h1>
-            <p className="mt-2 text-sm text-slate-600">Envía tus preguntas o comentarios. (Vista — no envía datos al servidor)</p>
+            <p className="mt-2 text-sm text-slate-600">Envía tus preguntas o comentarios y nos pondremos en contacto contigo.</p>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
               <div>
@@ -73,11 +109,17 @@ export default function ContactForm() {
               </div>
 
               <div className="flex items-center justify-between">
-                <div className="text-sm text-slate-600">Los campos no se envían en esta vista.</div>
+                <div className="text-sm text-slate-600">Los datos se envían al buzón interno de Micasita.</div>
                 <div>
-                  <button type="submit" className="rounded-md bg-teal-700 px-4 py-2 text-white hover:bg-teal-600">Enviar (simulado)</button>
+                  <button type="submit" disabled={isSubmitting} className="rounded-md bg-teal-700 px-4 py-2 text-white hover:bg-teal-600 disabled:opacity-70">
+                    {isSubmitting ? 'Enviando...' : 'Enviar mensaje'}
+                  </button>
                 </div>
               </div>
+
+              {statusMessage ? (
+                <p className={`text-sm ${statusType === 'success' ? 'text-emerald-700' : 'text-rose-600'}`}>{statusMessage}</p>
+              ) : null}
             </form>
           </div>
 

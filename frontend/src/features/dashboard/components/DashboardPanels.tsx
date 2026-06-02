@@ -1,19 +1,16 @@
-import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react'
+import { useEffect, useState, useMemo, type ChangeEvent, type ReactNode } from 'react'
 import toast from 'react-hot-toast'
-import { Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Mail } from 'lucide-react'
-import { Bar, Line } from 'react-chartjs-2'
+import { Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Printer } from 'lucide-react'
 import {
   ArcElement,
   BarElement,
   CategoryScale,
   Chart as ChartJS,
-  Filler,
   Legend,
-  LineElement,
   LinearScale,
-  PointElement,
   Tooltip,
 } from 'chart.js'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import type { AuthUser } from '../../auth/auth.types'
 import type { DashboardView } from './DashboardSidebar'
 import { TalleresView } from '../../talleres/components/TalleresView'
@@ -28,8 +25,9 @@ import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar }
 import { CajaDashboardPanel } from './CajaDashboardPanel'
 import { getCajaDashboard } from './caja.api'
 import { AdminFinanzasPanel } from './AdminFinanzasPanel'
+import { ContactMessagesPanel } from './ContactMessagesPanel'
 
-ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend)
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 type DashboardPanelProps = {
   user?: AuthUser | null
@@ -68,6 +66,7 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
   const [cajaResumen, setCajaResumen] = useState<Awaited<ReturnType<typeof getCajaDashboard>> | null>(null)
   const [loadingResumen, setLoadingResumen] = useState(false)
   const [resumenError, setResumenError] = useState<string | null>(null)
+  const [periodFilter, setPeriodFilter] = useState<'7' | '15' | '30' | 'all'>('30')
 
   useEffect(() => {
     let cancelled = false
@@ -82,7 +81,8 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
       setResumenError(null)
 
       try {
-        const dashboard = await getCajaDashboard(token, 15)
+        // Pedimos más historial para poder filtrar localmente hasta 1 mes o más
+        const dashboard = await getCajaDashboard(token, 1000)
         if (!cancelled) {
           setCajaResumen(dashboard)
         }
@@ -104,178 +104,334 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
     }
   }, [token])
 
-  const totalTalleres = cajaResumen?.totalCobradoTalleres ?? 0
-  const totalMatriculas = cajaResumen?.totalCobradoMatriculas ?? 0
-  const totalMensualidades = cajaResumen?.totalCobradoMensualidades ?? 0
-  const totalGeneral = cajaResumen?.totalCobradoGeneral ?? 0
-  const permissions = user?.permisos ?? []
-  const topPermissions = permissions.slice(0, 5)
+  const filteredData = useMemo(() => {
+    if (!cajaResumen) {
+      return {
+        validTaller: [], validMatricula: [], validMensualidad: [],
+        totalTaller: 0, totalMatricula: 0, totalMensualidad: 0, total: 0, combined: []
+      }
+    }
 
-  const areaChartData = {
+    const now = new Date()
+    now.setHours(23, 59, 59, 999)
+    let startDate = new Date(0)
+
+    if (periodFilter !== 'all') {
+      startDate = new Date()
+      startDate.setDate(startDate.getDate() - parseInt(periodFilter))
+      startDate.setHours(0, 0, 0, 0)
+    }
+
+    const isInsideDate = (dateStr?: string | null) => {
+      if (!dateStr) return false
+      const d = new Date(dateStr)
+      return d >= startDate && d <= now
+    }
+
+    const validTaller = (cajaResumen.pagosTaller || []).filter((p) => !p.anulado && isInsideDate(p.fechaPago))
+    const validMatricula = (cajaResumen.pagosMatricula || []).filter((p) => !p.anulado && isInsideDate(p.fechaPago))
+    const validMensualidad = (cajaResumen.mensualidades || []).filter((p) => !p.anulado && isInsideDate(p.fechaPago))
+
+    const totalTaller = validTaller.reduce((acc, curr) => acc + (curr.monto || 0), 0)
+    const totalMatricula = validMatricula.reduce((acc, curr) => acc + (curr.monto || 0), 0)
+    const totalMensualidad = validMensualidad.reduce((acc, curr) => acc + (curr.monto || 0), 0)
+    const total = totalTaller + totalMatricula + totalMensualidad
+
+    const combined = [
+      ...validTaller.map((t) => ({ fecha: t.fechaPago, concepto: 'Taller', detalle: t.taller || t.participante, monto: t.monto, metodo: t.metodoPago, recibo: t.numeroRecibo })),
+      ...validMatricula.map((m) => ({ fecha: m.fechaPago, concepto: 'Matrícula', detalle: m.estudiante, monto: m.monto, metodo: m.metodoPago, recibo: m.numeroRecibo })),
+      ...validMensualidad.map((m) => ({ fecha: m.fechaPago, concepto: 'Mensualidad', detalle: m.estudiante + ' (Mes ' + m.mes + ')', monto: m.monto, metodo: m.metodoPago, recibo: m.numeroRecibo })),
+    ].sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
+
+    return { validTaller, validMatricula, validMensualidad, totalTaller, totalMatricula, totalMensualidad, total, combined }
+  }, [cajaResumen, periodFilter])
+
+  const totalTalleres = filteredData.totalTaller
+  const totalMatriculas = filteredData.totalMatricula
+  const totalMensualidades = filteredData.totalMensualidad
+  const totalGeneral = filteredData.total
+
+  const barChartData = {
     labels: ['Talleres', 'Matrícula', 'Mensualidad'],
     datasets: [
       {
-        label: 'Recaudación',
+        label: 'Ingresos',
         data: [totalTalleres, totalMatriculas, totalMensualidades],
         backgroundColor: ['#0f766e', '#0ea5e9', '#f59e0b'],
-        borderRadius: 10,
+        borderRadius: 6,
       },
     ],
   }
 
-  const trendChartData = {
-    labels: ['Talleres', 'Matrícula', 'Mensualidad', 'Total'],
+  const doughnutChartData = {
+    labels: ['Talleres', 'Matrícula', 'Mensualidad'],
     datasets: [
       {
-        label: 'Recaudación',
-        data: [totalTalleres, totalMatriculas, totalMensualidades, totalGeneral],
-        fill: true,
-        borderColor: '#0f766e',
-        backgroundColor: 'rgba(15, 118, 110, 0.12)',
-        tension: 0.35,
-        pointRadius: 3,
+        data: [totalTalleres, totalMatriculas, totalMensualidades],
+        backgroundColor: ['#0f766e', '#0ea5e9', '#f59e0b'],
+        borderWidth: 0,
       },
     ],
   }
 
-  return (
-    <PanelShell
-      title={`Bienvenido, ${user?.nombre ?? 'usuario'}`}
-      subtitle="Resumen financiero de talleres, matrícula y mensualidad con importes reales de caja."
-    >
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Recaudado talleres" value={formatMoney(totalTalleres)} detail="Pagos activos no anulados" />
-        <MetricCard label="Recaudado matrícula" value={formatMoney(totalMatriculas)} detail="Pagos activos no anulados" />
-        <MetricCard label="Recaudado mensualidad" value={formatMoney(totalMensualidades)} detail="Pagos activos no anulados" />
-        <MetricCard label="Recaudado total" value={formatMoney(totalGeneral)} detail="Suma general de caja" />
-      </div>
-
-      <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <article className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recaudación Por Concepto</p>
-          <p className="mt-1 text-sm text-slate-600">Comparación directa entre talleres, matrícula y mensualidad.</p>
-          <div className="mt-4 h-[280px]">
-            <Bar
-              data={areaChartData}
-              options={{
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      callback: (value) => formatMoney(Number(value)),
-                    },
-                  },
-                  x: { grid: { display: false } },
-                },
-              }}
-            />
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Estado del resumen</p>
-          <p className="mt-1 text-sm text-slate-600">{loadingResumen ? 'Cargando movimientos de caja...' : 'Importes consolidados desde el endpoint financiero.'}</p>
-          <div className="mt-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3">
-              <span className="text-sm text-slate-600">Talleres</span>
-              <span className="text-base font-semibold text-slate-900">{formatMoney(totalTalleres)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3">
-              <span className="text-sm text-slate-600">Matrícula</span>
-              <span className="text-base font-semibold text-slate-900">{formatMoney(totalMatriculas)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-b border-slate-200 pb-3">
-              <span className="text-sm text-slate-600">Mensualidad</span>
-              <span className="text-base font-semibold text-slate-900">{formatMoney(totalMensualidades)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-semibold text-slate-700">Total general</span>
-              <span className="text-lg font-semibold text-teal-700">{formatMoney(totalGeneral)}</span>
-            </div>
-            {resumenError ? <p className="pt-2 text-sm text-rose-600">{resumenError}</p> : null}
-          </div>
-        </article>
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <article className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Tendencia Operativa</p>
-          <p className="mt-1 text-sm text-slate-600">Lectura rápida del peso financiero comparado entre conceptos.</p>
-          <div className="mt-4 h-[220px]">
-            <Line
-              data={trendChartData}
-              options={{
-                maintainAspectRatio: false,
-                plugins: { legend: { display: true, position: 'bottom' } },
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      callback: (value) => formatMoney(Number(value)),
-                    },
-                  },
-                  x: { grid: { display: false } },
-                },
-              }}
-            />
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-dashed border-teal-300 bg-[linear-gradient(135deg,_rgba(20,184,166,0.08),_rgba(2,132,199,0.05),_rgba(255,255,255,1))] p-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Permisos Prioritarios</p>
-          <p className="mt-1 text-sm text-slate-600">Top de permisos detectados en la sesión actual.</p>
-          <ul className="mt-4 space-y-2 text-sm text-slate-700">
-            {topPermissions.length > 0 ? (
-              topPermissions.map((perm) => (
-                <li key={perm} className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 font-medium">
-                  {perm}
-                </li>
-              ))
-            ) : (
-              <li className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2">Sin permisos cargados</li>
-            )}
-          </ul>
-        </article>
-      </div>
-    </PanelShell>
-  )
-}
-
-function GenericModulePanel({
-  title,
-  subtitle,
-  icon: Icon,
-  accent,
-}: {
-  title: string
-  subtitle: string
-  icon: typeof LayoutDashboard
-  accent: string
-}) {
-  return (
-    <PanelShell title={title} subtitle={subtitle}>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Estado" value="Disponible" detail="Vista base preparada para integrar data real" />
-        <MetricCard label="Prioridad" value="Alta" detail="Módulo visible por permisos" />
-        <MetricCard label="Acción" value="Crear CRUD" detail="Puedes reemplazar esta plantilla" />
-        <MetricCard label="Tipo" value="Panel" detail="Layout consistente con dashboard" />
-      </div>
-
-      <div className={`mt-6 rounded-[1.5rem] border border-slate-200 bg-gradient-to-r ${accent} p-6`}>
-        <div className="flex items-center gap-3 text-slate-900">
-          <span className="rounded-2xl bg-white/80 p-3 shadow-sm">
-            <Icon className="h-6 w-6" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-700">Módulo activo</p>
-            <p className="text-xl font-semibold text-slate-900">{title}</p>
-          </div>
+  const printReport = () => {
+    const filterLabel = periodFilter === '7' ? 'Últimos 7 días' : periodFilter === '15' ? 'Últimos 15 días' : periodFilter === '30' ? 'Último mes' : 'Histórico Completo'
+    
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Reporte Financiero - Mi Casita</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 30px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          h1 { color: #0f766e; margin: 0 0 10px 0; }
+          .meta { font-size: 14px; color: #555; margin: 5px 0; }
+          h2 { color: #1e293b; font-size: 18px; margin-top: 30px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; }
+          th { background-color: #f8fafc; color: #334155; font-weight: bold; text-transform: uppercase; font-size: 12px; }
+          .text-right { text-align: right; }
+          .total-row { font-weight: bold; background-color: #e2e8f0; font-size: 14px; }
+          .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 11px; background-color: #f1f5f9; color: #475569; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Reporte de Ingresos</h1>
+          <p class="meta"><strong>Periodo:</strong> ${filterLabel}</p>
+          <p class="meta"><strong>Generado el:</strong> ${new Date().toLocaleString('es-NI')}</p>
+          <p class="meta"><strong>Usuario en sesión:</strong> ${user?.nombre} ${user?.apellido || ''}</p>
         </div>
-        <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-700">{subtitle}</p>
-      </div>
-    </PanelShell>
+
+        <h2>Resumen General por Concepto</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Concepto</th>
+              <th class="text-right">Cantidad de Pagos</th>
+              <th class="text-right">Total Recaudado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Talleres</td>
+              <td class="text-right">${filteredData.validTaller.length}</td>
+              <td class="text-right">${formatMoney(filteredData.totalTaller)}</td>
+            </tr>
+            <tr>
+              <td>Matrícula</td>
+              <td class="text-right">${filteredData.validMatricula.length}</td>
+              <td class="text-right">${formatMoney(filteredData.totalMatricula)}</td>
+            </tr>
+            <tr>
+              <td>Mensualidad</td>
+              <td class="text-right">${filteredData.validMensualidad.length}</td>
+              <td class="text-right">${formatMoney(filteredData.totalMensualidad)}</td>
+            </tr>
+            <tr class="total-row">
+              <td>TOTAL INGRESOS</td>
+              <td class="text-right">${filteredData.combined.length}</td>
+              <td class="text-right">${formatMoney(filteredData.total)}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Ingresos Clasificados (Desglose)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Nº Recibo</th>
+              <th>Concepto</th>
+              <th>Detalle / Estudiante</th>
+              <th>Método</th>
+              <th class="text-right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredData.combined.map(item => `
+              <tr>
+                <td>${new Date(item.fecha || '').toLocaleDateString('es-NI')}</td>
+                <td>${item.recibo || '-'}</td>
+                <td><span class="badge">${item.concepto}</span></td>
+                <td>${item.detalle || '-'}</td>
+                <td>${item.metodo || '-'}</td>
+                <td class="text-right" style="font-weight: 500;">${formatMoney(item.monto)}</td>
+              </tr>
+            `).join('')}
+            ${filteredData.combined.length === 0 ? '<tr><td colspan="6" style="text-align:center; padding: 20px;">No hay ingresos registrados en este periodo</td></tr>' : ''}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast.error('Permite los popups para generar el reporte PDF')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => {
+      w.focus()
+      w.print()
+    }, 300)
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PanelShell
+        title={`Bienvenido, ${user?.nombre ?? 'usuario'}`}
+        subtitle="Genera reportes y analiza los ingresos financieros."
+      >
+        <div className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-semibold text-slate-700">Filtrar periodo:</label>
+            <select 
+              value={periodFilter} 
+              onChange={(e) => setPeriodFilter(e.target.value as any)}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            >
+              <option value="7">Últimos 7 días</option>
+              <option value="15">Últimos 15 días</option>
+              <option value="30">Último mes</option>
+              <option value="all">Todo el histórico</option>
+            </select>
+          </div>
+          
+          <button
+            type="button"
+            onClick={printReport}
+            className="inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800"
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            Generar Reporte PDF
+          </button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Recaudado talleres" value={formatMoney(totalTalleres)} detail="En el periodo seleccionado" />
+          <MetricCard label="Recaudado matrícula" value={formatMoney(totalMatriculas)} detail="En el periodo seleccionado" />
+          <MetricCard label="Recaudado mensualidad" value={formatMoney(totalMensualidades)} detail="En el periodo seleccionado" />
+          <MetricCard label="Recaudado total" value={formatMoney(totalGeneral)} detail="Suma total en el periodo" />
+        </div>
+
+        <div className="mt-6 grid gap-6 md:grid-cols-2">
+          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Recaudación por Concepto</p>
+            <div className="mt-4 h-[250px]">
+              <Bar
+                data={barChartData}
+                options={{
+                  maintainAspectRatio: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    y: { beginAtZero: true, ticks: { callback: (value) => formatMoney(Number(value)) } },
+                    x: { grid: { display: false } }
+                  },
+                }}
+              />
+            </div>
+          </article>
+          <article className="rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Distribución de Ingresos</p>
+            <div className="mt-4 flex h-[250px] items-center justify-center">
+              <Doughnut
+                data={doughnutChartData}
+                options={{ maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }}
+              />
+            </div>
+          </article>
+        </div>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-[1fr_1.5fr]">
+          <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Resumen Financiero</p>
+            <p className="mt-1 text-sm text-slate-600">Ingresos generales según el periodo seleccionado.</p>
+            
+            <div className="mt-4 flex-1 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="border-b border-slate-200 bg-white text-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Concepto</th>
+                    <th className="px-4 py-3 text-right font-semibold">Pagos</th>
+                    <th className="px-4 py-3 text-right font-semibold">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="px-4 py-3">Talleres</td>
+                    <td className="px-4 py-3 text-right">{filteredData.validTaller.length}</td>
+                    <td className="px-4 py-3 text-right font-medium">{formatMoney(totalTalleres)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3">Matrícula</td>
+                    <td className="px-4 py-3 text-right">{filteredData.validMatricula.length}</td>
+                    <td className="px-4 py-3 text-right font-medium">{formatMoney(totalMatriculas)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3">Mensualidad</td>
+                    <td className="px-4 py-3 text-right">{filteredData.validMensualidad.length}</td>
+                    <td className="px-4 py-3 text-right font-medium">{formatMoney(totalMensualidades)}</td>
+                  </tr>
+                  <tr className="bg-white font-semibold text-slate-900">
+                    <td className="px-4 py-3">TOTAL</td>
+                    <td className="px-4 py-3 text-right">{filteredData.combined.length}</td>
+                    <td className="px-4 py-3 text-right text-teal-700">{formatMoney(totalGeneral)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Ingresos Clasificados</p>
+            <p className="mt-1 text-sm text-slate-600">Desglose de operaciones en el periodo.</p>
+            
+            <div className="mt-4 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <div className="max-h-[320px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 border-b border-slate-200 bg-slate-50 text-slate-600 shadow-sm z-10">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">Fecha</th>
+                      <th className="px-4 py-3 text-left font-semibold">Recibo</th>
+                      <th className="px-4 py-3 text-left font-semibold">Concepto</th>
+                      <th className="px-4 py-3 text-left font-semibold">Detalle</th>
+                      <th className="px-4 py-3 text-right font-semibold">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredData.combined.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-500">{new Date(item.fecha || '').toLocaleDateString('es-NI')}</td>
+                        <td className="px-4 py-3 text-slate-600">{item.recibo || '-'}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                            {item.concepto}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-slate-700 truncate max-w-[180px]" title={item.detalle}>{item.detalle || '-'}</td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-900">{formatMoney(item.monto)}</td>
+                      </tr>
+                    ))}
+                    {filteredData.combined.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                          No hay registros en este periodo.
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </article>
+        </div>
+      </PanelShell>
+    </div>
   )
 }
 
@@ -316,26 +472,12 @@ export function RecepcionPanel() {
 }
 
 export function MensajesPanel() {
-  return (
-    <GenericModulePanel
-      title="Mensajes"
-      subtitle="Centro de comunicaciones y seguimiento de mensajes internos."
-      icon={Mail}
-      accent="from-cyan-50 via-sky-50 to-white"
-    />
-  )
+  return <ContactMessagesPanel />
 }
 
-export function AvisosPanel() {
-  return (
-    <GenericModulePanel
-      title="Noticias y avisos"
-      subtitle="Publicaciones visibles para la comunidad: anuncios, novedades y mensajes de dirección."
-      icon={Mail}
-      accent="from-amber-50 via-orange-50 to-white"
-    />
-  )
-}
+// export function AvisosPanel() {
+//   return <NoticiasPanel />
+// }
 
 export function AuditoriaPanel() {
   const { token } = useAuth()
@@ -692,8 +834,8 @@ export function getDashboardPanel(view: DashboardView, user?: AuthUser | null) {
       return <RecepcionPanel />
     case 'mensajes':
       return <MensajesPanel />
-    case 'noticias':
-      return <AvisosPanel />
+    // case 'noticias':
+    //   return <AvisosPanel />
     case 'settings':
       return <SettingsPanel />
     case 'auditoria':

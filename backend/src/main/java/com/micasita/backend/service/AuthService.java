@@ -35,12 +35,20 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Transactional(readOnly = true)
@@ -56,6 +64,9 @@ public class AuthService {
     private final JwtService jwtService;
     private final Path avatarDirectory;
     private final long maxAvatarBytes;
+
+    private record RecoveryData(String code, LocalDateTime expiry) {}
+    private final Map<String, RecoveryData> recoveryStore = new ConcurrentHashMap<>();
 
     public AuthService(
             UsuarioRepository usuarioRepository,
@@ -224,6 +235,66 @@ public class AuthService {
         usuarioRepository.save(usuario);
     }
 
+    @Transactional
+    public void requestPasswordReset(String email) {
+        if (isBlank(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El correo es obligatorio");
+        }
+
+        Usuario usuario = usuarioRepository.findByEmail(email.trim().toLowerCase(Locale.ROOT))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe un usuario con este correo"));
+
+        if (Boolean.FALSE.equals(usuario.getActivo())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_USER_INACTIVE");
+        }
+
+        // Generar código de 6 dígitos
+        String codigo = String.format("%06d", new Random().nextInt(999999));
+        recoveryStore.put(usuario.getEmail(), new RecoveryData(codigo, LocalDateTime.now().plusMinutes(5)));
+
+        sendRecoveryEmailToNodeService(usuario.getEmail(), usuario.getPersona().getNombre(), codigo);
+    }
+
+    @Transactional
+    public void resetPasswordWithCode(String email, String codigo, String newPassword) {
+        if (isBlank(email) || isBlank(codigo) || isBlank(newPassword)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Todos los campos son obligatorios");
+        }
+
+        String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
+        RecoveryData data = recoveryStore.get(normalizedEmail);
+
+        if (data == null || !data.code().equals(codigo.trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Código de recuperación inválido");
+        }
+
+        // Validar que el código no tenga más de 5 minutos
+        if (data.expiry().isBefore(LocalDateTime.now())) {
+            recoveryStore.remove(normalizedEmail);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El código ha expirado. Solicita uno nuevo.");
+        }
+
+        Usuario usuario = usuarioRepository.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+
+        // Validar seguridad de la nueva contraseña
+        String passwordPolicyError = IdentityValidationUtils.validateStrongPassword(
+                newPassword,
+                usuario.getEmail(),
+                usuario.getPersona().getNombre(),
+                usuario.getPersona().getApellido(),
+                usuario.getPersona().getIdentificador()
+        );
+        if (passwordPolicyError != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, passwordPolicyError);
+        }
+
+        // Actualizar la contraseña y limpiar el código
+        usuario.setPasswordHash(passwordEncoder.encode(newPassword));
+        usuarioRepository.save(usuario);
+        recoveryStore.remove(normalizedEmail);
+    }
+
     private AuthUserResponse buildUserResponse(Usuario usuario) {
         List<PersonaRoles> personaRoles = personaRolesRepository.findAllByPersonaId(usuario.getPersona().getId());
 
@@ -385,5 +456,22 @@ public class AuthService {
 
     private String defaultIfNull(String value, String defaultVal) {
         return value == null ? defaultVal : value;
+    }
+
+    private void sendRecoveryEmailToNodeService(String email, String nombre, String codigo) {
+        try {
+            String payload = String.format("{\"email\":\"%s\", \"nombre\":\"%s\", \"codigo\":\"%s\"}",
+                    email, nombre != null ? nombre : "Usuario", codigo);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:4000/api/auth/recover-password"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+
+            HttpClient.newHttpClient().sendAsync(request, HttpResponse.BodyHandlers.ofString());
+        } catch (Exception ex) {
+            log.error("Error al invocar el servicio de correos para recuperación de contraseña", ex);
+        }
     }
 }

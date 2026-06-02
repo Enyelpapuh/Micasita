@@ -29,6 +29,15 @@ function authHeaders(token: string | null) {
     : {}
 }
 
+export type CreateTutorPayload = {
+  nombre: string
+  apellido: string
+  correo?: string | null
+  telefono?: string | null
+  cedula?: string | null
+  direccion?: string | null
+}
+
 export type GrupoItem = {
   id: number
   nombre: string
@@ -46,6 +55,7 @@ export type EstudianteItem = {
   personaId?: number | null
   nombre?: string | null
   apellido?: string | null
+  grupos?: string[]
 }
 
 export type EstudianteDetailTutorItem = {
@@ -218,6 +228,14 @@ export async function updateEstudianteInformacionDocente(
   return response.data
 }
 
+export async function createTutor(token: string | null, payload: CreateTutorPayload): Promise<TutorItem> {
+  const response = await adminApi.post<TutorItem>('/academico/tutores', payload, {
+    headers: authHeaders(token),
+  })
+  
+  return response.data
+}
+
 export async function listProfesores(token: string | null): Promise<ProfesorItem[]> {
   const response = await adminApi.get<ProfesorItem[]>('/academico/catalogos/profesores', { headers: authHeaders(token) })
   return response.data
@@ -247,6 +265,13 @@ export async function inscribirEstudianteAsignatura(token: string | null, payloa
 
 export async function vincularEstudianteTutor(token: string | null, payload: { estudianteId: number; tutorId: number }) {
   await adminApi.post('/academico/estudiante-tutor', payload, { headers: authHeaders(token) })
+}
+
+export async function desvincularEstudianteTutor(token: string | null, estudianteId: number, tutorId: number) {
+  await adminApi.delete('/academico/estudiante-tutor', {
+    headers: authHeaders(token),
+    params: { estudianteId, tutorId }
+  })
 }
 
 export async function listEstadosAsistencia(token: string | null): Promise<EstadoAsistenciaItem[]> {

@@ -23,6 +23,8 @@ type ApiCupoTaller = {
   } | null
   participanteNombre?: string | null
   participanteApellido?: string | null
+  participanteTelefono?: string | null
+  participanteCorreo?: string | null
 }
 
 type ApiTaller = {
@@ -107,6 +109,8 @@ function toTallerModel(input: ApiTaller): Taller {
       idParticipante: cupo.participante?.id,
       participanteNombre: cupo.participanteNombre ?? null,
       participanteApellido: cupo.participanteApellido ?? null,
+      participanteTelefono: cupo.participanteTelefono ?? null,
+      participanteCorreo: cupo.participanteCorreo ?? null,
     })),
   }
 }
@@ -185,19 +189,20 @@ export function resolveTallerImageUrl(rutaImagen?: string | null): string {
     return ''
   }
 
-  if (rutaImagen.startsWith('http://') || rutaImagen.startsWith('https://')) {
-    return rutaImagen
+  // Normalizar: cambiar barras invertidas (\) por barras normales (/)
+  const normalizedPath = rutaImagen.replace(/\\/g, '/')
+
+  if (normalizedPath.startsWith('http://') || normalizedPath.startsWith('https://')) {
+    return normalizedPath
   }
 
-  if (rutaImagen.startsWith('/api/')) {
-    return `${API_ORIGIN}${rutaImagen}`
+  // Si la ruta ya empieza con / (ej. /uploads/... o /api/...)
+  if (normalizedPath.startsWith('/')) {
+    return `${API_ORIGIN}${normalizedPath}`
   }
 
-  if (rutaImagen.startsWith('/')) {
-    return `${API_ORIGIN}${rutaImagen}`
-  }
-
-  return new URL(rutaImagen, API_ORIGIN).toString()
+  // Para rutas relativas como 'uploads/talleres/imagen.jpg'
+  return `${API_ORIGIN}/${normalizedPath}`
 }
 
 export async function inscribirEnTaller(

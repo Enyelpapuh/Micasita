@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import axios from 'axios'
 import toast from 'react-hot-toast'
-import { Calendar, LoaderCircle, Pencil, Plus, Users } from 'lucide-react'
+import { Calendar, LoaderCircle, Pencil, Plus, Printer, Users } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { appPermissions, useAuthorization } from '../../auth/authorization'
 import { createTaller, getTalleres, resolveTallerImageUrl, updateTaller, uploadTallerImage } from '../talleres-view.api'
@@ -356,6 +357,82 @@ export function TalleresView() {
     }
   }
 
+  const imprimirListaInscritos = () => {
+    if (!inscritosTaller) return
+
+    const taller = inscritosTaller
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Lista de Inscritos - ${taller.nombre}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+          .header { margin-bottom: 20px; border-bottom: 2px solid #0f766e; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end; }
+          h2 { margin: 0; color: #0f766e; font-size: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+          th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 14px; }
+          th { background-color: #f8fafc; color: #334155; font-weight: bold; }
+          .info { margin: 4px 0 0 0; font-size: 13px; color: #555; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h2>${taller.nombre}</h2>
+            <p class="info">${taller.fechaInicial || 'Sin inicio'} al ${taller.fechaFinal || 'Sin cierre'} • ${taller.cupos.length}/${taller.cuposMaximos} cupos</p>
+          </div>
+          <div style="font-weight: bold; color: #333;">Lista de Inscritos</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px; text-align: center;">#</th>
+              <th>Nombre del Participante</th>
+              <th>Información de Contacto</th>
+              <th>Fecha Inscripción</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${taller.cupos.map((cupo, index) => {
+              const contacto = [cupo.participanteTelefono, cupo.participanteCorreo].filter(Boolean).join(' • ') || 'Sin información';
+              return `
+              <tr>
+                <td style="text-align: center;">${index + 1}</td>
+                <td>${formatInscrito(cupo)}</td>
+                <td>${contacto}</td>
+                <td>${cupo.fecha || 'Sin fecha'}</td>
+              </tr>
+              `;
+            }).join('')}
+            ${taller.cupos.length === 0 ? '<tr><td colspan="4" style="text-align:center;">Sin inscritos</td></tr>' : ''}
+          </tbody>
+        </table>
+        <footer style="margin-top: 30px; font-size: 12px; color: #64748b; text-align: center;">
+          Generado desde Mi Casita • ${new Date().toLocaleString('es-NI')}
+        </footer>
+      </body>
+      </html>
+    `
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast.error('No se pudo abrir la ventana de impresión. Permite popups.')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => {
+      try {
+        w.focus()
+        w.print()
+      } catch (e) {
+        // ignore
+      }
+    }, 300)
+  }
+
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -576,7 +653,7 @@ export function TalleresView() {
         </aside>
       </div>
 
-      {editing ? (
+      {editing ? createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <h3 className="text-xl font-semibold text-slate-900">
@@ -815,9 +892,9 @@ export function TalleresView() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
 
-      {inscritosTaller ? (
+      {inscritosTaller ? createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 px-4">
           <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
@@ -842,7 +919,7 @@ export function TalleresView() {
                 inscritosTaller.cupos.map((cupo) => (
                   <article key={cupo.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                     <p className="font-semibold text-slate-900">{formatInscrito(cupo)}</p>
-                    <p className="text-slate-600">Participante ID: {cupo.idParticipante ?? '-'}</p>
+                    <p className="text-slate-600">Contacto: {[cupo.participanteTelefono, cupo.participanteCorreo].filter(Boolean).join(' • ') || 'Sin información'}</p>
                     <p className="text-slate-500">Fecha inscripción: {cupo.fecha || 'Sin fecha'}</p>
                   </article>
                 ))
@@ -853,7 +930,15 @@ export function TalleresView() {
               )}
             </div>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={imprimirListaInscritos}
+                className="inline-flex items-center rounded-xl border border-teal-300 bg-white px-4 py-2 text-sm font-semibold text-teal-700 transition hover:bg-teal-50"
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir lista
+              </button>
               <button
                 type="button"
                 onClick={closeInscritos}
@@ -864,7 +949,7 @@ export function TalleresView() {
             </div>
           </div>
         </div>
-      ) : null}
+      , document.body) : null}
     </section>
   )
 }

@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -92,16 +93,34 @@ public class AcademicoController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
+    @DeleteMapping("/estudiante-tutor")
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION')")
+    public ResponseEntity<Void> desvincularEstudianteTutor(
+            @RequestParam Long estudianteId, 
+            @RequestParam Long tutorId) {
+        academicoService.desvincularEstudianteTutor(estudianteId, tutorId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/tutores")
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION')")
+    public ResponseEntity<AcademicoService.TutorSimpleItem> createTutor(@RequestBody AcademicoService.CreateTutorRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(academicoService.createTutor(request));
+    }
+
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR','CAJA')")
     @GetMapping("/catalogos/estudiantes")
     public ResponseEntity<List<AcademicoService.EstudianteSimpleItem>> listEstudiantes() {
         return ResponseEntity.ok(academicoService.listEstudiantes());
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR','CAJA')")
     @GetMapping("/catalogos/estudiantes/activos")
     public ResponseEntity<List<AcademicoService.EstudianteSimpleItem>> listEstudiantesActivos(@RequestParam(required = false) String anioLectivo) {
         return ResponseEntity.ok(academicoService.listEstudiantesActivos(anioLectivo));
     }
 
+    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR','CAJA')")
     @GetMapping("/catalogos/estudiantes/{estudianteId}/detalle")
     public ResponseEntity<AcademicoService.EstudianteDetailItem> getEstudianteDetalle(@PathVariable Long estudianteId) {
         return ResponseEntity.ok(academicoService.getEstudianteDetail(estudianteId));
