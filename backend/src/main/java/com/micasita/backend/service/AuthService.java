@@ -95,7 +95,7 @@ public class AuthService {
         }
 
         Usuario usuario = usuarioRepository.findByEmail(request.email().trim().toLowerCase(Locale.ROOT))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_USER_NOT_FOUND"));
 
         if (usuario.getIntentosFallidos() != null && usuario.getIntentosFallidos() >= 3) {
             usuario.setActivo(false);

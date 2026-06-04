@@ -78,7 +78,7 @@ public class AuditoriaController {
                     if ("DELETE".equalsIgnoreCase(o.getAccion())) accion = "ELIMINAR";
                     
                     String descripcion = "Registro alterado en la tabla " + o.getTablaAfectada();
-                    if ("Taller".equalsIgnoreCase(o.getTablaAfectada())) descripcion = "Actualización de datos de Taller (precios, descripción, etc)";
+                    if ("Taller".equalsIgnoreCase(o.getTablaAfectada())) descripcion = "Actualización de datos de Taller (activación, precios, fechas, etc)";
                     if ("Persona_Roles".equalsIgnoreCase(o.getTablaAfectada())) descripcion = "Asignación o revocación de un rol de sistema";
                     if ("Mensualidad".equalsIgnoreCase(o.getTablaAfectada())) descripcion = "Modificación o anulación en registro de pago de mensualidad";
                     if ("Pago_matricula".equalsIgnoreCase(o.getTablaAfectada())) descripcion = "Modificación o anulación en registro de pago de matrícula";

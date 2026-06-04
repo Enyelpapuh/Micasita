@@ -10,7 +10,7 @@ const baseNavLinks = [
   { label: 'Inicio', to: '/' },
   { label: '¿Qué es Mi casita?', to: '/' },
   { label: 'Talleres', to: '/talleres' },
-  { label: 'Noticias', to: '/' },
+  // { label: 'Noticias', to: '/' },
   { label: 'Conoce a nuestro equipo', to: '/equipo' },
   { label: 'Contacto', to: '/contacto' },
 ]

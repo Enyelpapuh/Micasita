@@ -23,7 +23,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 const API_MESSAGE_MAP: Record<string, string> = {
   AUTH_VALIDATION_REQUIRED_CREDENTIALS: 'Debes ingresar correo y contraseña.',
-  AUTH_INVALID_CREDENTIALS: 'Credenciales inválidas.',
+  AUTH_USER_NOT_FOUND: 'La cuenta de correo no existe en el sistema.',
+  AUTH_INVALID_CREDENTIALS: 'La contraseña es incorrecta.',
   AUTH_USER_BLOCKED_TOO_MANY_ATTEMPTS: 'Cuenta bloqueada temporalmente por demasiados intentos fallidos.',
   AUTH_USER_INACTIVE: 'Tu usuario está inactivo. Contacta a un administrador.',
   AUTH_SESSION_INVALID: 'La sesión no es válida. Inicia sesión de nuevo.',
@@ -146,7 +147,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (!cancelled) {
           setAuthState(nextAuthState)
         }
-      } catch {
+      } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 401 && error.response?.data?.message === 'AUTH_SESSION_INVALID') {
           window.dispatchEvent(new CustomEvent('session-expired'))
         }

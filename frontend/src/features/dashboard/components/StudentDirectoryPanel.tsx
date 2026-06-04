@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BookOpen, CalendarDays, ChevronRight, Mail, Phone, Search, Users, UserPlus, X, LoaderCircle } from 'lucide-react'
+import { BookOpen, CalendarDays, ChevronRight, Mail, Phone, Search, Users, UserPlus, X, LoaderCircle, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
+import axios from 'axios'
 import { normalizeApiError, useAuth } from '../../auth/AuthContext'
 import {
   getEstudianteDetail,
@@ -264,12 +265,22 @@ export function StudentDirectoryPanel() {
   const [loadingList, setLoadingList] = useState(true)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'general' | 'admin'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'admin' | 'documentos'>('general')
   const [isTutorModalOpen, setIsTutorModalOpen] = useState(false)
   const [tutorToUnlink, setTutorToUnlink] = useState<number | null>(null)
   const [isUnlinking, setIsUnlinking] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 12
+
+  type TipoDocumento = { id: number; nombre: string; esObligatorio: boolean }
+  type DocumentoEstudiante = { id: number; tipoDocumentoId: number; tipoDocumentoNombre: string; rutaArchivo: string; fechaRegistro: string }
+
+  const [documentos, setDocumentos] = useState<DocumentoEstudiante[]>([])
+  const [tiposDoc, setTiposDoc] = useState<TipoDocumento[]>([])
+  const [loadingDocs, setLoadingDocs] = useState(false)
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false)
+  const [docFile, setDocFile] = useState<File | null>(null)
+  const [selectedTipoDoc, setSelectedTipoDoc] = useState('')
 
   const canEditStudentNotes = useMemo(
     () => (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION', 'ADMIN_DIRECCION'].includes(role?.toUpperCase?.() ?? role)),
@@ -384,6 +395,74 @@ export function StudentDirectoryPanel() {
       setStudentObservacionDraft(selectedStudent.observacionMedicaCorta ?? '')
     }
   }, [selectedStudent])
+
+  useEffect(() => {
+    if (activeTab === 'documentos' && selectedStudentId && token) {
+      let cancelled = false
+      setLoadingDocs(true)
+      const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
+      
+      Promise.all([
+        axios.get(`${baseUrl}/admin/tipos-documento`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] })),
+        axios.get(`${baseUrl}/admin/estudiantes/${selectedStudentId}/documentos`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))
+      ]).then(([tiposRes, docsRes]) => {
+        if (!cancelled) {
+          setTiposDoc(tiposRes.data || [])
+          setDocumentos(docsRes.data || [])
+          setLoadingDocs(false)
+        }
+      })
+      return () => { cancelled = true }
+    }
+  }, [activeTab, selectedStudentId, token])
+
+  const handleUploadDocument = async () => {
+    if (!docFile || !selectedTipoDoc || !selectedStudentId) {
+      toast.error('Selecciona un tipo de documento y un archivo')
+      return
+    }
+    setIsUploadingDoc(true)
+    const formData = new FormData()
+    formData.append('file', docFile)
+    formData.append('tipoDocumentoId', selectedTipoDoc)
+
+    const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
+    try {
+      await axios.post(`${baseUrl}/admin/estudiantes/${selectedStudentId}/documentos`, formData, {
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' }
+      })
+      toast.success('Documento subido exitosamente')
+      setDocFile(null)
+      setSelectedTipoDoc('')
+      
+      const docsRes = await axios.get(`${baseUrl}/admin/estudiantes/${selectedStudentId}/documentos`, { headers: { Authorization: `Bearer ${token}` } })
+      setDocumentos(docsRes.data || [])
+    } catch (e) {
+      toast.error('Error al subir el documento')
+    } finally {
+      setIsUploadingDoc(false)
+    }
+  }
+
+  const handleDeleteDocument = async (docId: number) => {
+    const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
+    try {
+      await axios.delete(`${baseUrl}/admin/estudiantes/documentos/${docId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      toast.success('Documento eliminado')
+      setDocumentos(prev => prev.filter(d => d.id !== docId))
+    } catch (e) {
+      toast.error('Error al eliminar el documento')
+    }
+  }
+
+  const resolveDocUrl = (path: string) => {
+    if (!path) return '#'
+    if (path.startsWith('http')) return path
+    const base = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:8080'
+    return `${base}${path.startsWith('/') ? path : '/' + path}`
+  }
 
   const handleGuardarInformacionDocente = async () => {
     if (!selectedStudent) {
@@ -609,6 +688,12 @@ export function StudentDirectoryPanel() {
                         >
                           Administración
                         </button>
+                        <button
+                          onClick={() => setActiveTab('documentos')}
+                          className={`pb-2 text-sm font-semibold transition-colors ${activeTab === 'documentos' ? 'border-b-2 border-teal-600 text-teal-800' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                          Documentos
+                        </button>
                       </div>
                     ) : null}
                   </div>
@@ -675,7 +760,7 @@ export function StudentDirectoryPanel() {
                         </div>
                       </section>
                     </div>
-                  ) : (
+                ) : activeTab === 'admin' ? (
                     <div className="space-y-6">
                       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
                         <StudentMeta label="Fecha de nacimiento" value={formatDate(selectedSummary.fechaNacimiento)} />
@@ -771,6 +856,82 @@ export function StudentDirectoryPanel() {
                           </div>
                         </section>
                       </div>
+                    </div>
+                  ) : ( // Cierre de activeTab === 'admin'
+                    <div className="space-y-6">
+                      {canEditStudentNotes && (
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <SectionTitle title="Subir nuevo documento" subtitle="Adjunta un archivo (PDF, JPG, PNG) al expediente del estudiante" />
+                          <div className="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] items-end">
+                            <div>
+                              <label className="mb-1 block text-xs font-semibold text-slate-600">Tipo de documento</label>
+                              <select
+                                value={selectedTipoDoc}
+                                onChange={e => setSelectedTipoDoc(e.target.value)}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                              >
+                                <option value="">Seleccione un tipo</option>
+                                {tiposDoc.map(t => (
+                                  <option key={t.id} value={t.id}>{t.nombre} {t.esObligatorio ? '(Obligatorio)' : ''}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="mb-1 block text-xs font-semibold text-slate-600">Archivo</label>
+                              <input
+                                type="file"
+                                accept=".pdf,image/*"
+                                onChange={e => setDocFile(e.target.files?.[0] || null)}
+                                className="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-sm text-slate-600 file:mr-4 file:rounded-md file:border-0 file:bg-teal-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-teal-700 hover:file:bg-teal-100"
+                              />
+                            </div>
+                            <button
+                              onClick={handleUploadDocument}
+                              disabled={isUploadingDoc || !docFile || !selectedTipoDoc}
+                              className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 h-[38px] flex items-center justify-center min-w-[120px]"
+                            >
+                              {isUploadingDoc ? <LoaderCircle className="h-4 w-4 animate-spin" /> : 'Subir archivo'}
+                            </button>
+                          </div>
+                        </section>
+                      )}
+
+                      <section className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <SectionTitle title="Documentos adjuntos" subtitle="Archivos guardados en el expediente" />
+                        {loadingDocs ? (
+                          <div className="mt-4 py-8 text-center text-sm text-slate-500"><LoaderCircle className="mx-auto h-5 w-5 animate-spin" /></div>
+                        ) : documentos.length > 0 ? (
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            {documentos.map(doc => (
+                              <article key={doc.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3 shadow-sm">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-100 text-teal-700">
+                                    <FileText className="h-5 w-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="truncate font-semibold text-slate-900">{doc.tipoDocumentoNombre}</p>
+                                    <p className="text-xs text-slate-500">Subido el {formatDate(doc.fechaRegistro)}</p>
+                                  </div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <a href={resolveDocUrl(doc.rutaArchivo)} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition-colors">
+                                    Ver
+                                  </a>
+                                  {canEditStudentNotes && (
+                                    <button onClick={() => handleDeleteDocument(doc.id)} className="rounded-lg border border-rose-200 bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100 transition-colors" title="Eliminar documento">
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                            No hay documentos adjuntos.
+                          </div>
+                        )}
+                      </section>
                     </div>
                   )}
                 </div>

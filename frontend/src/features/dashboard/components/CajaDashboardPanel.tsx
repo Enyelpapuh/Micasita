@@ -1,7 +1,8 @@
-﻿﻿import { useEffect, useMemo, useState } from 'react'
+﻿﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, CreditCard, LoaderCircle, ReceiptText, UserCircle, Wallet, X, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
+import axios from 'axios'
 import { useAuth } from '../../auth/AuthContext'
 import { listEstudiantesActivos, type EstudianteItem } from './academico.api'
 import {
@@ -40,6 +41,16 @@ import MensualidadPaymentPanel from './MensualidadPaymentPanel'
 
 type CajaTab = 'talleres' | 'matricula' | 'mensualidad'
 type AnnulTargetType = 'taller' | 'matricula' | 'mensualidad'
+
+type PendingAnnulment = {
+  idUnico: string
+  type: AnnulTargetType
+  idElemento: number
+  label: string
+  monto: number
+  timestamp: string
+  status?: string
+}
 
 type AnnulModalState = {
   type: AnnulTargetType
@@ -363,6 +374,7 @@ function TalleresTab({
   metodosPago,
   busy,
   search,
+  pendingAnnulIds,
 }: {
   pendientes: CajaTallerPendienteItem[]
   pagos: CajaPagoTallerItem[]
@@ -373,6 +385,7 @@ function TalleresTab({
   metodosPago: MetodoPagoOption[]
   busy: boolean
   search?: string
+  pendingAnnulIds: number[]
 }) {
   const [selectedPendiente, setSelectedPendiente] = useState<CajaTallerPendienteItem | null>(null)
   const [selectedPago, setSelectedPago] = useState<CajaPagoTallerItem | null>(null)
@@ -632,13 +645,17 @@ function TalleresTab({
                     Ver
                   </button>
                   {!item.anulado ? (
-                    <button
-                      type="button"
-                      onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-                    >
-                      Anular
-                    </button>
+                    pendingAnnulIds.includes(item.pagoCupoId) ? (
+                      <span className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">En espera</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                      >
+                        Anular
+                      </button>
+                    )
                   ) : (
                     <span className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                   )}
@@ -662,6 +679,7 @@ function MatriculaTab({
   externalBusqueda,
   onPreviewMatricula,
   montoBaseSugerido,
+  pendingAnnulIds,
 }: {
   pendientes: CajaMatriculaPendienteItem[]
   pagos: CajaPagoMatriculaItem[]
@@ -672,6 +690,7 @@ function MatriculaTab({
   externalBusqueda?: string
   onPreviewMatricula?: (estudianteId: number) => Promise<import('./caja.api').MatriculaPreviewResponse | null>
   montoBaseSugerido?: number | null
+  pendingAnnulIds: number[]
 }) {
   const [busqueda, setBusqueda] = useState('')
   const [selectedMatricula, setSelectedMatricula] = useState<CajaMatriculaPendienteItem | null>(null)
@@ -838,13 +857,17 @@ function MatriculaTab({
                     Ver
                   </button>
                   {!item.anulado ? (
-                    <button
-                      type="button"
-                      onClick={() => onAnnul(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-                    >
-                      Anular
-                    </button>
+                    pendingAnnulIds.includes(item.pagoMatriculaId) ? (
+                      <span className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">En espera</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onAnnul(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                      >
+                        Anular
+                      </button>
+                    )
                   ) : (
                     <span className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                   )}
@@ -1101,6 +1124,7 @@ function MensualidadTab({
   estudiantesPendientesMensualidad,
   globalSearchTerm,
   onBuscarPendientes,
+  pendingAnnulIds,
 }: {
   mensualidades: CajaMensualidadItem[]
   mensualidadesPendientes: number
@@ -1129,6 +1153,7 @@ function MensualidadTab({
   estudiantesPendientesMensualidad?: ResumenPendientesMensualidadResponse[]
   globalSearchTerm?: string
   onBuscarPendientes?: (estudianteId: string) => void
+  pendingAnnulIds: number[]
 }) {
   const [selectedMensualidad, setSelectedMensualidad] = useState<CajaMensualidadItem | null>(null)
   const [showMensualidadPanel, setShowMensualidadPanel] = useState(false)
@@ -1331,13 +1356,17 @@ function MensualidadTab({
                     Ver
                   </button>
                   {!item.anulado ? (
-                    <button
-                      type="button"
-                      onClick={() => onAnnul(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
-                    >
-                      Anular
-                    </button>
+                    pendingAnnulIds.includes(item.mensualidadId) ? (
+                      <span className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">En espera</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onAnnul(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)}
+                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                      >
+                        Anular
+                      </button>
+                    )
                   ) : (
                     <span className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                   )}
@@ -1472,12 +1501,113 @@ export function CajaDashboardPanel() {
   const [annulReason, setAnnulReason] = useState('')
   const [historialModalOpen, setHistorialModalOpen] = useState(false)
   const [showPreCloseModal, setShowPreCloseModal] = useState(false)
+  const [pendingAnnulments, setPendingAnnulments] = useState<PendingAnnulment[]>([])
+  const [showPendingAnnulmentsModal, setShowPendingAnnulmentsModal] = useState(false)
   const [preCloseCounted, setPreCloseCounted] = useState('')
   const [preCloseCambioDevuelto, setPreCloseCambioDevuelto] = useState('0')
   const [showOpenSessionModal, setShowOpenSessionModal] = useState(false)
-  const [periodFilter, setPeriodFilter] = useState<'hoy' | 'todo'>('hoy')
+  const [periodFilter, setPeriodFilter] = useState<'mi_caja' | 'hoy_todos' | 'todo'>('mi_caja')
   const [historialTipoFiltro, setHistorialTipoFiltro] = useState<'todos' | 'Taller' | 'Matrícula' | 'Mensualidad'>('todos')
   const [historialFechaFiltro, setHistorialFechaFiltro] = useState('')
+
+  const selfRequestedIdsRef = useRef<Set<string>>(new Set())
+  const initialPendingLoadRef = useRef(false)
+  const prevPendingIdsRef = useRef<string[]>([])
+  const [waitingAnnulmentId, setWaitingAnnulmentId] = useState<string | null>(null)
+  const waitingAnnulmentIdRef = useRef<string | null>(null)
+
+  const setWaitingId = (id: string | null) => {
+    setWaitingAnnulmentId(id)
+    waitingAnnulmentIdRef.current = id
+  }
+
+  const loadPendingAnnulments = async () => {
+    if (!token) return
+    try {
+      const url = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api') + '/admin/caja/anulaciones-temporales'
+      const res = await axios.get<PendingAnnulment[]>(url, { headers: { Authorization: `Bearer ${token}` } })
+      let currentData = res.data
+
+      const currentWaitingId = waitingAnnulmentIdRef.current
+      if (currentWaitingId) {
+        const waitingItem = currentData.find(p => p.idUnico === currentWaitingId)
+        if (waitingItem) {
+          if (waitingItem.status === 'AUTORIZADO') {
+            setWaitingId(null)
+            await syncRemoveAnnulment(waitingItem.idUnico)
+            setAnnulReason('')
+            setAnnulModal({ type: waitingItem.type, id: waitingItem.idElemento, label: waitingItem.label, monto: waitingItem.monto })
+            currentData = currentData.filter(p => p.idUnico !== currentWaitingId)
+          } else if (waitingItem.status === 'RECHAZADO') {
+            setWaitingId(null)
+            await syncRemoveAnnulment(waitingItem.idUnico)
+            toast.error('La anulación fue rechazada por el administrador.')
+            currentData = currentData.filter(p => p.idUnico !== currentWaitingId)
+          }
+        } else {
+          setWaitingId(null)
+        }
+      }
+
+      if (initialPendingLoadRef.current) {
+        const oldIds = prevPendingIdsRef.current
+        const newItems = currentData.filter(item => !oldIds.includes(item.idUnico) && !selfRequestedIdsRef.current.has(item.idUnico))
+        
+        const adminCheck = Boolean(user?.roles?.some((role) => ['ADMIN', 'DEVELOPER'].includes(role.toUpperCase())))
+        if (newItems.length > 0 && adminCheck) {
+          toast('🔔 Nueva solicitud de anulación en espera', { 
+            duration: 6000,
+            style: { background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontWeight: 'bold' }
+          })
+        }
+      } else {
+        initialPendingLoadRef.current = true
+      }
+
+      prevPendingIdsRef.current = currentData.map(p => p.idUnico)
+      setPendingAnnulments(currentData.filter(p => p.status === 'PENDIENTE' || !p.status))
+    } catch (e) {
+      // Silencioso para el polling en fondo
+    }
+  }
+
+  useEffect(() => {
+    void loadPendingAnnulments()
+    const interval = setInterval(() => { void loadPendingAnnulments() }, 5000)
+    return () => clearInterval(interval)
+  }, [token])
+
+  const syncAddAnnulment = async (item: PendingAnnulment) => {
+    try {
+      const url = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api') + '/admin/caja/anulaciones-temporales'
+      selfRequestedIdsRef.current.add(item.idUnico)
+      await axios.post(url, { ...item, status: 'PENDIENTE' }, { headers: { Authorization: `Bearer ${token}` } })
+      setWaitingId(item.idUnico)
+      await loadPendingAnnulments()
+    } catch (e) {
+      toast.error('Error al enviar la solicitud.')
+    }
+  }
+
+  const syncUpdateAnnulmentStatus = async (idUnico: string, status: string) => {
+    try {
+      const url = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api') + `/admin/caja/anulaciones-temporales/${idUnico}/status`
+      await axios.put(url, { status }, { headers: { Authorization: `Bearer ${token}` } })
+      await loadPendingAnnulments()
+    } catch (e) {
+      toast.error('Error al actualizar estado.')
+    }
+  }
+
+  const syncRemoveAnnulment = async (idUnico: string) => {
+    try {
+      const url = (import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api') + `/admin/caja/anulaciones-temporales/${idUnico}`
+      await axios.delete(url, { headers: { Authorization: `Bearer ${token}` } })
+      await loadPendingAnnulments()
+    } catch (e) {
+      toast.error('Error al procesar la solicitud.')
+    }
+  }
 
   const moraPeriodosSugeridos = useMemo(
     () => calculateMoraPeriods(mensualidadMes, mensualidadDiaLimitePago),
@@ -1532,21 +1662,21 @@ export function CajaDashboardPanel() {
   const diferenciaPreCierre = efectivoContadoPreCierre - efectivoEsperadoPreCierre
 
   const pagosTallerSource = useMemo(() => {
-    if (periodFilter === 'todo') {
+    if (periodFilter !== 'mi_caja') {
       return generalHistorialData?.pagosTaller ?? []
     }
     return data?.pagosTaller ?? []
   }, [data, generalHistorialData, periodFilter])
 
   const pagosMatriculaSource = useMemo(() => {
-    if (periodFilter === 'todo') {
+    if (periodFilter !== 'mi_caja') {
       return generalHistorialData?.pagosMatricula ?? []
     }
     return data?.pagosMatricula ?? []
   }, [data, generalHistorialData, periodFilter])
 
   const mensualidadesSource = useMemo(() => {
-    if (periodFilter === 'todo') {
+    if (periodFilter !== 'mi_caja') {
       return generalHistorialData?.mensualidades ?? []
     }
     return data?.mensualidades ?? []
@@ -1606,14 +1736,6 @@ export function CajaDashboardPanel() {
     })
   }, [historialGeneral, searchTerm, historialTipoFiltro, historialFechaFiltro])
 
-  const totalCobradoTalleres = sumPaid(data?.pagosTaller ?? [])
-  const totalCobradoMatriculas = sumPaid(data?.pagosMatricula ?? [])
-  const totalCobradoMensualidades = sumPaid(data?.mensualidades ?? [])
-  // totalCobradoGeneral available if needed: totalCobradoTalleres + totalCobradoMatriculas + totalCobradoMensualidades
-  const anulacionesTotales =
-    countAnnulled(data?.pagosTaller ?? []) +
-    countAnnulled(data?.pagosMatricula ?? []) +
-    countAnnulled(data?.mensualidades ?? [])
 
   const loadData = async () => {
     setIsLoading(true)
@@ -1665,7 +1787,7 @@ export function CajaDashboardPanel() {
   }, [token])
 
   useEffect(() => {
-    if (periodFilter !== 'todo') {
+    if (periodFilter === 'mi_caja') {
       return
     }
     if (generalHistorialData) {
@@ -1678,7 +1800,7 @@ export function CajaDashboardPanel() {
   const refreshAll = async () => {
     const newData = await loadData()
     setGeneralHistorialData(null)
-    if (periodFilter === 'todo') {
+    if (periodFilter !== 'mi_caja') {
       await loadGeneralHistorialData()
     }
     return newData
@@ -1833,34 +1955,16 @@ export function CajaDashboardPanel() {
     await runAction(`annul-mensualidad-${mensualidadId}`, () => annulPagoMensualidad(token, mensualidadId, { motivo }))
   }
 
-  const requestAnnulTaller = (pagoCupoId: number, numeroRecibo: string, monto: number) => {
-    setAnnulReason('')
-    setAnnulModal({
-      type: 'taller',
-      id: pagoCupoId,
-      label: numeroRecibo || String(pagoCupoId),
-      monto,
-    })
+  const requestAnnulTaller = async (pagoCupoId: number, numeroRecibo: string, monto: number) => {
+    await syncAddAnnulment({ idUnico: `taller-${pagoCupoId}`, type: 'taller', idElemento: pagoCupoId, label: numeroRecibo || String(pagoCupoId), monto, timestamp: new Date().toISOString() })
   }
 
-  const requestAnnulMatricula = (pagoMatriculaId: number, numeroRecibo: string, monto: number) => {
-    setAnnulReason('')
-    setAnnulModal({
-      type: 'matricula',
-      id: pagoMatriculaId,
-      label: numeroRecibo || String(pagoMatriculaId),
-      monto,
-    })
+  const requestAnnulMatricula = async (pagoMatriculaId: number, numeroRecibo: string, monto: number) => {
+    await syncAddAnnulment({ idUnico: `matricula-${pagoMatriculaId}`, type: 'matricula', idElemento: pagoMatriculaId, label: numeroRecibo || String(pagoMatriculaId), monto, timestamp: new Date().toISOString() })
   }
 
-  const requestAnnulMensualidad = (mensualidadId: number, numeroRecibo: string, monto: number) => {
-    setAnnulReason('')
-    setAnnulModal({
-      type: 'mensualidad',
-      id: mensualidadId,
-      label: numeroRecibo || String(mensualidadId),
-      monto,
-    })
+  const requestAnnulMensualidad = async (mensualidadId: number, numeroRecibo: string, monto: number) => {
+    await syncAddAnnulment({ idUnico: `mensualidad-${mensualidadId}`, type: 'mensualidad', idElemento: mensualidadId, label: numeroRecibo || String(mensualidadId), monto, timestamp: new Date().toISOString() })
   }
 
   const closeAnnulModal = () => {
@@ -1898,6 +2002,10 @@ export function CajaDashboardPanel() {
   const isAnnulBusy = annulModal ? busyAction === `annul-${annulModal.type}-${annulModal.id}` : false
 
   const metricas = data?.metricas
+  
+  const pendingTallerIds = useMemo(() => pendingAnnulments.filter(p => p.type === 'taller').map(p => p.idElemento), [pendingAnnulments])
+  const pendingMatriculaIds = useMemo(() => pendingAnnulments.filter(p => p.type === 'matricula').map(p => p.idElemento), [pendingAnnulments])
+  const pendingMensualidadIds = useMemo(() => pendingAnnulments.filter(p => p.type === 'mensualidad').map(p => p.idElemento), [pendingAnnulments])
 
   const tabs = useMemo(
     () => [
@@ -2081,11 +2189,12 @@ export function CajaDashboardPanel() {
 
         <select
           value={periodFilter}
-          onChange={(e) => setPeriodFilter(e.target.value as 'hoy' | 'todo')}
+          onChange={(e) => setPeriodFilter(e.target.value as 'mi_caja' | 'hoy_todos' | 'todo')}
           className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
         >
-          <option value="hoy">Movimientos de hoy</option>
-          <option value="todo">Todo el tiempo</option>
+          <option value="mi_caja">Mi caja (Hoy)</option>
+          <option value="hoy_todos">General (Hoy todas las cajas)</option>
+          <option value="todo">General (Histórico completo)</option>
         </select>
 
         <select
@@ -2107,24 +2216,43 @@ export function CajaDashboardPanel() {
         />
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
-        {tabs.map(({ id, label, icon: Icon }) => {
-          const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-            >
-              <Icon className="mr-2 h-4 w-4" />
-              {label}
-              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
-                {count}
-              </span>
-            </button>
-          )
-        })}
+      <div className="mt-6 flex flex-wrap gap-2 justify-between items-center">
+        <div className="flex flex-wrap gap-2">
+          {tabs.map(({ id, label, icon: Icon }) => {
+            const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+              >
+                <Icon className="mr-2 h-4 w-4" />
+                {label}
+                <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
+                  {count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        
+        {pendingAnnulments.length > 0 && (
+          <button
+            onClick={() => setShowPendingAnnulmentsModal(true)}
+            className={`inline-flex items-center rounded-xl border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
+              isCajaAdmin 
+                ? 'border-rose-400 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                : 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100'
+            }`}
+          >
+            <span className="relative flex h-3 w-3 mr-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCajaAdmin ? 'bg-rose-400' : 'bg-amber-400'}`}></span>
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${isCajaAdmin ? 'bg-rose-500' : 'bg-amber-500'}`}></span>
+            </span>
+            {isCajaAdmin ? `Autorizar anulaciones (${pendingAnnulments.length})` : `Anulaciones en espera (${pendingAnnulments.length})`}
+          </button>
+        )}
       </div>
 
       <div className="mt-4">
@@ -2154,6 +2282,7 @@ export function CajaDashboardPanel() {
                     metodosPago={metodosPago}
                     busy={busyAction?.startsWith('pay-taller-') || busyAction?.startsWith('annul-taller-') || false}
                     search={searchTerm}
+                      pendingAnnulIds={pendingTallerIds}
                   />
                 ) : null}
 
@@ -2175,6 +2304,7 @@ export function CajaDashboardPanel() {
                       }
                     }}
                     montoBaseSugerido={tarifas?.montoMatriculaBase ?? null}
+                      pendingAnnulIds={pendingMatriculaIds}
                   />
                 ) : null}
 
@@ -2220,6 +2350,7 @@ export function CajaDashboardPanel() {
                     onPay={handlePayMensualidad}
                     onAnnul={requestAnnulMensualidad}
                     metodosPago={metodosPago}
+                    pendingAnnulIds={pendingMensualidadIds}
                   />
                 ) : null}
               </div>
@@ -2267,21 +2398,34 @@ export function CajaDashboardPanel() {
                             <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Imprimir</button>
                             <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Descargar</button>
                                   {!item.anulado ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (item.pagoCupoId) {
-                                          requestAnnulTaller(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)
-                                        } else if (item.pagoMatriculaId) {
-                                          requestAnnulMatricula(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)
-                                        } else if (item.mensualidadId) {
-                                          requestAnnulMensualidad(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)
-                                        }
-                                      }}
-                                      className="ml-auto rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
-                                    >
-                                      Anular
-                                    </button>
+                                    (() => {
+                                      const isPending = 
+                                        (item.pagoCupoId && pendingTallerIds.includes(item.pagoCupoId)) ||
+                                        (item.pagoMatriculaId && pendingMatriculaIds.includes(item.pagoMatriculaId)) ||
+                                        (item.mensualidadId && pendingMensualidadIds.includes(item.mensualidadId));
+                                      
+                                      if (isPending) {
+                                        return <span className="ml-auto rounded-xl bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">En espera</span>;
+                                      }
+                                      
+                                      return (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (item.pagoCupoId) {
+                                              requestAnnulTaller(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)
+                                            } else if (item.pagoMatriculaId) {
+                                              requestAnnulMatricula(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)
+                                            } else if (item.mensualidadId) {
+                                              requestAnnulMensualidad(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)
+                                            }
+                                          }}
+                                          className="ml-auto rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+                                        >
+                                          Anular
+                                        </button>
+                                      )
+                                    })()
                                   ) : (
                                     <span className="ml-auto rounded-xl bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
                                   )}
@@ -2586,6 +2730,96 @@ export function CajaDashboardPanel() {
                   </div>
                 ) : null}
               </div>
+            </div>
+          </div>
+        , document.body) : null}
+
+        {showPendingAnnulmentsModal ? createPortal(
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setShowPendingAnnulmentsModal(false)} />
+            <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900">Anulaciones en Espera</h4>
+                  <p className="text-sm text-slate-600">
+                    {isCajaAdmin ? 'Confirma o rechaza las anulaciones solicitadas por caja.' : 'Solicitudes enviadas esperando la aprobación de un administrador.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPendingAnnulmentsModal(false)}
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3 max-h-[60vh] overflow-y-auto">
+            {pendingAnnulments.map((req) => (
+              <article key={req.idUnico} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                    <div>
+                      <p className="font-bold text-slate-900">Recibo: {req.label}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tipo: {req.type}</p>
+                      <p className="mt-1 font-semibold text-rose-700">Monto a devolver: {formatMoney(req.monto)}</p>
+                    </div>
+                    <div className="flex gap-2 sm:shrink-0">
+                      {isCajaAdmin ? (
+                        <>
+                          <button 
+                            onClick={async () => {
+                              await syncUpdateAnnulmentStatus(req.idUnico, 'AUTORIZADO');
+                              toast.success('Anulación autorizada');
+                            }}
+                            className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700"
+                          >
+                            Autorizar
+                          </button>
+                          <button 
+                            onClick={async () => {
+                              await syncUpdateAnnulmentStatus(req.idUnico, 'RECHAZADO');
+                              toast.success('Anulación rechazada');
+                            }}
+                            className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Rechazar
+                          </button>
+                        </>
+                      ) : (
+                        <div className="flex items-center rounded-xl bg-white/50 px-4 py-2 text-sm font-medium text-amber-800 border border-amber-200">
+                          <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                          Esperando revisión...
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+                {pendingAnnulments.length === 0 && (
+                  <p className="text-center text-sm text-slate-500 py-4">No hay anulaciones en espera.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        , document.body) : null}
+
+        {waitingAnnulmentId ? createPortal(
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" />
+            <div className="relative w-full max-w-sm rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-8 shadow-2xl text-center">
+              <LoaderCircle className="mx-auto h-10 w-10 animate-spin text-amber-500 mb-4" />
+              <h4 className="text-xl font-bold text-slate-900">Esperando autorización</h4>
+              <p className="mt-2 text-sm text-slate-600">
+                El administrador debe confirmar esta anulación. Por favor espera...
+              </p>
+              <button
+                type="button"
+                onClick={async () => {
+                  await syncRemoveAnnulment(waitingAnnulmentId);
+                  setWaitingId(null);
+                }}
+                className="mt-6 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar solicitud
+              </button>
             </div>
           </div>
         , document.body) : null}

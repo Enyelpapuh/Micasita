@@ -49,7 +49,7 @@ import java.util.Objects;
 import java.time.LocalDate;
 import java.util.List;
 
-@Component
+// @Component
 public class DataInitializer implements CommandLineRunner {
 
     private final PersonaRepository personaRepository;
@@ -729,4 +729,3 @@ public class DataInitializer implements CommandLineRunner {
             .build());
         }
 }
-

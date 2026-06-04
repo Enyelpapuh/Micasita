@@ -4,7 +4,6 @@ import {
   Camera,
   Eye,
   EyeOff,
-  LayoutDashboard,
   LoaderCircle,
   Printer,
   PlusCircle,
@@ -34,10 +33,9 @@ import { AcademicoAsistenciaPanel, AcademicoGestionPanel, AcademicoNotasPanel } 
 import { StudentDirectoryPanel } from './StudentDirectoryPanel'
 import { useAuth } from '../../auth/AuthContext'
 import axios from 'axios'
-import type { RendimientoSistemaDTO } from '../../../dto/audit/RendimientoSistemaDTO'
 import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar } from './settings.api'
 import { CajaDashboardPanel } from './CajaDashboardPanel'
-import { getCajaDashboard } from './caja.api'
+import { getCajaHistorialGeneral } from './caja.api'
 import { AdminFinanzasPanel } from './AdminFinanzasPanel'
 import { ContactMessagesPanel } from './ContactMessagesPanel'
 import { AuditLogDetailModal } from './AuditLogDetailModal'
@@ -94,9 +92,7 @@ function formatMoney(value?: number | null) {
 
 export function OverviewPanel({ user }: DashboardPanelProps) {
   const { token } = useAuth()
-  const [cajaResumen, setCajaResumen] = useState<Awaited<ReturnType<typeof getCajaDashboard>> | null>(null)
-  const [loadingResumen, setLoadingResumen] = useState(false)
-  const [resumenError, setResumenError] = useState<string | null>(null)
+  const [cajaResumen, setCajaResumen] = useState<Awaited<ReturnType<typeof getCajaHistorialGeneral>> | null>(null)
   const [periodFilter, setPeriodFilter] = useState<'7' | '15' | '30' | 'all'>('30')
 
   useEffect(() => {
@@ -108,23 +104,12 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
         return
       }
 
-      setLoadingResumen(true)
-      setResumenError(null)
-
       try {
-        // Pedimos más historial para poder filtrar localmente hasta 1 mes o más
-        const dashboard = await getCajaDashboard(token, 1000)
+        const dashboard = await getCajaHistorialGeneral(token)
         if (!cancelled) {
           setCajaResumen(dashboard)
         }
       } catch {
-        if (!cancelled) {
-          setResumenError('No se pudo cargar el resumen financiero.')
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingResumen(false)
-        }
       }
     }
 
