@@ -44,6 +44,13 @@ public class AuthController {
     }
 
     @PreAuthorize("isAuthenticated()")
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(Authentication authentication) {
+        authService.logout(authentication.getName());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PreAuthorize("isAuthenticated()")
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(Authentication authentication, @RequestBody ChangePasswordRequest request) {
         authService.changePassword(authentication.getName(), request);

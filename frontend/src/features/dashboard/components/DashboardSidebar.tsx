@@ -365,6 +365,6 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'auditoria',
     category: 'ajustes',
     permission: 'DASHBOARD_AUDITORIA',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'DEVELOPER', 'ADMINISTRACION'],
   },
 ]

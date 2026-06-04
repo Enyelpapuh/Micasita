@@ -2,6 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, Eye, EyeOff, LockKeyhole, Mail } from 'lucide-react'
 import { useAuth } from './AuthContext'
+import { Toaster } from 'react-hot-toast'
+import logo from '../../assets/MiCASITALOGO-cropped.svg'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -45,11 +47,23 @@ export function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.18),_transparent_32%),linear-gradient(135deg,_#0f172a_0%,_#042f2e_45%,_#08111f_100%)] px-4 py-10 text-slate-100 sm:px-6 lg:px-8">
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 6000,
+          style: {
+            borderRadius: '0.75rem',
+          },
+        }}
+      />
       <div className="mx-auto w-full max-w-md">
 
 
         <section className="rounded-[2rem] border border-white/10 bg-slate-950/75 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-8">
-          <div className="mb-8">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center overflow-hidden rounded-2xl bg-white/10 p-3 shadow-inner">
+              <img src={logo} alt="Mi Casita Logo" className="h-full w-full object-contain" />
+            </div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-teal-200">Inicio de sesion</p>
             <h1 className="mt-2 text-3xl font-semibold text-white">Entra al panel</h1>
             <p className="mt-2 text-sm leading-6 text-slate-400">Ingresa tus credenciales para acceder al sistema del centro.</p>

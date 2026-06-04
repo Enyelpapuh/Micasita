@@ -32,4 +32,10 @@ public class Usuario {
 
     @Column(name = "Activo", nullable = false, columnDefinition = "BOOLEAN DEFAULT true")
     private Boolean activo;
+
+    @Column(name = "Intentos_Fallidos", nullable = false, columnDefinition = "INT DEFAULT 0")
+    private Integer intentosFallidos = 0;
+
+    @Column(name = "Token_Version", nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    private Long tokenVersion = 0L;
 }

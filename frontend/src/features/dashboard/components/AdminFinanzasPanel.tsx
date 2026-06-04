@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 import { useAuth } from '../../auth/AuthContext'
 import { getFinanzasConfig, updateFinanzasConfig, type ConfiguracionFinanzasDto } from './caja.api'
 
@@ -52,9 +53,11 @@ export function AdminFinanzasPanel() {
       const result = await updateFinanzasConfig(token, config)
       setConfig(result)
       setError(null)
+      toast.success('Configuración guardada correctamente')
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'No se pudo guardar la configuración'
       setError(msg)
+      toast.error(msg)
       console.error('Error al guardar configuración:', e)
     } finally {
       setBusy(false)

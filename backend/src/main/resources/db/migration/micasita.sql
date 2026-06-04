@@ -102,7 +102,9 @@ CREATE TABLE `Usuario` (
   `Password_hash` NVARCHAR(255) NOT NULL,
   `Path_avatar` NVARCHAR(255),
   `Activo` BOOLEAN DEFAULT true,
-  FOREIGN KEY (`ID_persona`) REFERENCES `Persona`(`ID_persona`)
+  FOREIGN KEY (`ID_persona`) REFERENCES `Persona`(`ID_persona`),
+  `Intentos_Fallidos` INT NOT NULL DEFAULT 0,
+  `Token_Version` BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE `Persona_Roles` (
@@ -481,8 +483,11 @@ CREATE TABLE Log_Auditoria (
     Valor_Anterior NVARCHAR(MAX) NULL,             -- Cambiado de TEXT a NVARCHAR(MAX)
     Valor_Nuevo NVARCHAR(MAX) NULL,                -- Cambiado de TEXT a NVARCHAR(MAX)
     Fecha_Hora DATETIME2 DEFAULT SYSDATETIME(),   -- Precisión de fecha recomendada
-    IP_Terminal NVARCHAR(45) NULL
+    IP_Terminal NVARCHAR(45) NULL,
+    campos_modificados NVARCHAR(MAX) NULL,             -- Lista de campos modificados (solo para UPDATE, formato: "Campo1,Campo2")
+    Navegador_Cliente NVARCHAR(255) NULL          -- Dispositivo/Navegador desde donde se hizo el cambio
 );
+
 CREATE TABLE Anuncio (
     ID_anuncio INT IDENTITY(1,1) PRIMARY KEY,
     Titulo NVARCHAR(150) NOT NULL,
@@ -521,15 +526,23 @@ BEGIN
     -- CASO 1: SE ACTUALIZÓ UN REGISTRO (Ej: Se anuló un pago o cambió el monto)
     IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
-        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal)
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
         SELECT 
-            i.ID_usuario, -- Registra al usuario responsable 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), -- Usuario REAL de la sesión
             'Mensualidad',
             i.ID_pago_mensualidad,
             'UPDATE',
             (SELECT d.Monto_Base, d.Monto_Mora, d.ID_estado_pago, d.Es_Anulado, d.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
             (SELECT i.Monto_Base, i.Monto_Mora, i.ID_estado_pago, i.Es_Anulado, i.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
-            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45))
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (
+                SELECT 
+                    CASE WHEN ISNULL(d.Monto_Base,0) <> ISNULL(i.Monto_Base,0) THEN 'Monto_Base' ELSE NULL END AS Monto_Base,
+                    CASE WHEN ISNULL(d.ID_estado_pago,0) <> ISNULL(i.ID_estado_pago,0) THEN 'ID_estado_pago' ELSE NULL END AS ID_estado_pago,
+                    CASE WHEN ISNULL(d.Es_Anulado,0) <> ISNULL(i.Es_Anulado,0) THEN 'Es_Anulado' ELSE NULL END AS Es_Anulado
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            )
         FROM inserted i
         INNER JOIN deleted d ON i.ID_pago_mensualidad = d.ID_pago_mensualidad;
     END
@@ -537,15 +550,16 @@ BEGIN
     -- CASO 2: SE ELIMINÓ UN REGISTRO (Alerta de riesgo crítico)
     IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
-        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal)
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
         SELECT 
-            d.ID_usuario,
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
             'Mensualidad',
             d.ID_pago_mensualidad,
             'DELETE',
             (SELECT d.Monto_Base, d.Monto_Mora, d.ID_estado_pago, d.Es_Anulado, d.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
             NULL,
-            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45))
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
         FROM deleted d;
     END
 END;
@@ -564,15 +578,23 @@ BEGIN
     -- CASO 1: ACTUALIZACIÓN
     IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
-        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal)
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
         SELECT 
-            i.ID_usuario,
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
             'Pago_matricula',
             i.ID_pago_matricula,
             'UPDATE',
             (SELECT d.Monto, d.ID_estado_pago, d.Es_Anulado, d.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
             (SELECT i.Monto, i.ID_estado_pago, i.Es_Anulado, i.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
-            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45))
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (
+                SELECT 
+                    CASE WHEN ISNULL(d.Monto,0) <> ISNULL(i.Monto,0) THEN 'Monto' ELSE NULL END AS Monto,
+                    CASE WHEN ISNULL(d.ID_estado_pago,0) <> ISNULL(i.ID_estado_pago,0) THEN 'ID_estado_pago' ELSE NULL END AS ID_estado_pago,
+                    CASE WHEN ISNULL(d.Es_Anulado,0) <> ISNULL(i.Es_Anulado,0) THEN 'Es_Anulado' ELSE NULL END AS Es_Anulado
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            )
         FROM inserted i
         INNER JOIN deleted d ON i.ID_pago_matricula = d.ID_pago_matricula;
     END
@@ -580,15 +602,16 @@ BEGIN
     -- CASO 2: ELIMINACIÓN
     IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
-        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal)
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
         SELECT 
-            d.ID_usuario,
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
             'Pago_matricula',
             d.ID_pago_matricula,
             'DELETE',
             (SELECT d.Monto, d.ID_estado_pago, d.Es_Anulado, d.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
             NULL,
-            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45))
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
         FROM deleted d;
     END
 END;
@@ -607,15 +630,23 @@ BEGIN
     -- CASO 1: ACTUALIZACIÓN
     IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
-        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal)
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
         SELECT 
-            i.ID_usuario,
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
             'Pago_cupo',
             i.ID_pago_cupo,
             'UPDATE',
             (SELECT d.Monto, d.ID_estado_pago, d.Es_Anulado, d.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
             (SELECT i.Monto, i.ID_estado_pago, i.Es_Anulado, i.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
-            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45))
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (
+                SELECT 
+                    CASE WHEN ISNULL(d.Monto,0) <> ISNULL(i.Monto,0) THEN 'Monto' ELSE NULL END AS Monto,
+                    CASE WHEN ISNULL(d.ID_estado_pago,0) <> ISNULL(i.ID_estado_pago,0) THEN 'ID_estado_pago' ELSE NULL END AS ID_estado_pago,
+                    CASE WHEN ISNULL(d.Es_Anulado,0) <> ISNULL(i.Es_Anulado,0) THEN 'Es_Anulado' ELSE NULL END AS Es_Anulado
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            )
         FROM inserted i
         INNER JOIN deleted d ON i.ID_pago_cupo = d.ID_pago_cupo;
     END
@@ -623,20 +654,69 @@ BEGIN
     -- CASO 2: ELIMINACIÓN
     IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
     BEGIN
-        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal)
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
         SELECT 
-            d.ID_usuario,
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
             'Pago_cupo',
             d.ID_pago_cupo,
             'DELETE',
             (SELECT d.Monto, d.ID_estado_pago, d.Es_Anulado, d.Numero_Recibo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
             NULL,
-            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45))
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
         FROM deleted d;
     END
 END;
 GO
+
+CREATE TRIGGER TR_Auditoria_Usuario
+ON Usuario
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- CASO 1: INSERT
+    IF EXISTS(SELECT * FROM inserted) AND NOT EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
+            'Usuario', i.ID_usuario, 'INSERT',
+            (SELECT i.Email, i.Activo, i.ID_persona FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i;
+    END
+
+    -- CASO 2: UPDATE
+    IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
+            'Usuario', i.ID_usuario, 'UPDATE',
+            (SELECT d.Email, d.Activo, d.ID_persona FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            (SELECT i.Email, i.Activo, i.ID_persona FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i
+        INNER JOIN deleted d ON i.ID_usuario = d.ID_usuario;
+    END
+
+    -- CASO 3: DELETE
+    IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
+            'Usuario', d.ID_usuario, 'DELETE',
+            (SELECT d.Email, d.Activo, d.ID_persona FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM deleted d;
+    END
+END;
+GO
+
+
 SET FOREIGN_KEY_CHECKS = 1;
 /*Tabla sin conexiones */
-
 

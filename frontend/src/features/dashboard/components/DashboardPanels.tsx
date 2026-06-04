@@ -1,6 +1,20 @@
 import { useEffect, useState, useMemo, type ChangeEvent, type ReactNode } from 'react'
 import toast from 'react-hot-toast'
-import { Camera, Eye, EyeOff, LayoutDashboard, LoaderCircle, Printer } from 'lucide-react'
+import {
+  Camera,
+  Eye,
+  EyeOff,
+  LayoutDashboard,
+  LoaderCircle,
+  Printer,
+  PlusCircle,
+  Pencil,
+  Trash2,
+  LogIn,
+  AlertTriangle,
+  Search,
+  History,
+} from 'lucide-react'
 import {
   ArcElement,
   BarElement,
@@ -26,6 +40,23 @@ import { CajaDashboardPanel } from './CajaDashboardPanel'
 import { getCajaDashboard } from './caja.api'
 import { AdminFinanzasPanel } from './AdminFinanzasPanel'
 import { ContactMessagesPanel } from './ContactMessagesPanel'
+import { AuditLogDetailModal } from './AuditLogDetailModal'
+
+export type AuditLogEntry = {
+  id: number
+  fecha: string
+  usuarioEmail: string
+  usuarioNombre: string
+  accion: 'CREAR' | 'ACTUALIZAR' | 'ELIMINAR' | 'LOGIN_EXITOSO' | 'LOGIN_FALLIDO'
+  entidad?: string
+  entidadId?: string | number
+  descripcion: string
+  ip?: string
+  navegador?: string
+  valorAnterior?: string
+  valorNuevo?: string
+  camposModificados?: string
+}
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -124,7 +155,7 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
 
     const isInsideDate = (dateStr?: string | null) => {
       if (!dateStr) return false
-      const d = new Date(dateStr)
+      const d = new Date(dateStr as string)
       return d >= startDate && d <= now
     }
 
@@ -141,7 +172,7 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
       ...validTaller.map((t) => ({ fecha: t.fechaPago, concepto: 'Taller', detalle: t.taller || t.participante, monto: t.monto, metodo: t.metodoPago, recibo: t.numeroRecibo })),
       ...validMatricula.map((m) => ({ fecha: m.fechaPago, concepto: 'Matrícula', detalle: m.estudiante, monto: m.monto, metodo: m.metodoPago, recibo: m.numeroRecibo })),
       ...validMensualidad.map((m) => ({ fecha: m.fechaPago, concepto: 'Mensualidad', detalle: m.estudiante + ' (Mes ' + m.mes + ')', monto: m.monto, metodo: m.metodoPago, recibo: m.numeroRecibo })),
-    ].sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime())
+    ].sort((a, b) => (b.fecha ? new Date(b.fecha as string).getTime() : 0) - (a.fecha ? new Date(a.fecha as string).getTime() : 0))
 
     return { validTaller, validMatricula, validMensualidad, totalTaller, totalMatricula, totalMensualidad, total, combined }
   }, [cajaResumen, periodFilter])
@@ -253,7 +284,7 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
           <tbody>
             ${filteredData.combined.map(item => `
               <tr>
-                <td>${new Date(item.fecha || '').toLocaleDateString('es-NI')}</td>
+                <td>${item.fecha ? new Date(item.fecha as string).toLocaleDateString('es-NI') : '-'}</td>
                 <td>${item.recibo || '-'}</td>
                 <td><span class="badge">${item.concepto}</span></td>
                 <td>${item.detalle || '-'}</td>
@@ -292,7 +323,7 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
             <label className="text-sm font-semibold text-slate-700">Filtrar periodo:</label>
             <select 
               value={periodFilter} 
-              onChange={(e) => setPeriodFilter(e.target.value as any)}
+              onChange={(e) => setPeriodFilter(e.target.value as '7' | '15' | '30' | 'all')}
               className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
             >
               <option value="7">Últimos 7 días</option>
@@ -406,7 +437,7 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
                   <tbody className="divide-y divide-slate-100">
                     {filteredData.combined.map((item, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 whitespace-nowrap text-slate-500">{new Date(item.fecha || '').toLocaleDateString('es-NI')}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-slate-500">{item.fecha ? new Date(item.fecha as string).toLocaleDateString('es-NI') : '-'}</td>
                         <td className="px-4 py-3 text-slate-600">{item.recibo || '-'}</td>
                         <td className="px-4 py-3">
                           <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
@@ -479,11 +510,45 @@ export function MensajesPanel() {
 //   return <NoticiasPanel />
 // }
 
+function formatAuditDate(value?: string | null) {
+  if (!value) return 'Fecha desconocida'
+  try {
+    return new Intl.DateTimeFormat('es-NI', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(value))
+  } catch {
+    return 'Fecha inválida'
+  }
+}
+
+function getActionMeta(action: AuditLogEntry['accion']) {
+  switch (action) {
+    case 'CREAR':
+      return { Icon: PlusCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' }
+    case 'ACTUALIZAR':
+      return { Icon: Pencil, color: 'text-sky-600', bg: 'bg-sky-50' }
+    case 'ELIMINAR':
+      return { Icon: Trash2, color: 'text-rose-600', bg: 'bg-rose-50' }
+    case 'LOGIN_EXITOSO':
+      return { Icon: LogIn, color: 'text-teal-600', bg: 'bg-teal-50' }
+    case 'LOGIN_FALLIDO':
+      return { Icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50' }
+    default:
+      return { Icon: History, color: 'text-slate-600', bg: 'bg-slate-100' }
+  }
+}
+
 export function AuditoriaPanel() {
   const { token } = useAuth()
-  const [data, setData] = useState<RendimientoSistemaDTO[]>([])
-  const [loading, setLoading] = useState(false)
+  const [logs, setLogs] = useState<AuditLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [period, setPeriod] = useState<'7' | '30' | '90'>('7')
+  const [search, setSearch] = useState('')
+  const [specificDate, setSpecificDate] = useState('')
+  const [selectedLogForDetail, setSelectedLogForDetail] = useState<AuditLogEntry | null>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -492,53 +557,139 @@ export function AuditoriaPanel() {
       setLoading(true)
       setError(null)
       try {
-        const res = await axios.get<RendimientoSistemaDTO[]>('/api/admin/auditoria/rendimiento', {
-          baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080',
+        const res = await axios.get<AuditLogEntry[]>('/admin/auditoria/log', {
+          baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api',
           headers: { Authorization: `Bearer ${token}` },
+          params: { days: period },
         })
-        if (!cancelled) setData(res.data ?? [])
+        if (!cancelled) setLogs(res.data ?? [])
       } catch (err) {
-        if (!cancelled) setError('No fue posible cargar métricas de rendimiento')
+        if (!cancelled) setError('No fue posible cargar el registro de auditoría.')
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
     void load()
-    return () => {
-      cancelled = true
+    return () => { cancelled = true }
+  }, [token, period])
+
+  const filteredLogs = useMemo(() => {
+    let result = logs
+    if (specificDate) {
+      // Como log.fecha viene en formato ISO "YYYY-MM-DDTHH:mm:ss", podemos usar startsWith
+      result = result.filter(log => log.fecha && log.fecha.startsWith(specificDate))
     }
-  }, [token])
+
+    const term = search.trim().toLowerCase()
+    if (!term) return result
+    return result.filter(log => {
+      const haystack = [
+        log.usuarioEmail,
+        log.usuarioNombre,
+        log.accion,
+        log.entidad,
+        String(log.entidadId),
+        log.descripcion,
+        log.ip,
+      ].join(' ').toLowerCase()
+      return haystack.includes(term)
+    })
+  }, [logs, search, specificDate])
+
+  const openDetailModal = (log: AuditLogEntry) => {
+    setSelectedLogForDetail(log)
+    setIsDetailModalOpen(true)
+  }
+
+  const closeDetailModal = () => {
+    setSelectedLogForDetail(null)
+    setIsDetailModalOpen(false)
+  }
 
   return (
-    <PanelShell title="Auditoría del Sistema" subtitle="Métricas de rendimiento y uso del sistema (solo visible por la persona de mayor rango)">
-      {loading ? (
-        <div className="p-6 text-center">Cargando métricas...</div>
-      ) : error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
-      ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full table-auto">
-            <thead>
-              <tr className="text-left text-sm text-slate-700">
-                <th className="px-3 py-2">Periodo</th>
-                <th className="px-3 py-2">Total requests</th>
-                <th className="px-3 py-2">Avg response (ms)</th>
-                <th className="px-3 py-2">Max response (ms)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((row, idx) => (
-                <tr key={idx} className="border-t border-slate-100 text-sm text-slate-700">
-                  <td className="px-3 py-2">{row.periodo}</td>
-                  <td className="px-3 py-2">{row.totalRequests ?? '-'}</td>
-                  <td className="px-3 py-2">{row.avgResponseMs ?? '-'}</td>
-                  <td className="px-3 py-2">{row.maxResponseMs ?? '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <PanelShell title="Auditoría del Sistema" subtitle="Registro de cambios y eventos importantes en la plataforma.">
+      <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm ring-teal-300 focus-within:ring">
+          <Search className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por usuario, acción, entidad..."
+            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+          />
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-semibold text-slate-700">Día:</label>
+            <input
+              type="date"
+              value={specificDate}
+              onChange={(e) => setSpecificDate(e.target.value)}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-semibold text-slate-700">Periodo:</label>
+            <select 
+              value={period} 
+              onChange={(e) => setPeriod(e.target.value as '7' | '30' | '90')}
+              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+            >
+              <option value="7">Últimos 7 días</option>
+              <option value="30">Últimos 30 días</option>
+              <option value="90">Últimos 90 días</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        {loading ? (
+          <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-10 text-slate-600">
+            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Cargando registros...
+          </div>
+        ) : error ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+            No hay registros de auditoría para el periodo y filtro seleccionados.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredLogs.map((log) => {
+              const { Icon, color, bg } = getActionMeta(log.accion)
+              return (
+                <button
+                  key={log.id}
+                  type="button"
+                  onClick={() => openDetailModal(log)}
+                  className="flex w-full items-start gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg} ${color}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-800">{log.descripcion}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Por <span className="font-medium text-slate-700">{log.usuarioNombre || 'N/A'}</span> ({log.usuarioEmail || 'N/A'})
+                      {log.ip ? ` desde la IP ${log.ip}` : ''}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">{formatAuditDate(log.fecha)}</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{log.accion}</span>
+                </button>
+              )
+            })} 
+          </div>
+        )}
+      </div>
+
+      {isDetailModalOpen && selectedLogForDetail ? (
+        <AuditLogDetailModal
+          log={selectedLogForDetail}
+          onClose={closeDetailModal}
+        />
+      ) : null}
     </PanelShell>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Clock, Users, ChevronLeft, ChevronRight, DollarSign, LoaderCircle, X } from 'lucide-react'
+import { Clock, Users, ChevronLeft, ChevronRight, LoaderCircle, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import heroImage from '../../../assets/hero.png'
 import axios from 'axios'
 import { getTalleres, inscribirEnTaller, resolveTallerImageUrl } from '../../talleres/talleres-view.api'
@@ -253,7 +254,7 @@ export default function TalleresSection() {
             {getVisibleTalleres().map((taller) => (
               <div
                 key={taller.id}
-                className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg transition-all duration-300 hover:shadow-2xl"
+                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg transition-all duration-300 hover:shadow-2xl"
               >
                 <div className={`h-40 bg-gradient-to-br ${colores[taller.id % colores.length]} relative overflow-hidden`}>
                   <img
@@ -266,11 +267,13 @@ export default function TalleresSection() {
                   />
                 </div>
 
-                <div className="p-6 flex flex-col flex-grow">
-                  <h3 className="mb-2 text-xl font-bold text-slate-900">{taller.nombre}</h3>
-                  <p className="mb-4 flex-grow text-sm leading-relaxed text-slate-600">
-                    {taller.descripcion || 'Sin descripcion'}
-                  </p>
+                <div className="flex flex-grow flex-col p-6">
+                  <div className="mb-4 flex-grow">
+                    <h3 className="mb-2 line-clamp-2 min-h-[3.5rem] text-xl font-bold text-slate-900">{taller.nombre}</h3>
+                    <p className="line-clamp-4 text-sm leading-relaxed text-slate-600">
+                      {taller.descripcion || 'Sin descripcion'}
+                    </p>
+                  </div>
 
                   <div className="mb-4 space-y-2 border-b border-slate-200 pb-4">
                     <div className="flex items-center gap-2 text-xs">
@@ -299,8 +302,7 @@ export default function TalleresSection() {
                   <div className="mb-4 rounded-lg border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-slate-600">Costo del taller:</span>
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="h-4 w-4 text-teal-700" />
+                      <div className="flex items-center">
                         <span className="text-lg font-bold text-teal-700">{formatCordobas(Number(taller.costo || 0))}</span>
                       </div>
                     </div>
@@ -353,118 +355,163 @@ export default function TalleresSection() {
         </div>
         ) : null}
 
-        {tallerSeleccionado ? (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/60 px-4">
-            <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-              <div className="flex items-start justify-between gap-3">
+        {tallerSeleccionado ? createPortal(
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity" onClick={cerrarFormulario} />
+            <div className="relative flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] bg-white shadow-2xl md:flex-row">
+              <button
+                type="button"
+                onClick={cerrarFormulario}
+                className="absolute right-4 top-4 z-10 rounded-full bg-white/80 p-2 text-slate-600 backdrop-blur hover:bg-white md:right-6 md:top-6"
+                aria-label="Cerrar formulario"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="bg-gradient-to-br from-teal-50 to-cyan-50 p-6 md:w-2/5 md:p-8 lg:p-10 flex flex-col justify-between overflow-y-auto">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Inscripcion</p>
-                  <h3 className="mt-1 text-xl font-bold text-slate-900">{tallerSeleccionado.nombre}</h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Rango edad: {tallerSeleccionado.edadMinima} - {tallerSeleccionado.edadMaxima} años
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Inscripción</p>
+                  <h3 className="mt-2 text-2xl font-bold text-slate-900">{tallerSeleccionado.nombre}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-600">
+                    {tallerSeleccionado.descripcion || 'Sin descripción detallada.'}
                   </p>
+
+                  <div className="mt-6 space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-teal-600 shadow-sm">
+                        <Clock className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Duración</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {formatDate(tallerSeleccionado.fechaInicial)} - {formatDate(tallerSeleccionado.fechaFinal)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-teal-600 shadow-sm">
+                        <Users className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Edades</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {tallerSeleccionado.edadMinima} a {tallerSeleccionado.edadMaxima} años
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={cerrarFormulario}
-                  className="rounded-full border border-slate-300 p-2 text-slate-600 hover:bg-slate-100"
-                  aria-label="Cerrar formulario"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+
+                <div className="mt-8 rounded-xl bg-white p-4 shadow-sm">
+                  <p className="text-xs text-slate-500">Costo del taller</p>
+                  <p className="mt-1 text-2xl font-bold text-teal-700">{formatCordobas(Number(tallerSeleccionado.costo || 0))}</p>
+                </div>
               </div>
 
-          <form className="mt-4" onSubmit={handleSubmit(enviarInscripcion)} noValidate>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="block">
-                <input
-                  {...register('nombre', { required: 'El nombre es obligatorio.' })}
-                  placeholder="Nombre"
-                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.nombre ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
-                />
-                {errors.nombre && <span className="mt-1 block text-xs text-rose-600">{errors.nombre.message}</span>}
-              </label>
-              <label className="block">
-                <input
-                  {...register('apellido', { required: 'El apellido es obligatorio.' })}
-                  placeholder="Apellido"
-                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.apellido ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
-                />
-                {errors.apellido && <span className="mt-1 block text-xs text-rose-600">{errors.apellido.message}</span>}
-              </label>
-              <label className="block">
-                <input
-                  type="date"
-                  {...register('fechaNacimiento', {
-                    required: 'La fecha de nacimiento es obligatoria.',
-                    validate: (value) => {
-                      const edadCalculada = calculateAgeFromBirthDate(value)
-                      if (edadCalculada === null) return 'La fecha debe ser válida y anterior a hoy.'
-                      if (tallerSeleccionado && edadCalculada < tallerSeleccionado.edadMinima) return `La edad mínima permitida es ${tallerSeleccionado.edadMinima} años.`
-                      if (tallerSeleccionado && edadCalculada > tallerSeleccionado.edadMaxima) return `La edad máxima permitida es ${tallerSeleccionado.edadMaxima} años.`
-                      return true
-                    }
-                  })}
-                  max={new Date().toISOString().split('T')[0]}
-                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.fechaNacimiento ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
-                />
-                {errors.fechaNacimiento && <span className="mt-1 block text-xs text-rose-600">{errors.fechaNacimiento.message}</span>}
-              </label>
-              <label className="block">
-                <input
-                  {...register('telefono', {
-                    required: 'El teléfono es obligatorio.',
-                    pattern: { value: /^\d{8}$/, message: 'El teléfono debe tener exactamente 8 dígitos numéricos.' }
-                  })}
-                  placeholder="Teléfono"
-                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.telefono ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
-                />
-                {errors.telefono && <span className="mt-1 block text-xs text-rose-600">{errors.telefono.message}</span>}
-              </label>
-              <label className="block md:col-span-2">
-                <input
-                  type="email"
-                  {...register('correo', {
-                    pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'El correo no tiene un formato válido.' }
-                  })}
-                  placeholder="Correo (opcional)"
-                  className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring ${errors.correo ? 'border-rose-400 ring-rose-300' : 'border-slate-300 ring-teal-300'}`}
-                />
-                {errors.correo && <span className="mt-1 block text-xs text-rose-600">{errors.correo.message}</span>}
-              </label>
-            </div>
+              <div className="p-6 md:w-3/5 md:p-8 lg:p-10 overflow-y-auto">
+                <h4 className="text-lg font-semibold text-slate-900">Completa tus datos</h4>
+                <p className="mt-1 text-sm text-slate-600">Llena este formulario para reservar tu cupo.</p>
 
-              {submitError ? (
-                <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{submitError}</p>
-              ) : null}
+                <form className="mt-6" onSubmit={handleSubmit(enviarInscripcion)} noValidate>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Nombre</span>
+                      <input
+                        {...register('nombre', { required: 'El nombre es obligatorio.' })}
+                        placeholder="Ej. Juan"
+                        className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-2 ${errors.nombre ? 'border-rose-400 focus:ring-rose-200' : 'border-slate-300 focus:border-teal-500 focus:ring-teal-100'}`}
+                      />
+                      {errors.nombre && <span className="mt-1 block text-xs text-rose-600">{errors.nombre.message}</span>}
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Apellido</span>
+                      <input
+                        {...register('apellido', { required: 'El apellido es obligatorio.' })}
+                        placeholder="Ej. Pérez"
+                        className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-2 ${errors.apellido ? 'border-rose-400 focus:ring-rose-200' : 'border-slate-300 focus:border-teal-500 focus:ring-teal-100'}`}
+                      />
+                      {errors.apellido && <span className="mt-1 block text-xs text-rose-600">{errors.apellido.message}</span>}
+                    </label>
+                    <label className="block md:col-span-2">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Fecha de nacimiento</span>
+                      <input
+                        type="date"
+                        {...register('fechaNacimiento', {
+                          required: 'La fecha de nacimiento es obligatoria.',
+                          validate: (value) => {
+                            const edadCalculada = calculateAgeFromBirthDate(value)
+                            if (edadCalculada === null) return 'La fecha debe ser válida y anterior a hoy.'
+                            if (tallerSeleccionado && edadCalculada < tallerSeleccionado.edadMinima) return `La edad mínima permitida es ${tallerSeleccionado.edadMinima} años.`
+                            if (tallerSeleccionado && edadCalculada > tallerSeleccionado.edadMaxima) return `La edad máxima permitida es ${tallerSeleccionado.edadMaxima} años.`
+                            return true
+                          }
+                        })}
+                        max={new Date().toISOString().split('T')[0]}
+                        className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-2 ${errors.fechaNacimiento ? 'border-rose-400 focus:ring-rose-200' : 'border-slate-300 focus:border-teal-500 focus:ring-teal-100'}`}
+                      />
+                      {errors.fechaNacimiento && <span className="mt-1 block text-xs text-rose-600">{errors.fechaNacimiento.message}</span>}
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Teléfono</span>
+                      <input
+                        {...register('telefono', {
+                          required: 'El teléfono es obligatorio.',
+                          pattern: { value: /^\d{8}$/, message: 'Debe tener exactamente 8 dígitos.' }
+                        })}
+                        placeholder="Ej. 88888888"
+                        className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-2 ${errors.telefono ? 'border-rose-400 focus:ring-rose-200' : 'border-slate-300 focus:border-teal-500 focus:ring-teal-100'}`}
+                      />
+                      {errors.telefono && <span className="mt-1 block text-xs text-rose-600">{errors.telefono.message}</span>}
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-slate-700">Correo (Opcional)</span>
+                      <input
+                        type="email"
+                        {...register('correo', {
+                          pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'El correo no tiene un formato válido.' }
+                        })}
+                        placeholder="correo@ejemplo.com"
+                        className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition focus:ring-2 ${errors.correo ? 'border-rose-400 focus:ring-rose-200' : 'border-slate-300 focus:border-teal-500 focus:ring-teal-100'}`}
+                      />
+                      {errors.correo && <span className="mt-1 block text-xs text-rose-600">{errors.correo.message}</span>}
+                    </label>
+                  </div>
 
-              {submitSuccess ? (
-                <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  {submitSuccess}
-                </p>
-              ) : null}
+                  {submitError ? (
+                    <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {submitError}
+                    </div>
+                  ) : null}
 
-              <div className="mt-5 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={cerrarFormulario}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-                >
-                  Cancelar
-                </button>
-                <button
-                type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center rounded-xl bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isSubmitting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Enviar inscripcion
-                </button>
+                  {submitSuccess ? (
+                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                      {submitSuccess}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-8 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={cerrarFormulario}
+                      className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="inline-flex items-center rounded-xl bg-teal-700 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-teal-800 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSubmitting ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Enviar inscripción
+                    </button>
+                  </div>
+                </form>
               </div>
-          </form>
             </div>
           </div>
-        ) : null}
+        , document.body) : null}
       </div>
     </section>
   )

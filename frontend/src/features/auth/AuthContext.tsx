@@ -24,6 +24,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 const API_MESSAGE_MAP: Record<string, string> = {
   AUTH_VALIDATION_REQUIRED_CREDENTIALS: 'Debes ingresar correo y contraseña.',
   AUTH_INVALID_CREDENTIALS: 'Credenciales inválidas.',
+  AUTH_USER_BLOCKED_TOO_MANY_ATTEMPTS: 'Cuenta bloqueada temporalmente por demasiados intentos fallidos.',
   AUTH_USER_INACTIVE: 'Tu usuario está inactivo. Contacta a un administrador.',
   AUTH_SESSION_INVALID: 'La sesión no es válida. Inicia sesión de nuevo.',
   AUTH_PHONE_INVALID: 'El teléfono debe tener exactamente 8 dígitos.',
@@ -146,6 +147,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setAuthState(nextAuthState)
         }
       } catch {
+        if (axios.isAxiosError(error) && error.response?.status === 401 && error.response?.data?.message === 'AUTH_SESSION_INVALID') {
+          window.dispatchEvent(new CustomEvent('session-expired'))
+        }
         localStorage.removeItem(AUTH_STORAGE_KEY)
         if (!cancelled) {
           setAuthState(null)
@@ -163,6 +167,37 @@ export function AuthProvider({ children }: PropsWithChildren) {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      localStorage.removeItem(AUTH_STORAGE_KEY)
+      setAuthState(null)
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast.error('Tu sesión fue cerrada porque iniciaste sesión en otro dispositivo.', {
+          id: 'session-expired-toast',
+          duration: 6000,
+          icon: '🔒',
+        })
+      })
+    }
+
+    window.addEventListener('session-expired', handleSessionExpired)
+    return () => window.removeEventListener('session-expired', handleSessionExpired)
+  }, [])
+
+  useEffect(() => {
+    if (!authState?.token) return
+
+    const interval = setInterval(() => {
+      api.get('/auth/me', { headers: { Authorization: `Bearer ${authState.token}` } }).catch((error) => {
+        if (axios.isAxiosError(error) && error.response?.status === 401 && error.response?.data?.message === 'AUTH_SESSION_INVALID') {
+          window.dispatchEvent(new CustomEvent('session-expired'))
+        }
+      })
+    }, 15000)
+
+    return () => clearInterval(interval)
+  }, [authState?.token])
 
   const login = async (email: string, password: string) => {
     try {
@@ -207,7 +242,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }
 
-  const logout = () => {
+  const logout = async () => {
+    if (authState?.token) {
+      try {
+        await api.post('/auth/logout', {}, {
+          headers: { Authorization: `Bearer ${authState.token}` }
+        })
+      } catch (error) {
+        console.error('Error cerrando sesión en el servidor', error)
+      }
+    }
     localStorage.removeItem(AUTH_STORAGE_KEY)
     setAuthState(null)
   }

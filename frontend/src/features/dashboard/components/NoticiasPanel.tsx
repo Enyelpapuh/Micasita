@@ -43,7 +43,7 @@ function statusLabel(item: NewsAnnouncement) {
     return 'Inactiva'
   }
 
-  if (item.fechaExpiracion && new Date(item.fechaExpiracion).getTime() < new Date().setHours(0, 0, 0, 0)) {
+  if (item.fechaExpiracion && new Date(item.fechaExpiracion as string).getTime() < new Date().setHours(0, 0, 0, 0)) {
     return 'Expirada'
   }
 

@@ -2,6 +2,8 @@ package com.micasita.backend.security;
 
 import com.micasita.backend.dto.auth.JwtPayload;
 import com.micasita.backend.service.JwtService;
+import com.micasita.backend.entities.core.Usuario;
+import com.micasita.backend.repositories.core.UsuarioRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,6 +20,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -25,9 +28,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private final JwtService jwtService;
+    private final UsuarioRepository usuarioRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, UsuarioRepository usuarioRepository) {
         this.jwtService = jwtService;
+        this.usuarioRepository = usuarioRepository;
     }
 
     @Override
@@ -40,14 +45,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = authorizationHeader.substring(7);
             log.info("[JWT] bearer token detected path={} tokenPrefix={}", request.getRequestURI(), safeTokenPrefix(token));
 
-            jwtService.parseAndValidate(token)
-                    .ifPresentOrElse(
-                            payload -> {
-                                log.info("[JWT] token valid user={} roles={} path={}", payload.email(), payload.roles(), request.getRequestURI());
-                                setAuthentication(request, payload);
-                            },
-                            () -> log.warn("[JWT] token invalid or expired path={} tokenPrefix={}", request.getRequestURI(), safeTokenPrefix(token))
-                    );
+            Optional<JwtPayload> payloadOpt = jwtService.parseAndValidate(token);
+            if (payloadOpt.isPresent()) {
+                JwtPayload payload = payloadOpt.get();
+                log.info("[JWT] token valid user={} roles={} path={}", payload.email(), payload.roles(), request.getRequestURI());
+
+                Usuario usuario = usuarioRepository.findByEmail(payload.email()).orElse(null);
+                Long tokenVersionFromJwt = jwtService.extractTokenVersion(token);
+
+                if (usuario != null && !usuario.getTokenVersion().equals(tokenVersionFromJwt)) {
+                    log.warn("[JWT] Session revoked for user={}. Token version mismatch.", payload.email());
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json");
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write("{\"message\": \"AUTH_SESSION_INVALID\"}");
+                    return;
+                }
+
+                setAuthentication(request, payload);
+            } else {
+                log.warn("[JWT] token invalid or expired path={} tokenPrefix={}", request.getRequestURI(), safeTokenPrefix(token));
+            }
         } else if (authorizationHeader == null) {
             log.info("[JWT] no Authorization header for path={}", request.getRequestURI());
         } else if (!authorizationHeader.startsWith("Bearer ")) {

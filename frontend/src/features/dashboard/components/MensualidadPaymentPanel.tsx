@@ -77,7 +77,7 @@ export default function MensualidadPaymentPanel({
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
       <div 
         className={`absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity duration-300 ${isVisible ? 'opacity-100' : 'opacity-0'}`} 
         onClick={onClose} 

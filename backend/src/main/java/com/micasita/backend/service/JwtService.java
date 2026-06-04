@@ -41,7 +41,7 @@ public class JwtService {
         return expirationMinutes;
     }
 
-    public String generateToken(Long userId, Long personaId, String email, String nombre, String apellido, List<String> roles, List<String> permisos) {
+    public String generateToken(Long userId, Long personaId, String email, String nombre, String apellido, List<String> roles, List<String> permisos, Long tokenVersion) {
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plusSeconds(expirationMinutes * 60);
 
@@ -54,6 +54,7 @@ public class JwtService {
         payload.put("apellido", apellido);
         payload.put("iat", issuedAt.getEpochSecond());
         payload.put("exp", expiresAt.getEpochSecond());
+        payload.put("tokenVersion", tokenVersion == null ? 0L : tokenVersion);
 
         ArrayNode rolesNode = payload.putArray("roles");
         roles.forEach(rolesNode::add);
@@ -103,6 +104,17 @@ public class JwtService {
             ));
         } catch (Exception ex) {
             return Optional.empty();
+        }
+    }
+
+    public Long extractTokenVersion(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) return null;
+            JsonNode payloadNode = objectMapper.readTree(new String(Base64.getUrlDecoder().decode(parts[1]), StandardCharsets.UTF_8));
+            return payloadNode.path("tokenVersion").asLong(0L);
+        } catch (Exception ex) {
+            return null;
         }
     }
 

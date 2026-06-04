@@ -45,6 +45,7 @@ type AnnulModalState = {
   type: AnnulTargetType
   id: number
   label: string
+  monto: number
 }
 
 function formatDate(value?: string | null) {
@@ -268,8 +269,8 @@ function buildCajaHistorialFromParts(
   }))
 
   return [...historialTaller, ...historialMatricula, ...historialMensualidad].sort((a, b) => {
-    const fechaA = a.fecha ? new Date(a.fecha).getTime() : 0
-    const fechaB = b.fecha ? new Date(b.fecha).getTime() : 0
+    const fechaA = a.fecha ? new Date(a.fecha as string).getTime() : 0
+    const fechaB = b.fecha ? new Date(b.fecha as string).getTime() : 0
     return fechaB - fechaA
   })
 }
@@ -366,7 +367,7 @@ function TalleresTab({
   pendientes: CajaTallerPendienteItem[]
   pagos: CajaPagoTallerItem[]
   onPay: (cupoId: number, monto: number) => void
-  onAnnul: (pagoCupoId: number, numeroRecibo: string) => void
+  onAnnul: (pagoCupoId: number, numeroRecibo: string, monto: number) => void
   metodoPagoId: string
   onMetodoPagoChange: (value: string) => void
   metodosPago: MetodoPagoOption[]
@@ -467,7 +468,7 @@ function TalleresTab({
       </section>
 
       {selectedPendiente ? createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarModal} />
           <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
@@ -547,7 +548,7 @@ function TalleresTab({
       , document.body) : null}
 
       {selectedPago ? createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarModal} />
           <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
@@ -633,7 +634,7 @@ function TalleresTab({
                   {!item.anulado ? (
                     <button
                       type="button"
-                      onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo)}
+                      onClick={() => onAnnul(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)}
                       className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
                     >
                       Anular
@@ -665,7 +666,7 @@ function MatriculaTab({
   pendientes: CajaMatriculaPendienteItem[]
   pagos: CajaPagoMatriculaItem[]
   onPay: (payload: { matriculaId: number; monto: number; metodoPagoId: number; detalle: string }) => Promise<void>
-  onAnnul: (pagoMatriculaId: number) => void
+  onAnnul: (pagoMatriculaId: number, numeroRecibo: string, monto: number) => void
   metodosPago: MetodoPagoOption[]
   busy: boolean
   externalBusqueda?: string
@@ -676,6 +677,7 @@ function MatriculaTab({
   const [selectedMatricula, setSelectedMatricula] = useState<CajaMatriculaPendienteItem | null>(null)
   const [selectedPagoMatricula, setSelectedPagoMatricula] = useState<CajaPagoMatriculaItem | null>(null)
   const [montoCobro, setMontoCobro] = useState('')
+  const [precioBaseConsultado, setPrecioBaseConsultado] = useState(0)
   const [montoRecibido, setMontoRecibido] = useState('')
   const [metodoPagoId, setMetodoPagoId] = useState('')
   const [detalle, setDetalle] = useState('Cobro de matrícula en caja')
@@ -727,7 +729,9 @@ function MatriculaTab({
   const abrirModal = (item: CajaMatriculaPendienteItem) => {
     setSelectedMatricula(item)
     setSelectedPagoMatricula(null)
-    setMontoCobro(String(Number(item.montoEsperado ?? montoBaseSugerido ?? 0)))
+    const initialAmount = Number(montoBaseSugerido ?? item.montoEsperado ?? 0)
+    setMontoCobro(String(initialAmount))
+    setPrecioBaseConsultado(initialAmount)
     setMontoRecibido('')
     setDetalle(`Cobro matrícula ${item.anioLectivo || ''}`.trim())
     // fetch preview monto si contamos con estudianteId
@@ -739,6 +743,7 @@ function MatriculaTab({
             const previewMonto = resp.montoBase ?? resp.monto
             if (previewMonto != null) {
               setMontoCobro(String(Number(previewMonto)))
+              setPrecioBaseConsultado(Number(previewMonto))
             }
           }
         } catch (e) {
@@ -798,7 +803,7 @@ function MatriculaTab({
                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">Año lectivo: {item.anioLectivo || '-'}</span>
                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">Estado: {item.estado || '-'}</span>
                   </div>
-                  <p className="mt-1 text-sm font-semibold text-teal-700">{formatMoney(item.montoEsperado)}</p>
+                  <p className="mt-1 text-sm font-semibold text-teal-700">{formatMoney(montoBaseSugerido ?? item.montoEsperado)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 sm:shrink-0">
@@ -835,7 +840,7 @@ function MatriculaTab({
                   {!item.anulado ? (
                     <button
                       type="button"
-                      onClick={() => onAnnul(item.pagoMatriculaId)}
+                      onClick={() => onAnnul(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)}
                       className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
                     >
                       Anular
@@ -851,7 +856,7 @@ function MatriculaTab({
       </section>
 
       {selectedMatricula ? createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
           <div 
             className={`absolute inset-0 bg-slate-950/60 backdrop-blur-sm transition-opacity duration-300 ${isMatriculaModalVisible ? 'opacity-100' : 'opacity-0'}`} 
             onClick={cerrarModal} 
@@ -897,7 +902,7 @@ function MatriculaTab({
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-5">
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Precio base consultado</p>
-                  <p className="mt-2 text-3xl font-bold text-slate-900">{formatMoney(selectedMatricula.montoEsperado)}</p>
+              <p className="mt-2 text-3xl font-bold text-slate-900">{formatMoney(precioBaseConsultado)}</p>
                   <p className="mt-2 text-sm text-slate-500">Monto consultado automáticamente desde la configuración del sistema para este año lectivo.</p>
                 </div>
               </div>
@@ -1006,7 +1011,7 @@ function MatriculaTab({
       , document.body) : null}
 
       {selectedPagoMatricula ? createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarModal} />
           <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
@@ -1115,7 +1120,7 @@ function MensualidadTab({
   onBuscarEstudianteChange: (value: string) => void
   onFiltroEstadoChange: (value: 'todos' | 'activos' | 'anulados') => void
   onPay: () => void
-  onAnnul: (mensualidadId: number) => void
+  onAnnul: (mensualidadId: number, numeroRecibo: string, monto: number) => void
   metodosPago: MetodoPagoOption[]
   pendientesMensualidadesList?: Array<import('./caja.api').PendienteMensualidadResponse>
   mensualidadMesesPagados?: number[]
@@ -1253,7 +1258,16 @@ function MensualidadTab({
             <p className="text-sm text-slate-600">Meses adeudados (click para seleccionar)</p>
             <div className="mt-2 grid gap-2">
               {(pendientesMensualidadesList ?? []).map((p) => (
-                <button key={p.mensualidadId} type="button" onClick={() => { onMesDePagoChange(String(p.mes)); onMontoBaseChange(String(p.monto ?? 0)); onMontoMoraChange('0'); }} className="text-left rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">{`Mes ${p.mes} — ${formatMoney(p.monto ?? 0)}`}</button>
+                <button 
+                  key={p.mensualidadId} 
+                  type="button" 
+                  onClick={() => { 
+                    onMesDePagoChange(String(p.mes)); 
+                    onMontoBaseChange(String(montoBase ? Number(montoBase) : (p.monto ?? 0))); 
+                    onMontoMoraChange('0'); 
+                  }} 
+                  className="text-left rounded-xl border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50"
+                >{`Mes ${p.mes} — ${formatMoney(montoBase ? Number(montoBase) : (p.monto ?? 0))}`}</button>
               ))}
             </div>
           </div>
@@ -1319,7 +1333,7 @@ function MensualidadTab({
                   {!item.anulado ? (
                     <button
                       type="button"
-                      onClick={() => onAnnul(item.mensualidadId)}
+                      onClick={() => onAnnul(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)}
                       className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
                     >
                       Anular
@@ -1335,7 +1349,7 @@ function MensualidadTab({
       </section>
 
       {selectedMensualidad ? createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
           <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={cerrarDetalleMensualidad} />
           <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
@@ -1478,10 +1492,38 @@ export function CajaDashboardPanel() {
   const moraAplicadaFormulario = mensualidadMoraAutomatica ? moraSugerida : Number(mensualidadMontoMora)
 
   const isCajaAdmin = Boolean(user?.roles?.some((role) => ['ADMIN', 'DEVELOPER'].includes(role.toUpperCase())))
-  const totalCobradoGeneralPreClose =
-    sumPaid(data?.pagosTaller ?? []) +
-    sumPaid(data?.pagosMatricula ?? []) +
-    sumPaid(data?.mensualidades ?? [])
+
+  const pagosTallerSourceCompleto = generalHistorialData?.pagosTaller ?? data?.pagosTaller ?? []
+  const pagosMatriculaSourceCompleto = generalHistorialData?.pagosMatricula ?? data?.pagosMatricula ?? []
+  const mensualidadesSourceCompleto = generalHistorialData?.mensualidades ?? data?.mensualidades ?? []
+
+  const pagosDelTurno = useMemo(() => {
+    if (!activeSession) return { taller: 0, matricula: 0, mensualidad: 0, total: 0 }
+    const aperturaTime = new Date(activeSession.fechaApertura as string).getTime()
+    const filterAndSum = (items: Array<{ fechaPago?: string | null; monto?: number | null; anulado?: boolean }>) => {
+      return items.reduce((acc, item) => {
+        if (item.anulado) return acc
+        const time = item.fechaPago ? new Date(item.fechaPago as string).getTime() : 0
+        return time >= aperturaTime ? acc + (item.monto ?? 0) : acc
+      }, 0)
+    }
+    return { taller: filterAndSum(pagosTallerSourceCompleto), matricula: filterAndSum(pagosMatriculaSourceCompleto), mensualidad: filterAndSum(mensualidadesSourceCompleto), total: filterAndSum(pagosTallerSourceCompleto) + filterAndSum(pagosMatriculaSourceCompleto) + filterAndSum(mensualidadesSourceCompleto) }
+  }, [activeSession, pagosTallerSourceCompleto, pagosMatriculaSourceCompleto, mensualidadesSourceCompleto])
+
+  const anulacionesTurno = useMemo(() => {
+    if (!activeSession) return 0
+    const aperturaTime = new Date(activeSession.fechaApertura as string).getTime()
+    const filterAndCount = (items: Array<{ fechaPago?: string | null; anulado?: boolean }>) => {
+      return items.reduce((acc, item) => {
+        if (!item.anulado) return acc
+        const time = item.fechaPago ? new Date(item.fechaPago as string).getTime() : 0
+        return time >= aperturaTime ? acc + 1 : acc
+      }, 0)
+    }
+    return filterAndCount(pagosTallerSourceCompleto) + filterAndCount(pagosMatriculaSourceCompleto) + filterAndCount(mensualidadesSourceCompleto)
+  }, [activeSession, pagosTallerSourceCompleto, pagosMatriculaSourceCompleto, mensualidadesSourceCompleto])
+
+  const totalCobradoGeneralPreClose = pagosDelTurno.total
   const aperturaSesion = Number(activeSession?.saldoInicial ?? 0)
   const cambioDevuelto = Number(preCloseCambioDevuelto) || 0
   const ingresoNetoTurno = totalCobradoGeneralPreClose - cambioDevuelto
@@ -1690,9 +1732,28 @@ export function CajaDashboardPanel() {
   }
 
   const handleCloseSession = async () => {
-    // open pre-close modal first
+    let currentTotals = pagosDelTurno.total
+    if (!generalHistorialData) {
+      const toastId = toast.loading('Calculando totales del turno...')
+      try {
+        const payload = await getCajaHistorialGeneral(token)
+        setGeneralHistorialData(payload)
+        const aperturaTime = activeSession ? new Date(activeSession.fechaApertura as string).getTime() : 0
+        const filterAndSum = (items: Array<{ fechaPago?: string | null; monto?: number | null; anulado?: boolean }>) => {
+          return items.reduce((acc, item) => {
+            if (item.anulado) return acc
+            const time = item.fechaPago ? new Date(item.fechaPago as string).getTime() : 0
+            return time >= aperturaTime ? acc + (item.monto ?? 0) : acc
+          }, 0)
+        }
+        currentTotals = filterAndSum(payload.pagosTaller) + filterAndSum(payload.pagosMatricula) + filterAndSum(payload.mensualidades)
+      } finally {
+        toast.dismiss(toastId)
+      }
+    }
+    const esperado = (Number(activeSession?.saldoInicial ?? 0)) + currentTotals
     setPreCloseCambioDevuelto('0')
-    setPreCloseCounted(String(efectivoEsperadoPreCierre > 0 ? efectivoEsperadoPreCierre : 0))
+    setPreCloseCounted(String(esperado > 0 ? esperado : 0))
     setShowPreCloseModal(true)
   }
 
@@ -1772,30 +1833,33 @@ export function CajaDashboardPanel() {
     await runAction(`annul-mensualidad-${mensualidadId}`, () => annulPagoMensualidad(token, mensualidadId, { motivo }))
   }
 
-  const requestAnnulTaller = (pagoCupoId: number, numeroRecibo: string) => {
+  const requestAnnulTaller = (pagoCupoId: number, numeroRecibo: string, monto: number) => {
     setAnnulReason('')
     setAnnulModal({
       type: 'taller',
       id: pagoCupoId,
       label: numeroRecibo || String(pagoCupoId),
+      monto,
     })
   }
 
-  const requestAnnulMatricula = (pagoMatriculaId: number) => {
+  const requestAnnulMatricula = (pagoMatriculaId: number, numeroRecibo: string, monto: number) => {
     setAnnulReason('')
     setAnnulModal({
       type: 'matricula',
       id: pagoMatriculaId,
-      label: String(pagoMatriculaId),
+      label: numeroRecibo || String(pagoMatriculaId),
+      monto,
     })
   }
 
-  const requestAnnulMensualidad = (mensualidadId: number) => {
+  const requestAnnulMensualidad = (mensualidadId: number, numeroRecibo: string, monto: number) => {
     setAnnulReason('')
     setAnnulModal({
       type: 'mensualidad',
       id: mensualidadId,
-      label: String(mensualidadId),
+      label: numeroRecibo || String(mensualidadId),
+      monto,
     })
   }
 
@@ -2143,7 +2207,7 @@ export function CajaDashboardPanel() {
                       if (!token || !estId) return
                       try {
                         const [list, resumen] = await Promise.all([
-                          (await import('./caja.api')).getPendientesMensualidades(token ?? null, Number(estId)),
+                          (await import('./caja.api') as any).getPendientesMensualidades(token ?? null, Number(estId)),
                           getMensualidadMesesResumen(token ?? null, Number(estId)),
                         ])
                         setPendientesMensualidadesList(list)
@@ -2207,11 +2271,11 @@ export function CajaDashboardPanel() {
                                       type="button"
                                       onClick={() => {
                                         if (item.pagoCupoId) {
-                                          requestAnnulTaller(item.pagoCupoId, item.numeroRecibo)
+                                          requestAnnulTaller(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)
                                         } else if (item.pagoMatriculaId) {
-                                          requestAnnulMatricula(item.pagoMatriculaId)
+                                          requestAnnulMatricula(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)
                                         } else if (item.mensualidadId) {
-                                          requestAnnulMensualidad(item.mensualidadId)
+                                          requestAnnulMensualidad(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)
                                         }
                                       }}
                                       className="ml-auto rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
@@ -2234,7 +2298,7 @@ export function CajaDashboardPanel() {
         ) : null}
 
         {annulModal ? createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
             <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={closeAnnulModal} />
             <div className="relative w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
@@ -2256,6 +2320,14 @@ export function CajaDashboardPanel() {
                 >
                   Cerrar
                 </button>
+              </div>
+
+              <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+                <p className="text-sm font-semibold text-rose-800">Atención: Devolución de dinero</p>
+                <p className="mt-1 text-sm text-rose-700">
+                  Al anular este recibo, deberás devolver <strong>{formatMoney(annulModal.monto)}</strong> al cliente. 
+                  Este monto será restado automáticamente del ingreso neto de tu turno de caja.
+                </p>
               </div>
 
               <div className="mt-4">
@@ -2295,7 +2367,7 @@ export function CajaDashboardPanel() {
         , document.body) : null}
 
         {showOpenSessionModal ? createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
             <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setShowOpenSessionModal(false)} />
             <div className="relative w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">
@@ -2359,101 +2431,107 @@ export function CajaDashboardPanel() {
         , document.body) : null}
 
         {showPreCloseModal ? createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
             <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setShowPreCloseModal(false)} />
-            <div className="relative w-full max-w-xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
-              <div className="flex items-start justify-between gap-3">
+            <div className="relative flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 p-5 sm:p-6">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Pre-cierre de caja</h4>
                   <p className="text-sm text-slate-600">Revise los totales y confirme el cierre del turno.</p>
                 </div>
-                <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Cerrar</button>
+                <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cerrar</button>
               </div>
 
-              <div className="mt-4 grid gap-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                  <p className="text-sm text-slate-600">Arqueo sugerido</p>
-                  <p className="mt-1 font-semibold text-slate-900">Efectivo esperado: {formatMoney(efectivoEsperadoPreCierre)}</p>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                    <p className="text-xs text-slate-500">Talleres</p>
-                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoTalleres)}</p>
+              <div className="flex-1 overflow-y-auto p-5 sm:p-6">
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <p className="text-sm text-slate-600">Arqueo sugerido</p>
+                      <p className="mt-1 font-semibold text-slate-900">Efectivo esperado: {formatMoney(efectivoEsperadoPreCierre)}</p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                        <p className="text-xs text-slate-500">Talleres</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurno.taller)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                        <p className="text-xs text-slate-500">Matrícula</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurno.matricula)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                        <p className="text-xs text-slate-500">Mensualidad</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurno.mensualidad)}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm">
+                      <p className="text-xs text-rose-700">Anulaciones en turno</p>
+                      <p className="font-semibold text-rose-800">{anulacionesTurno}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                        <p className="text-xs text-slate-500">Apertura de caja</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(aperturaSesion)}</p>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                        <p className="text-xs text-slate-500">Dinero ingresado (cobrado)</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(totalCobradoGeneralPreClose)}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                    <p className="text-xs text-slate-500">Matrícula</p>
-                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoMatriculas)}</p>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Sencillo devuelto estimado</label>
+                      <input
+                        value={preCloseCambioDevuelto}
+                        onChange={(e) => setPreCloseCambioDevuelto(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                        placeholder="Ingrese sencillo devuelto"
+                      />
+                      <p className="mt-1 text-xs text-slate-500">Se restará del ingreso para estimar el efectivo neto antes de confirmar cierre.</p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <p className="text-slate-700">Ingreso neto estimado: <span className="font-semibold">{formatMoney(ingresoNetoTurno)}</span></p>
+                      {diferenciaPreCierre > 0 ? (
+                        <p className="text-emerald-700">Sobrante estimado: <span className="font-semibold">{formatMoney(diferenciaPreCierre)}</span></p>
+                      ) : diferenciaPreCierre < 0 ? (
+                        <p className="text-rose-700">Faltante estimado: <span className="font-semibold">{formatMoney(Math.abs(diferenciaPreCierre))}</span></p>
+                      ) : (
+                        <p className="text-slate-700">Sin diferencia estimada.</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad física contada</label>
+                      <input value={preCloseCounted} onChange={(e) => setPreCloseCounted(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" placeholder="Ingrese monto contado" />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Descripción/observación de cierre</label>
+                      <input
+                        value={closeObservacion}
+                        onChange={(e) => setCloseObservacion(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                        placeholder="Ej. Cierre de turno sin incidencias"
+                      />
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                    <p className="text-xs text-slate-500">Mensualidad</p>
-                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoMensualidades)}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm">
-                  <p className="text-xs text-rose-700">Anulaciones en turno</p>
-                  <p className="font-semibold text-rose-800">{anulacionesTotales}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                    <p className="text-xs text-slate-500">Apertura de caja</p>
-                    <p className="font-semibold text-slate-900">{formatMoney(aperturaSesion)}</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                    <p className="text-xs text-slate-500">Dinero ingresado (cobrado)</p>
-                    <p className="font-semibold text-slate-900">{formatMoney(totalCobradoGeneralPreClose)}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Sencillo devuelto estimado</label>
-                  <input
-                    value={preCloseCambioDevuelto}
-                    onChange={(e) => setPreCloseCambioDevuelto(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                    placeholder="Ingrese sencillo devuelto"
-                  />
-                  <p className="mt-1 text-xs text-slate-500">Se restará del ingreso para estimar el efectivo neto antes de confirmar cierre.</p>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                  <p className="text-slate-700">Ingreso neto estimado: <span className="font-semibold">{formatMoney(ingresoNetoTurno)}</span></p>
-                  {diferenciaPreCierre > 0 ? (
-                    <p className="text-emerald-700">Sobrante estimado: <span className="font-semibold">{formatMoney(diferenciaPreCierre)}</span></p>
-                  ) : diferenciaPreCierre < 0 ? (
-                    <p className="text-rose-700">Faltante estimado: <span className="font-semibold">{formatMoney(Math.abs(diferenciaPreCierre))}</span></p>
-                  ) : (
-                    <p className="text-slate-700">Sin diferencia estimada.</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad física contada</label>
-                  <input value={preCloseCounted} onChange={(e) => setPreCloseCounted(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" placeholder="Ingrese monto contado" />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Descripción/observación de cierre</label>
-                  <input
-                    value={closeObservacion}
-                    onChange={(e) => setCloseObservacion(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                    placeholder="Ej. Cierre de turno sin incidencias"
-                  />
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2">
-                <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700">Cancelar</button>
-                <button type="button" onClick={confirmCloseSession} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white">Confirmar cierre</button>
+              <div className="flex shrink-0 justify-end gap-2 border-t border-slate-100 p-5 sm:p-6">
+                <button type="button" onClick={() => setShowPreCloseModal(false)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                <button type="button" onClick={confirmCloseSession} className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">Confirmar cierre</button>
               </div>
             </div>
           </div>
         , document.body) : null}
 
         {historialModalOpen ? createPortal(
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
             <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={closeHistorialModal} />
             <div className="relative w-full max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
               <div className="flex items-start justify-between gap-3">

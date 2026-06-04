@@ -61,7 +61,7 @@ function StudentProfileModal({
   }, [estudianteId, token])
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
       <div 
         className="absolute inset-0"
         onClick={onClose}
@@ -456,7 +456,7 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, token, reloadC
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
       <div className="absolute inset-0" onClick={onClose} />
       <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
@@ -552,7 +552,7 @@ function ConfigAsignaturasModal({ isOpen, onClose, grupos, asignaturas, token, r
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
       <div className="absolute inset-0" onClick={onClose} />
       <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
@@ -785,7 +785,7 @@ export function AcademicoGestionPanel() {
       />
 
       {studentToInscribe ? createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
           <div className="absolute inset-0" onClick={() => setStudentToInscribe(null)} />
           <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Users, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
+import { Clock, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import heroImage from '../../../assets/hero.png';
 
 function formatCordobas(value: number) {
@@ -143,8 +143,7 @@ export default function WorkshopsSection() {
                   <div className="mb-4 rounded-lg border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-semibold text-slate-600">Precio por mes:</span>
-                      <div className="flex items-center gap-1">
-                        <DollarSign className="h-4 w-4 text-teal-700" />
+                      <div className="flex items-center">
                         <span className="text-lg font-bold text-teal-700">{formatCordobas(workshop.price)}</span>
                       </div>
                     </div>

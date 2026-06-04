@@ -88,7 +88,7 @@ public class AuthService {
         this.maxAvatarBytes = maxAvatarBytes;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         if (request == null || isBlank(request.email()) || isBlank(request.password())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "AUTH_VALIDATION_REQUIRED_CREDENTIALS");
@@ -97,13 +97,26 @@ public class AuthService {
         Usuario usuario = usuarioRepository.findByEmail(request.email().trim().toLowerCase(Locale.ROOT))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS"));
 
+        if (usuario.getIntentosFallidos() != null && usuario.getIntentosFallidos() >= 3) {
+            usuario.setActivo(false);
+            usuarioRepository.save(usuario);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_USER_BLOCKED_TOO_MANY_ATTEMPTS");
+        }
+
         if (Boolean.FALSE.equals(usuario.getActivo())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_USER_INACTIVE");
         }
 
         if (!passwordEncoder.matches(request.password(), usuario.getPasswordHash())) {
+            usuario.setIntentosFallidos((usuario.getIntentosFallidos() == null ? 0 : usuario.getIntentosFallidos()) + 1);
+            usuarioRepository.save(usuario);
+            registerFailedLoginAudit(usuario);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS");
         }
+
+        usuario.setIntentosFallidos(0);
+        usuario.setTokenVersion((usuario.getTokenVersion() == null ? 0 : usuario.getTokenVersion()) + 1);
+        usuario = usuarioRepository.save(usuario);
 
         AuthUserResponse user = buildUserResponse(usuario);
         String token = jwtService.generateToken(
@@ -113,12 +126,21 @@ public class AuthService {
                 user.nombre(),
                 user.apellido(),
                 user.roles(),
-                user.permisos()
+                user.permisos(),
+                usuario.getTokenVersion()
         );
 
         registerSuccessfulLoginAudit(usuario);
 
         return new AuthResponse(token, "Bearer", jwtService.getExpirationMinutes(), user);
+    }
+
+    @Transactional
+    public void logout(String email) {
+        usuarioRepository.findByEmail(email).ifPresent(usuario -> {
+            usuario.setTokenVersion((usuario.getTokenVersion() == null ? 0 : usuario.getTokenVersion()) + 1);
+            usuarioRepository.save(usuario);
+        });
     }
 
     public AuthUserResponse me(String email) {
@@ -361,7 +383,7 @@ public class AuthService {
     private List<String> resolvePermissions(List<String> roles) {
         Set<String> permissions = new LinkedHashSet<>();
 
-        if (roles.contains("DEVELOPER") || roles.contains("ADMIN") || roles.contains("ADMIN_DIRECCION") || roles.contains("ADMINISTRACION")) {
+        if (roles.contains("DEVELOPER") || roles.contains("ADMIN") || roles.contains("ADMIN_DIRECCION") || roles.contains("ADMINISTRACION") || roles.contains("DIRECTOR")) {
             permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ADMISION");
             permissions.add("DASHBOARD_ACADEMICO");
@@ -399,6 +421,27 @@ public class AuthService {
         }
 
         return new ArrayList<>(permissions);
+    }
+
+    private void registerFailedLoginAudit(Usuario usuario) {
+        try {
+            HttpServletRequest request = resolveRequest();
+            String ip = extractClientIp(request);
+            String userAgent = request != null ? defaultIfNull(request.getHeader("User-Agent"), "<unknown>") : "<unknown>";
+
+            AuditoriaAccesoSistema record = AuditoriaAccesoSistema.builder()
+                    .usuario(usuario)
+                    .emailUsuario(usuario.getEmail())
+                    .fechaIngreso(java.time.LocalDateTime.now())
+                    .ipTerminal(ip)
+                    .navegadorCliente(userAgent)
+                    .estadoIntento("FALLIDO")
+                    .build();
+
+            auditoriaAccesoRepository.save(record);
+        } catch (Exception ex) {
+            log.error("Error saving failed login audit", ex);
+        }
     }
 
     private boolean isBlank(String value) {
