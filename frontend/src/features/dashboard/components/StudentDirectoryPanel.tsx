@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { BookOpen, CalendarDays, ChevronRight, Mail, Phone, Search, Users, UserPlus, X, LoaderCircle, FileText } from 'lucide-react'
+import { BookOpen, CalendarDays, ChevronRight, Mail, Phone, Search, Users, UserPlus, X, LoaderCircle, FileText, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 import { normalizeApiError, useAuth } from '../../auth/AuthContext'
@@ -16,6 +16,7 @@ import {
   type EstudianteItem,
   type TutorItem,
 } from './academico.api'
+import { getAdminTiposDocumento } from '../../admision/admision.api'
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -272,7 +273,7 @@ export function StudentDirectoryPanel() {
   const [currentPage, setCurrentPage] = useState(1)
   const ITEMS_PER_PAGE = 12
 
-  type TipoDocumento = { id: number; nombre: string; esObligatorio: boolean }
+  type TipoDocumento = { id: number; nombre: string; obligatorio: boolean }
   type DocumentoEstudiante = { id: number; tipoDocumentoId: number; tipoDocumentoNombre: string; rutaArchivo: string; fechaRegistro: string }
 
   const [documentos, setDocumentos] = useState<DocumentoEstudiante[]>([])
@@ -281,9 +282,12 @@ export function StudentDirectoryPanel() {
   const [isUploadingDoc, setIsUploadingDoc] = useState(false)
   const [docFile, setDocFile] = useState<File | null>(null)
   const [selectedTipoDoc, setSelectedTipoDoc] = useState('')
+  const [previewDoc, setPreviewDoc] = useState<DocumentoEstudiante | null>(null)
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null)
+  const [previewDocLoading, setPreviewDocLoading] = useState(false)
 
   const canEditStudentNotes = useMemo(
-    () => (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION', 'ADMIN_DIRECCION'].includes(role?.toUpperCase?.() ?? role)),
+    () => (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION', 'ADMIN_DIRECCION', 'DIRECTOR'].includes(role?.toUpperCase?.() ?? role)),
     [user?.roles],
   )
 
@@ -403,12 +407,17 @@ export function StudentDirectoryPanel() {
       const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
       
       Promise.all([
-        axios.get(`${baseUrl}/admin/tipos-documento`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] })),
-        axios.get(`${baseUrl}/admin/estudiantes/${selectedStudentId}/documentos`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ data: [] }))
-      ]).then(([tiposRes, docsRes]) => {
+        getAdminTiposDocumento(token).catch(() => []),
+        axios.get(`${baseUrl}/admin/estudiantes/${selectedStudentId}/documentos`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(res => res.data)
+          .catch((e) => {
+            toast.error(normalizeApiError(e, 'Hubo un error en el servidor al cargar los documentos.'))
+            return []
+          })
+      ]).then(([tiposData, docsData]) => {
         if (!cancelled) {
-          setTiposDoc(tiposRes.data || [])
-          setDocumentos(docsRes.data || [])
+          setTiposDoc(tiposData || [])
+          setDocumentos(docsData || [])
           setLoadingDocs(false)
         }
       })
@@ -434,11 +443,13 @@ export function StudentDirectoryPanel() {
       toast.success('Documento subido exitosamente')
       setDocFile(null)
       setSelectedTipoDoc('')
+      const fileInput = document.getElementById('doc-file-input') as HTMLInputElement
+      if (fileInput) fileInput.value = ''
       
       const docsRes = await axios.get(`${baseUrl}/admin/estudiantes/${selectedStudentId}/documentos`, { headers: { Authorization: `Bearer ${token}` } })
       setDocumentos(docsRes.data || [])
     } catch (e) {
-      toast.error('Error al subir el documento')
+      toast.error(normalizeApiError(e, 'Error al subir el documento (Verifica el tamaño o que la carpeta exista en el servidor)'))
     } finally {
       setIsUploadingDoc(false)
     }
@@ -453,7 +464,7 @@ export function StudentDirectoryPanel() {
       toast.success('Documento eliminado')
       setDocumentos(prev => prev.filter(d => d.id !== docId))
     } catch (e) {
-      toast.error('Error al eliminar el documento')
+      toast.error(normalizeApiError(e, 'Hubo un error interno al intentar eliminar el documento'))
     }
   }
 
@@ -463,6 +474,46 @@ export function StudentDirectoryPanel() {
     const base = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:8080'
     return `${base}${path.startsWith('/') ? path : '/' + path}`
   }
+
+  const isImageDoc = (rutaArchivo: string) => /\.(png|jpe?g|webp|gif)$/i.test(rutaArchivo)
+  const isPdfDoc = (rutaArchivo: string) => /\.pdf$/i.test(rutaArchivo)
+
+  useEffect(() => {
+    if (!previewDoc) return
+
+    let cancelled = false
+    let objectUrl: string | null = null
+
+    setPreviewDocLoading(true)
+
+    const fetchDoc = async () => {
+      try {
+        const targetUrl = resolveDocUrl(previewDoc.rutaArchivo)
+        const response = await fetch(targetUrl, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        
+        if (!response.ok) throw new Error('No se pudo cargar el documento')
+        
+        const blob = await response.blob()
+        objectUrl = URL.createObjectURL(blob)
+        
+        if (!cancelled) setPreviewDocUrl(objectUrl)
+      } catch (err) {
+        if (!cancelled) setPreviewDocUrl(null)
+      } finally {
+        if (!cancelled) setPreviewDocLoading(false)
+      }
+    }
+
+    void fetchDoc()
+
+    return () => {
+      cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setPreviewDocUrl(null)
+    }
+  }, [previewDoc, token])
 
   const handleGuardarInformacionDocente = async () => {
     if (!selectedStudent) {
@@ -872,13 +923,14 @@ export function StudentDirectoryPanel() {
                               >
                                 <option value="">Seleccione un tipo</option>
                                 {tiposDoc.map(t => (
-                                  <option key={t.id} value={t.id}>{t.nombre} {t.esObligatorio ? '(Obligatorio)' : ''}</option>
+                                  <option key={t.id} value={t.id}>{t.nombre} {t.obligatorio ? '(Obligatorio)' : ''}</option>
                                 ))}
                               </select>
                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-semibold text-slate-600">Archivo</label>
                               <input
+                                id="doc-file-input"
                                 type="file"
                                 accept=".pdf,image/*"
                                 onChange={e => setDocFile(e.target.files?.[0] || null)}
@@ -914,9 +966,9 @@ export function StudentDirectoryPanel() {
                                   </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2">
-                                  <a href={resolveDocUrl(doc.rutaArchivo)} target="_blank" rel="noreferrer" className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition-colors">
+                                  <button onClick={() => setPreviewDoc(doc)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 hover:bg-teal-50 transition-colors">
                                     Ver
-                                  </a>
+                                  </button>
                                   {canEditStudentNotes && (
                                     <button onClick={() => handleDeleteDocument(doc.id)} className="rounded-lg border border-rose-200 bg-rose-50 p-1.5 text-rose-600 hover:bg-rose-100 transition-colors" title="Eliminar documento">
                                       <X className="h-4 w-4" />
@@ -984,6 +1036,63 @@ export function StudentDirectoryPanel() {
                 {isUnlinking ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                 Desvincular
               </button>
+            </div>
+          </div>
+        </div>
+      , document.body) : null}
+
+      {previewDoc ? createPortal(
+        <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/60 p-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Vista de documento</p>
+                <p className="text-xs text-slate-500">{previewDoc.tipoDocumentoNombre}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDocUrl || '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={`inline-flex items-center rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 ${!previewDocUrl ? 'pointer-events-none opacity-50' : ''}`}
+                >
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                  Abrir aparte
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc(null)}
+                  className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-[calc(90vh-64px)] overflow-auto bg-slate-50 p-3">
+              {previewDocLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-slate-500">
+                  <LoaderCircle className="mb-2 h-8 w-8 animate-spin" />
+                  <p className="text-sm">Cargando documento...</p>
+                </div>
+              ) : previewDocUrl ? (
+                <>
+                  {isImageDoc(previewDoc.rutaArchivo) ? (
+                    <img src={previewDocUrl} alt={previewDoc.tipoDocumentoNombre} className="mx-auto max-h-[75vh] rounded-lg border border-slate-200 object-contain" />
+                  ) : null}
+                  {isPdfDoc(previewDoc.rutaArchivo) ? (
+                    <iframe src={previewDocUrl} title={previewDoc.tipoDocumentoNombre} className="h-[75vh] w-full rounded-lg border border-slate-200 bg-white" />
+                  ) : null}
+                  {!isImageDoc(previewDoc.rutaArchivo) && !isPdfDoc(previewDoc.rutaArchivo) ? (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">No se puede previsualizar este formato aquí. Usa "Abrir aparte".</div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-10 text-center text-rose-800">
+                  <p className="font-semibold text-lg">No tiene documento</p>
+                  <p className="mt-1 text-sm">El archivo no se encontró en el servidor o no tienes permisos para verlo.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

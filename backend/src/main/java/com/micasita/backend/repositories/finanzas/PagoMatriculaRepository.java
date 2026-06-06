@@ -37,11 +37,13 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
                 pm.detalle as detalle,
                 coalesce(pm.esAnulado, false) as anulado,
                 pm.motivoAnulacion as motivoAnulacion,
-                pm.numeroRecibo as numeroRecibo
+                pm.numeroRecibo as numeroRecibo,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pm.usuario.email) as cajero
             from PagoMatricula pm
             join pm.matricula m
             join m.estudiante e
             join e.persona p
+            left join pm.usuario.persona userPer
             where lower(pm.usuario.email) = lower(:email)
             order by pm.id desc
             """)
@@ -59,11 +61,36 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
                 pm.detalle as detalle,
                 coalesce(pm.esAnulado, false) as anulado,
                 pm.motivoAnulacion as motivoAnulacion,
-                pm.numeroRecibo as numeroRecibo
+                pm.numeroRecibo as numeroRecibo,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pm.usuario.email) as cajero
             from PagoMatricula pm
             join pm.matricula m
             join m.estudiante e
             join e.persona p
+            left join pm.usuario.persona userPer
+            order by pm.id desc
+            """)
+    List<PagoMatriculaCajaView> findAllRecentCaja();
+
+    @Query("""
+            select
+                pm.id as pagoMatriculaId,
+                pm.matricula.id as matriculaId,
+                concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
+                pm.monto as monto,
+                pm.fechaDePago as fechaPago,
+                pm.estadoPago.nombre as estado,
+                pm.metodoPago.nombre as metodoPago,
+                pm.detalle as detalle,
+                coalesce(pm.esAnulado, false) as anulado,
+                pm.motivoAnulacion as motivoAnulacion,
+                pm.numeroRecibo as numeroRecibo,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pm.usuario.email) as cajero
+            from PagoMatricula pm
+            join pm.matricula m
+            join m.estudiante e
+            join e.persona p
+            left join pm.usuario.persona userPer
             where pm.cajaSesion.id = :sessionId
             order by pm.id desc
             """)
@@ -81,5 +108,6 @@ public interface PagoMatriculaRepository extends JpaRepository<PagoMatricula, Lo
         String getDetalle();
         Boolean getAnulado();
         String getMotivoAnulacion();
+        String getCajero();
     }
 }

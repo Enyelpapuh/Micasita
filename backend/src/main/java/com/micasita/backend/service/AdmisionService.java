@@ -567,12 +567,12 @@ public class AdmisionService {
                 continue;
             }
 
-            documentoEstudianteRepository.save(DocumentoEstudiante.builder()
-                    .estudiante(estudiante)
-                    .tipoDocumento(documentoSolicitud.getTipoDocumento())
-                    .rutaArchivo(documentoSolicitud.getRutaArchivo())
-                    .fechaRegistro(LocalDateTime.now())
-                    .build());
+            DocumentoEstudiante docEstudiante = new DocumentoEstudiante();
+            docEstudiante.setEstudiante(estudiante);
+            docEstudiante.setTipoDocumento(documentoSolicitud.getTipoDocumento());
+            docEstudiante.setRutaArchivo(documentoSolicitud.getRutaArchivo());
+            docEstudiante.setFechaRegistro(LocalDateTime.now());
+            documentoEstudianteRepository.save(docEstudiante);
         }
     }
 

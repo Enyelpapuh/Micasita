@@ -1,6 +1,6 @@
 ﻿﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, CreditCard, LoaderCircle, ReceiptText, UserCircle, Wallet, X, ChevronRight } from 'lucide-react'
+import { Check, CreditCard, LoaderCircle, ReceiptText, UserCircle, Wallet, X, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 import { useAuth } from '../../auth/AuthContext'
@@ -224,6 +224,7 @@ type CajaHistorialItem = {
   estado?: string | null
   anulado?: boolean
   motivoAnulacion?: string | null
+  cajero?: string
   pagoCupoId?: number
   pagoMatriculaId?: number
   mensualidadId?: number
@@ -246,6 +247,7 @@ function buildCajaHistorialFromParts(
     estado: item.estado,
     anulado: item.anulado,
     motivoAnulacion: item.motivoAnulacion,
+    cajero: (item as any).cajero,
     pagoCupoId: item.pagoCupoId,
   }))
 
@@ -261,6 +263,7 @@ function buildCajaHistorialFromParts(
     estado: item.estado,
     anulado: item.anulado,
     motivoAnulacion: item.motivoAnulacion,
+    cajero: (item as any).cajero,
     pagoMatriculaId: item.pagoMatriculaId,
   }))
 
@@ -276,6 +279,7 @@ function buildCajaHistorialFromParts(
     estado: item.estado,
     anulado: item.anulado,
     motivoAnulacion: item.motivoAnulacion,
+    cajero: (item as any).cajero,
     mensualidadId: item.mensualidadId,
   }))
 
@@ -1467,7 +1471,7 @@ function MensualidadTab({
 }
 
 export function CajaDashboardPanel() {
-  const { token, user } = useAuth()
+  const { token, user, login } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [tab, setTab] = useState<CajaTab>('talleres')
   const [isLoading, setIsLoading] = useState(true)
@@ -1506,8 +1510,12 @@ export function CajaDashboardPanel() {
   const [preCloseCounted, setPreCloseCounted] = useState('')
   const [preCloseCambioDevuelto, setPreCloseCambioDevuelto] = useState('0')
   const [showOpenSessionModal, setShowOpenSessionModal] = useState(false)
+  const [openPassword, setOpenPassword] = useState('')
+  const [showOpenPassword, setShowOpenPassword] = useState(false)
   const [periodFilter, setPeriodFilter] = useState<'mi_caja' | 'hoy_todos' | 'todo'>('mi_caja')
   const [historialTipoFiltro, setHistorialTipoFiltro] = useState<'todos' | 'Taller' | 'Matrícula' | 'Mensualidad'>('todos')
+  const [historialCajeroFiltro, setHistorialCajeroFiltro] = useState<string>('todos')
+  const [cajeroFilter, setCajeroFilter] = useState<string>('todos')
   const [historialFechaFiltro, setHistorialFechaFiltro] = useState('')
 
   const selfRequestedIdsRef = useRef<Set<string>>(new Set())
@@ -1690,6 +1698,12 @@ export function CajaDashboardPanel() {
     return full.filter((item) => isSameLocalDay(item.fecha))
   }, [pagosTallerSource, pagosMatriculaSource, mensualidadesSource, periodFilter])
 
+  const uniqueHistorialCajeros = useMemo(() => {
+    const cajeros = new Set<string>()
+    historialGeneral.forEach(item => item.cajero && cajeros.add(item.cajero))
+    return Array.from(cajeros).sort()
+  }, [historialGeneral])
+
   const pagosTallerFiltradosPeriodo = useMemo(() => {
     const items = pagosTallerSource
     if (periodFilter === 'todo') {
@@ -1719,6 +1733,10 @@ export function CajaDashboardPanel() {
     return historialGeneral.filter((item) => {
       const matchTipo = historialTipoFiltro === 'todos' || item.tipo === historialTipoFiltro
       if (!matchTipo) {
+        return false
+      }
+
+      if (historialCajeroFiltro !== 'todos' && item.cajero !== historialCajeroFiltro) {
         return false
       }
 
@@ -1827,11 +1845,29 @@ export function CajaDashboardPanel() {
   }
 
   const handleOpenSession = async () => {
+    setOpenPassword('')
     setShowOpenSessionModal(true)
   }
 
   const confirmOpenSession = async () => {
+    if (!openPassword.trim()) {
+      toast.error('Debes confirmar tu contraseña para abrir la caja.')
+      return
+    }
+
+    setBusyAction('open-session')
+    try {
+      const userEmail = (user as any)?.email || (user as any)?.correo
+      if (!userEmail) throw new Error('Usuario sin correo')
+      await login(userEmail, openPassword)
+    } catch (err) {
+      toast.error('Contraseña incorrecta. Verificación fallida.')
+      setBusyAction(null)
+      return
+    }
+
     setShowOpenSessionModal(false)
+    setOpenPassword('')
     await runAction('open-session', () => openCajaSession(token, { saldoInicial: readNumber(openSaldo), observacion: openObservacion }))
   }
 
@@ -2144,6 +2180,82 @@ export function CajaDashboardPanel() {
     URL.revokeObjectURL(url)
   }
 
+  const printHistorialGeneral = () => {
+    const filterLabel = periodFilter === 'mi_caja' ? 'Mi caja (Hoy)' : periodFilter === 'hoy_todos' ? 'General (Hoy todas las cajas)' : 'Histórico completo'
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Historial General de Caja</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 30px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          h1 { color: #0f766e; margin: 0 0 10px 0; font-size: 24px; text-transform: uppercase; }
+          .meta { font-size: 14px; color: #555; margin: 5px 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; }
+          th { background-color: #f8fafc; color: #334155; font-weight: bold; text-transform: uppercase; font-size: 12px; }
+          .text-right { text-align: right; }
+          .anulado { color: #b91c1c; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Historial General de Caja</h1>
+          <p class="meta"><strong>Periodo:</strong> ${filterLabel}</p>
+          <p class="meta"><strong>Generado el:</strong> ${new Date().toLocaleString('es-NI')}</p>
+          <p class="meta"><strong>Usuario:</strong> ${user?.nombre || ''} ${user?.apellido || ''}</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Recibo</th>
+              <th>Tipo</th>
+              <th>Título / Estudiante</th>
+              <th>Detalle</th>
+              <th>Cajero</th>
+              <th>Método</th>
+              <th>Estado</th>
+              <th class="text-right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${historialFiltrado.map(item => `
+              <tr class="${item.anulado ? 'anulado' : ''}">
+                <td>${formatDate(item.fecha)}</td>
+                <td>${item.numeroRecibo || '-'}</td>
+                <td>${item.tipo}</td>
+                <td>${item.titulo}</td>
+                <td>${item.detalle}</td>
+                <td>${item.cajero || '-'}</td>
+                <td>${item.metodoPago || '-'}</td>
+                <td>${item.anulado ? 'Anulado' : (item.estado || '-')}</td>
+                <td class="text-right">${formatMoney(item.monto)}</td>
+              </tr>
+            `).join('')}
+            ${historialFiltrado.length === 0 ? '<tr><td colspan="8" style="text-align:center;">No hay registros</td></tr>' : ''}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      toast.error('Permite las ventanas emergentes para poder imprimir el reporte.')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => {
+      w.focus()
+      w.print()
+    }, 300)
+  }
+
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <div>
@@ -2179,7 +2291,7 @@ export function CajaDashboardPanel() {
       </div>
 
       {/* Search central */}
-      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_220px]">
+      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_220px_220px]">
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -2208,6 +2320,15 @@ export function CajaDashboardPanel() {
           <option value="Mensualidad">Mensualidad</option>
         </select>
 
+        <select
+          value={historialCajeroFiltro}
+          onChange={(e) => setHistorialCajeroFiltro(e.target.value)}
+          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+        >
+          <option value="todos">Todos los cajeros</option>
+          {uniqueHistorialCajeros.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+
         <input
           value={historialFechaFiltro}
           onChange={(e) => setHistorialFechaFiltro(e.target.value)}
@@ -2217,25 +2338,27 @@ export function CajaDashboardPanel() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-2 justify-between items-center">
-        <div className="flex flex-wrap gap-2">
-          {tabs.map(({ id, label, icon: Icon }) => {
-            const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-              >
-                <Icon className="mr-2 h-4 w-4" />
-                {label}
-                <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
-                  {count}
-                </span>
-              </button>
-            )
-          })}
-        </div>
+        {activeSession ? (
+          <div className="flex flex-wrap gap-2">
+            {tabs.map(({ id, label, icon: Icon }) => {
+              const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTab(id)}
+                  className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+                >
+                  <Icon className="mr-2 h-4 w-4" />
+                  {label}
+                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ) : <div />}
         
         {pendingAnnulments.length > 0 && (
           <button
@@ -2271,6 +2394,18 @@ export function CajaDashboardPanel() {
           <>
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">
+                    {!activeSession ? (
+                      <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-200 text-slate-500">
+                          <Wallet className="h-8 w-8" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-900">La caja está cerrada</h3>
+                        <p className="mt-2 max-w-md text-sm text-slate-500">
+                          Para registrar nuevos cobros, consultar deudas o realizar anulaciones, necesitas abrir una sesión de caja desde el panel superior.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
                 {tab === 'talleres' ? (
                   <TalleresTab
                     pendientes={data.talleresPendientes}
@@ -2353,21 +2488,24 @@ export function CajaDashboardPanel() {
                     pendingAnnulIds={pendingMensualidadIds}
                   />
                 ) : null}
+                      </>
+                    )}
               </div>
 
               <aside className="lg:col-span-1">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Historial general</h3>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start justify-between gap-2">
                         <p className="mt-1 text-xs text-slate-600">Un solo listado cronológico para talleres, matrícula y mensualidad.</p>
-                        <div>
+                        <div className="flex shrink-0 flex-col gap-2">
                           <button type="button" onClick={openHistorialModal} className="rounded-xl border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ver todos</button>
+                          <button type="button" onClick={printHistorialGeneral} className="rounded-xl border border-teal-300 bg-white px-3 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-50">Imprimir</button>
                         </div>
                       </div>
                       {historialFechaFiltro ? (
                         <p className="mt-2 text-xs text-slate-500">Filtrando por fecha de pago: {historialFechaFiltro}</p>
                       ) : null}
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-4 max-h-[600px] space-y-3 overflow-y-auto pr-1">
                     {historialFiltrado.map((item) => (
                       <article
                         key={item.key}
@@ -2408,6 +2546,10 @@ export function CajaDashboardPanel() {
                                         return <span className="ml-auto rounded-xl bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">En espera</span>;
                                       }
                                       
+                                      if (!activeSession) {
+                                        return null;
+                                      }
+
                                       return (
                                         <button
                                           type="button"
@@ -2551,6 +2693,22 @@ export function CajaDashboardPanel() {
                     className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
                   />
                 </div>
+
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Contraseña de confirmación</label>
+                  <div className="flex items-center rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus-within:border-teal-500 focus-within:ring-1 focus-within:ring-teal-500">
+                    <input
+                      value={openPassword}
+                      onChange={(e) => setOpenPassword(e.target.value)}
+                      type={showOpenPassword ? 'text' : 'password'}
+                      placeholder="Ingresa tu contraseña para autorizar"
+                      className="w-full bg-transparent outline-none"
+                    />
+                    <button type="button" onClick={() => setShowOpenPassword(!showOpenPassword)} className="text-slate-400 hover:text-slate-600">
+                      {showOpenPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-4 flex justify-end gap-2">
@@ -2677,46 +2835,67 @@ export function CajaDashboardPanel() {
         {historialModalOpen ? createPortal(
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
             <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={closeHistorialModal} />
-            <div className="relative w-full max-w-4xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
-              <div className="flex items-start justify-between gap-3">
+            <div className="relative flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl">
+              
+              {/* Encabezado Fijo */}
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 bg-white p-5 sm:p-6">
                 <div>
                   <h4 className="text-lg font-semibold text-slate-900">Historial completo</h4>
                   <p className="text-sm text-slate-600">Listado cronológico de pagos con filtros por período, tipo y recibo.</p>
                 </div>
-                <button type="button" onClick={closeHistorialModal} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Cerrar</button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button type="button" onClick={printHistorialGeneral} className="rounded-lg border border-teal-300 bg-white px-3 py-1.5 text-xs font-semibold text-teal-700 shadow-sm hover:bg-teal-50">Imprimir lista</button>
+                  <button type="button" onClick={closeHistorialModal} className="rounded-lg border border-slate-300 bg-slate-100 px-4 py-1.5 text-xs font-bold text-slate-800 shadow-sm hover:bg-slate-200">
+                    ✕ Cerrar
+                  </button>
+                </div>
               </div>
 
-              <div className="mt-4">
-                <div className="overflow-x-auto">
+              {/* Buscador Fijo */}
+              <div className="shrink-0 border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
+                <input
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar en el historial por estudiante, número de recibo o detalle..."
+                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none shadow-sm focus:border-teal-500"
+                />
+              </div>
+
+              {/* Área Desplazable */}
+              <div className="flex-1 overflow-y-auto bg-slate-50/30 p-4 sm:p-6">
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-slate-500">
-                        <th className="px-2 py-2">Tipo</th>
-                        <th className="px-2 py-2">Título</th>
-                        <th className="px-2 py-2">Recibo</th>
-                        <th className="px-2 py-2">Detalle</th>
-                        <th className="px-2 py-2">Monto</th>
-                        <th className="px-2 py-2">Fecha</th>
-                        <th className="px-2 py-2">Método</th>
-                        <th className="px-2 py-2">Estado</th>
-                        <th className="px-2 py-2 text-right">Acciones</th>
+                    <thead className="border-b border-slate-200 bg-slate-50">
+                      <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500">
+                        <th className="px-4 py-3 font-semibold">Tipo</th>
+                        <th className="px-4 py-3 font-semibold">Título</th>
+                        <th className="px-4 py-3 font-semibold">Recibo</th>
+                        <th className="px-4 py-3 font-semibold">Detalle</th>
+                        <th className="px-4 py-3 font-semibold">Cajero</th>
+                        <th className="px-4 py-3 font-semibold">Monto</th>
+                        <th className="px-4 py-3 font-semibold">Fecha</th>
+                        <th className="px-4 py-3 font-semibold">Método</th>
+                        <th className="px-4 py-3 font-semibold">Estado</th>
+                      <th className="px-4 py-3 text-left font-semibold">Cajero</th>
+                        <th className="px-4 py-3 text-right font-semibold">Acciones</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {historialFiltrado.map((item) => (
-                        <tr key={item.key} className={`border-b ${item.anulado ? 'bg-rose-50' : ''}`}>
-                          <td className="px-2 py-3">{item.tipo}</td>
-                          <td className="px-2 py-3">{item.titulo}</td>
-                          <td className="px-2 py-3">{item.numeroRecibo}</td>
-                          <td className="px-2 py-3">{item.detalle}</td>
-                          <td className="px-2 py-3">{formatMoney(item.monto)}</td>
-                          <td className="px-2 py-3">{formatDate(item.fecha)}</td>
-                          <td className="px-2 py-3">{item.metodoPago || '-'}</td>
-                          <td className="px-2 py-3">{item.anulado ? `Anulado` : (item.estado || '-')}</td>
-                          <td className="px-2 py-3 text-right">
+                        <tr key={item.key} className={`transition-colors hover:bg-slate-50 ${item.anulado ? 'bg-rose-50/50' : 'bg-white'}`}>
+                          <td className="whitespace-nowrap px-4 py-3">{item.tipo}</td>
+                          <td className="px-4 py-3">{item.titulo}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-medium text-slate-700">{item.numeroRecibo}</td>
+                          <td className="max-w-[200px] truncate px-4 py-3" title={item.detalle}>{item.detalle}</td>
+                          <td className="whitespace-nowrap px-4 py-3">{item.cajero || '-'}</td>
+                          <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">{formatMoney(item.monto)}</td>
+                          <td className="whitespace-nowrap px-4 py-3">{formatDate(item.fecha)}</td>
+                          <td className="whitespace-nowrap px-4 py-3">{item.metodoPago || '-'}</td>
+                          <td className="whitespace-nowrap px-4 py-3">{item.anulado ? `Anulado` : (item.estado || '-')}</td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
                             <div className="inline-flex gap-2">
-                              <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100">Imprimir</button>
-                              <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Descargar</button>
+                              <button type="button" onClick={() => openReceipt(item)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Imprimir</button>
+                              <button type="button" onClick={() => downloadReceipt(item)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Descargar</button>
                             </div>
                           </td>
                         </tr>
@@ -2725,7 +2904,7 @@ export function CajaDashboardPanel() {
                   </table>
                 </div>
                 {historialFiltrado.length === 0 ? (
-                  <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                     No hay registros en el historial con los filtros seleccionados.
                   </div>
                 ) : null}

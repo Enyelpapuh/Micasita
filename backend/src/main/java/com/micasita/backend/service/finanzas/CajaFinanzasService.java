@@ -257,6 +257,11 @@ public class CajaFinanzasService {
         pago.setEsAnulado(true);
         pago.setMotivoAnulacion(requireMotivo(motivo));
         pago.setEstadoPago(requireEstadoPago(ESTADO_ANULADO));
+
+        Matricula matricula = pago.getMatricula();
+        matricula.setEstadoMatricula(requireEstadoMatricula(ESTADO_PENDIENTE));
+        matriculaRepository.save(matricula);
+
         pagoMatriculaRepository.save(pago);
         return new CajaOperacionResult(pago.getId(), pago.getNumeroRecibo(), ESTADO_ANULADO, "Pago de matricula anulado");
     }
@@ -284,7 +289,7 @@ public class CajaFinanzasService {
         }
         mensualidad.setEsAnulado(true);
         mensualidad.setMotivoAnulacion(requireMotivo(motivo));
-        mensualidad.setEstadoPago(requireEstadoPago(ESTADO_ANULADO));
+        mensualidad.setEstadoPago(requireEstadoPago(ESTADO_PENDIENTE));
         mensualidadRepository.save(mensualidad);
         return new CajaOperacionResult(mensualidad.getId(), mensualidad.getNumeroRecibo(), ESTADO_ANULADO, "Mensualidad anulada");
     }

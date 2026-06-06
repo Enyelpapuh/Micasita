@@ -38,23 +38,7 @@ import { CajaDashboardPanel } from './CajaDashboardPanel'
 import { getCajaHistorialGeneral } from './caja.api'
 import { AdminFinanzasPanel } from './AdminFinanzasPanel'
 import { ContactMessagesPanel } from './ContactMessagesPanel'
-import { AuditLogDetailModal } from './AuditLogDetailModal'
-
-export type AuditLogEntry = {
-  id: number
-  fecha: string
-  usuarioEmail: string
-  usuarioNombre: string
-  accion: 'CREAR' | 'ACTUALIZAR' | 'ELIMINAR' | 'LOGIN_EXITOSO' | 'LOGIN_FALLIDO'
-  entidad?: string
-  entidadId?: string | number
-  descripcion: string
-  ip?: string
-  navegador?: string
-  valorAnterior?: string
-  valorNuevo?: string
-  camposModificados?: string
-}
+import { AuditoriaPanel } from './AuditoriaPanel'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -62,7 +46,7 @@ type DashboardPanelProps = {
   user?: AuthUser | null
 }
 
-function PanelShell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+export function PanelShell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <div className="flex flex-col gap-2">
@@ -93,7 +77,9 @@ function formatMoney(value?: number | null) {
 export function OverviewPanel({ user }: DashboardPanelProps) {
   const { token } = useAuth()
   const [cajaResumen, setCajaResumen] = useState<Awaited<ReturnType<typeof getCajaHistorialGeneral>> | null>(null)
-  const [periodFilter, setPeriodFilter] = useState<'7' | '15' | '30' | 'all'>('30')
+  const [periodFilter, setPeriodFilter] = useState<'0' | '7' | '15' | '30' | 'all' | 'custom'>('30')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -128,39 +114,65 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
       }
     }
 
-    const now = new Date()
-    now.setHours(23, 59, 59, 999)
-    let startDate = new Date(0)
+    let filterStart = new Date(0)
+    let filterEnd = new Date()
+    filterEnd.setHours(23, 59, 59, 999)
 
-    if (periodFilter !== 'all') {
-      startDate = new Date()
-      startDate.setDate(startDate.getDate() - parseInt(periodFilter))
-      startDate.setHours(0, 0, 0, 0)
+    if (periodFilter === 'custom') {
+      if (dateFrom) filterStart = new Date(dateFrom + 'T00:00:00')
+      if (dateTo) filterEnd = new Date(dateTo + 'T23:59:59.999')
+    } else if (periodFilter !== 'all') {
+      filterStart = new Date()
+      filterStart.setDate(filterStart.getDate() - parseInt(periodFilter))
+      filterStart.setHours(0, 0, 0, 0)
     }
 
     const isInsideDate = (dateStr?: string | null) => {
       if (!dateStr) return false
+
       const d = new Date(dateStr as string)
-      return d >= startDate && d <= now
+      return d >= filterStart && d <= filterEnd
     }
 
     const validTaller = (cajaResumen.pagosTaller || []).filter((p) => !p.anulado && isInsideDate(p.fechaPago))
     const validMatricula = (cajaResumen.pagosMatricula || []).filter((p) => !p.anulado && isInsideDate(p.fechaPago))
     const validMensualidad = (cajaResumen.mensualidades || []).filter((p) => !p.anulado && isInsideDate(p.fechaPago))
 
+    const annulledTaller = (cajaResumen.pagosTaller || []).filter((p) => p.anulado && isInsideDate(p.fechaPago))
+    const annulledMatricula = (cajaResumen.pagosMatricula || []).filter((p) => p.anulado && isInsideDate(p.fechaPago))
+    const annulledMensualidad = (cajaResumen.mensualidades || []).filter((p) => p.anulado && isInsideDate(p.fechaPago))
+
     const totalTaller = validTaller.reduce((acc, curr) => acc + (curr.monto || 0), 0)
     const totalMatricula = validMatricula.reduce((acc, curr) => acc + (curr.monto || 0), 0)
     const totalMensualidad = validMensualidad.reduce((acc, curr) => acc + (curr.monto || 0), 0)
     const total = totalTaller + totalMatricula + totalMensualidad
 
+    const totalAnulado = [...annulledTaller, ...annulledMatricula, ...annulledMensualidad].reduce((acc, curr) => acc + (curr.monto || 0), 0)
+    const cantidadAnulados = annulledTaller.length + annulledMatricula.length + annulledMensualidad.length
+
     const combined = [
-      ...validTaller.map((t) => ({ fecha: t.fechaPago, concepto: 'Taller', detalle: t.taller || t.participante, monto: t.monto, metodo: t.metodoPago, recibo: t.numeroRecibo })),
+      ...validTaller.map((t) => ({ fecha: t.fechaPago, concepto: 'Taller', detalle: `${t.taller || 'Taller'} - ${t.participante || 'Sin nombre'}`, monto: t.monto, metodo: t.metodoPago, recibo: t.numeroRecibo })),
       ...validMatricula.map((m) => ({ fecha: m.fechaPago, concepto: 'Matrícula', detalle: m.estudiante, monto: m.monto, metodo: m.metodoPago, recibo: m.numeroRecibo })),
       ...validMensualidad.map((m) => ({ fecha: m.fechaPago, concepto: 'Mensualidad', detalle: m.estudiante + ' (Mes ' + m.mes + ')', monto: m.monto, metodo: m.metodoPago, recibo: m.numeroRecibo })),
     ].sort((a, b) => (b.fecha ? new Date(b.fecha as string).getTime() : 0) - (a.fecha ? new Date(a.fecha as string).getTime() : 0))
 
-    return { validTaller, validMatricula, validMensualidad, totalTaller, totalMatricula, totalMensualidad, total, combined }
+    return { validTaller, validMatricula, validMensualidad, totalTaller, totalMatricula, totalMensualidad, total, combined, totalAnulado, cantidadAnulados }
   }, [cajaResumen, periodFilter])
+
+  const talleresAgrupados = useMemo(() => {
+    const map = new Map<string, { cantidad: number; total: number }>()
+    filteredData.validTaller.forEach((t) => {
+      const nombre = t.taller || 'Taller General'
+      const actual = map.get(nombre) || { cantidad: 0, total: 0 }
+      map.set(nombre, {
+        cantidad: actual.cantidad + 1,
+        total: actual.total + (t.monto || 0),
+      })
+    })
+    return Array.from(map.entries())
+      .map(([nombre, datos]) => ({ nombre, ...datos }))
+      .sort((a, b) => b.total - a.total)
+  }, [filteredData.validTaller])
 
   const totalTalleres = filteredData.totalTaller
   const totalMatriculas = filteredData.totalMatricula
@@ -191,7 +203,20 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
   }
 
   const printReport = () => {
-    const filterLabel = periodFilter === '7' ? 'Últimos 7 días' : periodFilter === '15' ? 'Últimos 15 días' : periodFilter === '30' ? 'Último mes' : 'Histórico Completo'
+    let filterLabel = ''
+    if (periodFilter === 'custom') {
+      if (dateFrom && dateTo) {
+         filterLabel = `Desde ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-NI')} hasta ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-NI')}`
+      } else if (dateFrom) {
+         filterLabel = `Desde ${new Date(dateFrom + 'T00:00:00').toLocaleDateString('es-NI')}`
+      } else if (dateTo) {
+         filterLabel = `Hasta ${new Date(dateTo + 'T00:00:00').toLocaleDateString('es-NI')}`
+      } else {
+         filterLabel = 'Personalizado'
+      }
+    } else {
+      filterLabel = periodFilter === '0' ? 'Hoy' : periodFilter === '7' ? 'Últimos 7 días' : periodFilter === '15' ? 'Últimos 15 días' : periodFilter === '30' ? 'Último mes' : 'Histórico Completo'
+    }
     
     const html = `
       <!doctype html>
@@ -246,15 +271,41 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
               <td class="text-right">${filteredData.validMensualidad.length}</td>
               <td class="text-right">${formatMoney(filteredData.totalMensualidad)}</td>
             </tr>
+            <tr style="color: #b91c1c;">
+              <td>Anulaciones (No suman al total)</td>
+              <td class="text-right">${filteredData.cantidadAnulados}</td>
+              <td class="text-right">-${formatMoney(filteredData.totalAnulado)}</td>
+            </tr>
             <tr class="total-row">
-              <td>TOTAL INGRESOS</td>
+              <td>TOTAL INGRESOS NETOS</td>
               <td class="text-right">${filteredData.combined.length}</td>
               <td class="text-right">${formatMoney(filteredData.total)}</td>
             </tr>
           </tbody>
         </table>
 
-        <h2>Ingresos Clasificados (Desglose)</h2>
+        <h2>Desglose por Talleres</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre del Taller</th>
+              <th class="text-right">Inscripciones Pagadas</th>
+              <th class="text-right">Total Recaudado</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${talleresAgrupados.map(t => `
+              <tr>
+                <td>${t.nombre}</td>
+                <td class="text-right">${t.cantidad}</td>
+                <td class="text-right" style="font-weight: 500; color: #0f766e;">${formatMoney(t.total)}</td>
+              </tr>
+            `).join('')}
+            ${talleresAgrupados.length === 0 ? '<tr><td colspan="3" style="text-align:center; padding: 15px;">No hay ingresos por talleres</td></tr>' : ''}
+          </tbody>
+        </table>
+
+        <h2>Ingresos Clasificados (Desglose General)</h2>
         <table>
           <thead>
             <tr>
@@ -304,18 +355,40 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
         subtitle="Genera reportes y analiza los ingresos financieros."
       >
         <div className="mb-6 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-semibold text-slate-700">Filtrar periodo:</label>
-            <select 
-              value={periodFilter} 
-              onChange={(e) => setPeriodFilter(e.target.value as '7' | '15' | '30' | 'all')}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-            >
-              <option value="7">Últimos 7 días</option>
-              <option value="15">Últimos 15 días</option>
-              <option value="30">Último mes</option>
-              <option value="all">Todo el histórico</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-semibold text-slate-700">Desde:</label>
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); if (e.target.value) setPeriodFilter('custom'); }}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-semibold text-slate-700">Hasta:</label>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); if (e.target.value) setPeriodFilter('custom'); }}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-semibold text-slate-700">O rápido:</label>
+              <select 
+                value={periodFilter} 
+                onChange={(e) => { setPeriodFilter(e.target.value as any); if (e.target.value !== 'custom') { setDateFrom(''); setDateTo(''); } }}
+                className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+              >
+                <option value="0">Hoy</option>
+                <option value="7">Últimos 7 días</option>
+                <option value="15">Últimos 15 días</option>
+                <option value="30">Último mes</option>
+                <option value="all">Todo el histórico</option>
+                <option value="custom" className="hidden">Personalizado</option>
+              </select>
+            </div>
           </div>
           
           <button
@@ -328,11 +401,12 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
           </button>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
           <MetricCard label="Recaudado talleres" value={formatMoney(totalTalleres)} detail="En el periodo seleccionado" />
           <MetricCard label="Recaudado matrícula" value={formatMoney(totalMatriculas)} detail="En el periodo seleccionado" />
           <MetricCard label="Recaudado mensualidad" value={formatMoney(totalMensualidades)} detail="En el periodo seleccionado" />
           <MetricCard label="Recaudado total" value={formatMoney(totalGeneral)} detail="Suma total en el periodo" />
+          <MetricCard label="Total anulado" value={formatMoney(filteredData.totalAnulado)} detail={`${filteredData.cantidadAnulados} operaciones anuladas`} />
         </div>
 
         <div className="mt-6 grid gap-6 md:grid-cols-2">
@@ -393,8 +467,13 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
                     <td className="px-4 py-3 text-right">{filteredData.validMensualidad.length}</td>
                     <td className="px-4 py-3 text-right font-medium">{formatMoney(totalMensualidades)}</td>
                   </tr>
+                  <tr className="bg-slate-50 text-rose-700">
+                    <td className="px-4 py-3">Anulaciones</td>
+                    <td className="px-4 py-3 text-right">{filteredData.cantidadAnulados}</td>
+                    <td className="px-4 py-3 text-right font-medium">-{formatMoney(filteredData.totalAnulado)}</td>
+                  </tr>
                   <tr className="bg-white font-semibold text-slate-900">
-                    <td className="px-4 py-3">TOTAL</td>
+                    <td className="px-4 py-3">TOTAL NETO</td>
                     <td className="px-4 py-3 text-right">{filteredData.combined.length}</td>
                     <td className="px-4 py-3 text-right text-teal-700">{formatMoney(totalGeneral)}</td>
                   </tr>
@@ -446,6 +525,41 @@ export function OverviewPanel({ user }: DashboardPanelProps) {
             </div>
           </article>
         </div>
+
+        <div className="mt-6">
+          <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Desglose por Talleres</p>
+            <p className="mt-1 text-sm text-slate-600">Recaudación detallada por cada taller impartido en el periodo.</p>
+            
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+              <table className="w-full text-sm">
+                <thead className="border-b border-slate-200 bg-white text-slate-600">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold">Nombre del Taller</th>
+                    <th className="px-4 py-3 text-right font-semibold">Inscripciones Pagadas</th>
+                    <th className="px-4 py-3 text-right font-semibold">Total Recaudado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {talleresAgrupados.map((taller, idx) => (
+                    <tr key={idx} className="transition-colors hover:bg-white">
+                      <td className="px-4 py-3 font-medium text-slate-900">{taller.nombre}</td>
+                      <td className="px-4 py-3 text-right text-slate-700">{taller.cantidad}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-teal-700">{formatMoney(taller.total)}</td>
+                    </tr>
+                  ))}
+                  {talleresAgrupados.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-8 text-center text-slate-500">
+                        No hay pagos de talleres registrados en este periodo.
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </div>
       </PanelShell>
     </div>
   )
@@ -494,190 +608,6 @@ export function MensajesPanel() {
 // export function AvisosPanel() {
 //   return <NoticiasPanel />
 // }
-
-function formatAuditDate(value?: string | null) {
-  if (!value) return 'Fecha desconocida'
-  try {
-    return new Intl.DateTimeFormat('es-NI', {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(value))
-  } catch {
-    return 'Fecha inválida'
-  }
-}
-
-function getActionMeta(action: AuditLogEntry['accion']) {
-  switch (action) {
-    case 'CREAR':
-      return { Icon: PlusCircle, color: 'text-emerald-600', bg: 'bg-emerald-50' }
-    case 'ACTUALIZAR':
-      return { Icon: Pencil, color: 'text-sky-600', bg: 'bg-sky-50' }
-    case 'ELIMINAR':
-      return { Icon: Trash2, color: 'text-rose-600', bg: 'bg-rose-50' }
-    case 'LOGIN_EXITOSO':
-      return { Icon: LogIn, color: 'text-teal-600', bg: 'bg-teal-50' }
-    case 'LOGIN_FALLIDO':
-      return { Icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50' }
-    default:
-      return { Icon: History, color: 'text-slate-600', bg: 'bg-slate-100' }
-  }
-}
-
-export function AuditoriaPanel() {
-  const { token } = useAuth()
-  const [logs, setLogs] = useState<AuditLogEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [period, setPeriod] = useState<'7' | '30' | '90'>('7')
-  const [search, setSearch] = useState('')
-  const [specificDate, setSpecificDate] = useState('')
-  const [selectedLogForDetail, setSelectedLogForDetail] = useState<AuditLogEntry | null>(null)
-  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      if (!token) return
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await axios.get<AuditLogEntry[]>('/admin/auditoria/log', {
-          baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api',
-          headers: { Authorization: `Bearer ${token}` },
-          params: { days: period },
-        })
-        if (!cancelled) setLogs(res.data ?? [])
-      } catch (err) {
-        if (!cancelled) setError('No fue posible cargar el registro de auditoría.')
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    void load()
-    return () => { cancelled = true }
-  }, [token, period])
-
-  const filteredLogs = useMemo(() => {
-    let result = logs
-    if (specificDate) {
-      // Como log.fecha viene en formato ISO "YYYY-MM-DDTHH:mm:ss", podemos usar startsWith
-      result = result.filter(log => log.fecha && log.fecha.startsWith(specificDate))
-    }
-
-    const term = search.trim().toLowerCase()
-    if (!term) return result
-    return result.filter(log => {
-      const haystack = [
-        log.usuarioEmail,
-        log.usuarioNombre,
-        log.accion,
-        log.entidad,
-        String(log.entidadId),
-        log.descripcion,
-        log.ip,
-      ].join(' ').toLowerCase()
-      return haystack.includes(term)
-    })
-  }, [logs, search, specificDate])
-
-  const openDetailModal = (log: AuditLogEntry) => {
-    setSelectedLogForDetail(log)
-    setIsDetailModalOpen(true)
-  }
-
-  const closeDetailModal = () => {
-    setSelectedLogForDetail(null)
-    setIsDetailModalOpen(false)
-  }
-
-  return (
-    <PanelShell title="Auditoría del Sistema" subtitle="Registro de cambios y eventos importantes en la plataforma.">
-      <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm ring-teal-300 focus-within:ring">
-          <Search className="mr-2 h-4 w-4 shrink-0 text-slate-400" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por usuario, acción, entidad..."
-            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-semibold text-slate-700">Día:</label>
-            <input
-              type="date"
-              value={specificDate}
-              onChange={(e) => setSpecificDate(e.target.value)}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-semibold text-slate-700">Periodo:</label>
-            <select 
-              value={period} 
-              onChange={(e) => setPeriod(e.target.value as '7' | '30' | '90')}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-            >
-              <option value="7">Últimos 7 días</option>
-              <option value="30">Últimos 30 días</option>
-              <option value="90">Últimos 90 días</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-6">
-        {loading ? (
-          <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-10 text-slate-600">
-            <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Cargando registros...
-          </div>
-        ) : error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
-        ) : filteredLogs.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-            No hay registros de auditoría para el periodo y filtro seleccionados.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {filteredLogs.map((log) => {
-              const { Icon, color, bg } = getActionMeta(log.accion)
-              return (
-                <button
-                  key={log.id}
-                  type="button"
-                  onClick={() => openDetailModal(log)}
-                  className="flex w-full items-start gap-4 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md"
-                >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg} ${color}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-800">{log.descripcion}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Por <span className="font-medium text-slate-700">{log.usuarioNombre || 'N/A'}</span> ({log.usuarioEmail || 'N/A'})
-                      {log.ip ? ` desde la IP ${log.ip}` : ''}
-                    </p>
-                    <p className="mt-1 text-xs font-medium text-slate-500">{formatAuditDate(log.fecha)}</p>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-slate-600">{log.accion}</span>
-                </button>
-              )
-            })} 
-          </div>
-        )}
-      </div>
-
-      {isDetailModalOpen && selectedLogForDetail ? (
-        <AuditLogDetailModal
-          log={selectedLogForDetail}
-          onClose={closeDetailModal}
-        />
-      ) : null}
-    </PanelShell>
-  )
-}
 
 export function SettingsPanel() {
   const { token, user, refreshUser } = useAuth()

@@ -716,7 +716,184 @@ BEGIN
 END;
 GO
 
+-- =========================================================================
+-- 4. TRIGGER DE AUDITORÍA PARA LA TABLA: Matricula
+-- =========================================================================
+CREATE TRIGGER TR_Auditoria_Matricula
+ON Matricula
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS(SELECT * FROM inserted) AND NOT EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Matricula', i.ID_matricula, 'INSERT',
+            (SELECT i.ID_estudiante, i.Anio_lectivo, i.ID_estado_matricula FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i;
+    END
+
+    IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Matricula', i.ID_matricula, 'UPDATE',
+            (SELECT d.ID_estudiante, d.Anio_lectivo, d.ID_estado_matricula FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            (SELECT i.ID_estudiante, i.Anio_lectivo, i.ID_estado_matricula FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (SELECT 
+                CASE WHEN ISNULL(d.ID_estado_matricula,0) <> ISNULL(i.ID_estado_matricula,0) THEN 'ID_estado_matricula' ELSE NULL END AS ID_estado_matricula,
+                CASE WHEN ISNULL(d.Anio_lectivo,'') <> ISNULL(i.Anio_lectivo,'') THEN 'Anio_lectivo' ELSE NULL END AS Anio_lectivo
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
+        FROM inserted i INNER JOIN deleted d ON i.ID_matricula = d.ID_matricula;
+    END
+
+    IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Matricula', d.ID_matricula, 'DELETE',
+            (SELECT d.ID_estudiante, d.Anio_lectivo, d.ID_estado_matricula FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM deleted d;
+    END
+END;
+GO
+
+-- =========================================================================
+-- 5. TRIGGER DE AUDITORÍA PARA LA TABLA: Solicitud_Admision
+-- =========================================================================
+CREATE TRIGGER TR_Auditoria_SolicitudAdmision
+ON Solicitud_Admision
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS(SELECT * FROM inserted) AND NOT EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Solicitud_Admision', i.ID_solicitud, 'INSERT',
+            (SELECT i.ID_estado_solicitud, i.Activo, i.Nombre_Postulante FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i;
+    END
+
+    IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Solicitud_Admision', i.ID_solicitud, 'UPDATE',
+            (SELECT d.ID_estado_solicitud, d.Activo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            (SELECT i.ID_estado_solicitud, i.Activo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (SELECT 
+                CASE WHEN ISNULL(d.ID_estado_solicitud,0) <> ISNULL(i.ID_estado_solicitud,0) THEN 'ID_estado_solicitud' ELSE NULL END AS ID_estado_solicitud,
+                CASE WHEN ISNULL(d.Activo,0) <> ISNULL(i.Activo,0) THEN 'Activo' ELSE NULL END AS Activo 
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
+        FROM inserted i INNER JOIN deleted d ON i.ID_solicitud = d.ID_solicitud;
+    END
+
+    IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Solicitud_Admision', d.ID_solicitud, 'DELETE',
+            (SELECT d.ID_estado_solicitud, d.Activo, d.Nombre_Postulante FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM deleted d;
+    END
+END;
+GO
+
+-- =========================================================================
+-- 6. TRIGGER DE AUDITORÍA PARA LA TABLA: Taller
+-- =========================================================================
+CREATE TRIGGER TR_Auditoria_Taller
+ON Taller
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS(SELECT * FROM inserted) AND NOT EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Taller', i.ID_taller, 'INSERT',
+            (SELECT i.Nombre, i.Costo, i.Activo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i;
+    END
+
+    IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Taller', i.ID_taller, 'UPDATE',
+            (SELECT d.Nombre, d.Costo, d.Activo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            (SELECT i.Nombre, i.Costo, i.Activo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (SELECT 
+                CASE WHEN ISNULL(d.Nombre,'') <> ISNULL(i.Nombre,'') THEN 'Nombre' ELSE NULL END AS Nombre,
+                CASE WHEN ISNULL(d.Costo,0) <> ISNULL(i.Costo,0) THEN 'Costo' ELSE NULL END AS Costo,
+                CASE WHEN ISNULL(d.Activo,0) <> ISNULL(i.Activo,0) THEN 'Activo' ELSE NULL END AS Activo 
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
+        FROM inserted i INNER JOIN deleted d ON i.ID_taller = d.ID_taller;
+    END
+
+    IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Taller', d.ID_taller, 'DELETE',
+            (SELECT d.Nombre, d.Costo, d.Activo FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM deleted d;
+    END
+END;
+GO
+
+-- =========================================================================
+-- 7. TRIGGER DE AUDITORÍA PARA LA TABLA: Caja_Sesion
+-- =========================================================================
+CREATE TRIGGER TR_Auditoria_Caja_Sesion
+ON Caja_Sesion
+AFTER INSERT, UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS(SELECT * FROM inserted) AND NOT EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Caja_Sesion', i.ID_caja_sesion, 'INSERT',
+            (SELECT i.Codigo, i.ID_estado_caja, i.Saldo_inicial FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i;
+    END
+
+    IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente, campos_modificados)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT), 'Caja_Sesion', i.ID_caja_sesion, 'UPDATE',
+            (SELECT d.Codigo, d.ID_estado_caja, d.Saldo_inicial, d.Saldo_cierre FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            (SELECT i.Codigo, i.ID_estado_caja, i.Saldo_inicial, i.Saldo_cierre FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)), CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255)),
+            (SELECT 
+                CASE WHEN ISNULL(d.ID_estado_caja,0) <> ISNULL(i.ID_estado_caja,0) THEN 'ID_estado_caja' ELSE NULL END AS ID_estado_caja,
+                CASE WHEN ISNULL(d.Saldo_cierre,0) <> ISNULL(i.Saldo_cierre,0) THEN 'Saldo_cierre' ELSE NULL END AS Saldo_cierre 
+             FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
+        FROM inserted i INNER JOIN deleted d ON i.ID_caja_sesion = d.ID_caja_sesion;
+    END
+END;
+GO
 
 SET FOREIGN_KEY_CHECKS = 1;
 /*Tabla sin conexiones */
-

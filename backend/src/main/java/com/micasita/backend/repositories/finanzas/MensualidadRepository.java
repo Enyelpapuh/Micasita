@@ -39,10 +39,12 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 m.detalle as detalle,
                 coalesce(m.esAnulado, false) as anulado,
                 m.motivoAnulacion as motivoAnulacion,
-                m.numeroRecibo as numeroRecibo
+                m.numeroRecibo as numeroRecibo,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero
             from Mensualidad m
             join m.estudiante e
             join e.persona p
+            left join m.usuario.persona userPer
             where lower(m.usuario.email) = lower(:email)
             order by m.id desc
             """)
@@ -62,10 +64,36 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 m.detalle as detalle,
                 coalesce(m.esAnulado, false) as anulado,
                 m.motivoAnulacion as motivoAnulacion,
-                m.numeroRecibo as numeroRecibo
+                m.numeroRecibo as numeroRecibo,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero
             from Mensualidad m
             join m.estudiante e
             join e.persona p
+            left join m.usuario.persona userPer
+            order by m.id desc
+            """)
+    List<MensualidadCajaView> findAllRecentCaja();
+
+    @Query("""
+            select
+                m.id as mensualidadId,
+                concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
+                m.mesDePago as mes,
+                coalesce(m.montoBase, 0) as montoBase,
+                coalesce(m.montoMora, 0) as montoMora,
+                (coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)) as monto,
+                m.fechaDePago as fechaPago,
+                m.estadoPago.nombre as estado,
+                m.metodoPago.nombre as metodoPago,
+                m.detalle as detalle,
+                coalesce(m.esAnulado, false) as anulado,
+                m.motivoAnulacion as motivoAnulacion,
+                m.numeroRecibo as numeroRecibo,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero
+            from Mensualidad m
+            join m.estudiante e
+            join e.persona p
+            left join m.usuario.persona userPer
             where m.cajaSesion.id = :sessionId
             order by m.id desc
             """)
@@ -85,6 +113,7 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         String getNumeroRecibo();
         Boolean getAnulado();
         String getMotivoAnulacion();
+        String getCajero();
     }
 
     @Query("""

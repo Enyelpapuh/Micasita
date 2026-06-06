@@ -394,6 +394,11 @@ public class AuthService {
             permissions.add("USUARIOS_MANAGE");
             // Permiso para acceder al panel de auditoría
             permissions.add("DASHBOARD_AUDITORIA");
+            
+            // Nuevos permisos explícitos para garantizar que el superusuario no tenga bloqueos
+            permissions.add("DOCUMENTOS_MANAGE");
+            permissions.add("ESTUDIANTES_MANAGE");
+            permissions.add("EXPEDIENTES_MANAGE");
         }
 
         if (roles.contains("ADMINISTRACION")) {

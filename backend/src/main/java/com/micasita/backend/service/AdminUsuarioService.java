@@ -113,6 +113,8 @@ public class AdminUsuarioService {
                 .email(email)
                 .passwordHash(passwordEncoder.encode(request.password()))
                 .activo(request.activo() == null ? Boolean.TRUE : request.activo())
+                .intentosFallidos(0)
+                .tokenVersion(0L)
                 .build());
 
         replaceRoles(usuario.getPersona().getId(), request.roles());

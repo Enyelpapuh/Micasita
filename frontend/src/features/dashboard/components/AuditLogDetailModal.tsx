@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
-import type { AuditLogEntry } from './DashboardPanels' // Importa el tipo desde DashboardPanels
+import type { AuditLogEntry } from './AuditoriaPanel'
 
 type AuditLogDetailModalProps = {
   log: AuditLogEntry | null

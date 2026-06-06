@@ -10,6 +10,7 @@ import com.micasita.backend.entities.academico.EstudianteTutor;
 import com.micasita.backend.entities.academico.EstadoAsistencia;
 import com.micasita.backend.entities.academico.Grupo;
 import com.micasita.backend.entities.academico.GrupoAsignatura;
+import com.micasita.backend.entities.academico.DocumentoEstudiante;
 import com.micasita.backend.entities.academico.HojaAsignatura;
 import com.micasita.backend.entities.academico.Profesor;
 import com.micasita.backend.entities.academico.ProfesorGrupo;
@@ -18,6 +19,7 @@ import com.micasita.backend.entities.academico.Tutor;
 import com.micasita.backend.entities.core.Persona;
 import com.micasita.backend.entities.core.Usuario;
 import com.micasita.backend.repositories.academico.AsignaturaRepository;
+import com.micasita.backend.repositories.academico.DocumentoEstudianteRepository;
 import com.micasita.backend.repositories.academico.AsistenciaEstudianteRepository;
 import com.micasita.backend.repositories.academico.AsistenciaGeneralRepository;
 import com.micasita.backend.repositories.academico.EstudianteAsignaturaRepository;
@@ -35,18 +37,32 @@ import com.micasita.backend.repositories.academico.TutorRepository;
 import com.micasita.backend.repositories.core.UsuarioRepository;
 import com.micasita.backend.repositories.core.PersonaRepository;
 import com.micasita.backend.repositories.finanzas.MatriculaRepository;
+import com.micasita.backend.repositories.admision.TipoDocumentoRepository;
+import com.micasita.backend.entities.admision.TipoDocumento;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.stream.Collectors;
 
 @Service
@@ -70,6 +86,10 @@ public class AcademicoService {
         private final MatriculaRepository matriculaRepository;
         private final UsuarioRepository usuarioRepository;
     private final PersonaRepository personaRepository;
+    private final DocumentoEstudianteRepository documentoEstudianteRepository;
+    private final TipoDocumentoRepository tipoDocumentoRepository;
+    private final Path docsDirectory;
+    private final long maxDocBytes;
 
     public AcademicoService(
             GrupoRepository grupoRepository,
@@ -89,7 +109,11 @@ public class AcademicoService {
             EstudianteTutorRepository estudianteTutorRepository,
             MatriculaRepository matriculaRepository,
             UsuarioRepository usuarioRepository,
-            PersonaRepository personaRepository
+            PersonaRepository personaRepository,
+            DocumentoEstudianteRepository documentoEstudianteRepository,
+            TipoDocumentoRepository tipoDocumentoRepository,
+            @Value("${app.upload.estudiantes-docs-dir:uploads/estudiantes/documentos}") String docsDirectory,
+            @Value("${app.upload.estudiantes-docs-max-bytes:10485760}") long maxDocBytes
     ) {
         this.grupoRepository = grupoRepository;
         this.asignaturaRepository = asignaturaRepository;
@@ -109,6 +133,10 @@ public class AcademicoService {
         this.matriculaRepository = matriculaRepository;
         this.usuarioRepository = usuarioRepository;
         this.personaRepository = personaRepository;
+        this.documentoEstudianteRepository = documentoEstudianteRepository;
+        this.tipoDocumentoRepository = tipoDocumentoRepository;
+        this.docsDirectory = Paths.get(docsDirectory).toAbsolutePath().normalize();
+        this.maxDocBytes = maxDocBytes;
     }
 
     @Transactional(readOnly = true)
@@ -804,6 +832,84 @@ public class AcademicoService {
                 return historial;
         }
 
+    @Transactional
+    public DocumentoEstudianteItem uploadDocumentoEstudiante(Long estudianteId, Long tipoDocumentoId, MultipartFile file) {
+        if (file == null || file.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El archivo es requerido");
+        if (file.getSize() > maxDocBytes) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El archivo supera el límite permitido");
+
+        Estudiante estudiante = estudianteRepository.findById(estudianteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Estudiante no encontrado"));
+        TipoDocumento tipoDoc = tipoDocumentoRepository.findById(tipoDocumentoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Tipo de documento no válido"));
+
+        String originalName = file.getOriginalFilename();
+        String extension = originalName != null && originalName.contains(".") ? originalName.substring(originalName.lastIndexOf(".")) : ".pdf";
+        String fileName = "estudiante-" + estudianteId + "-doc-" + UUID.randomUUID().toString().replace("-", "") + extension;
+
+        try {
+            Files.createDirectories(docsDirectory);
+            Path target = docsDirectory.resolve(fileName).normalize();
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error al guardar el archivo en el servidor", ex);
+        }
+
+        DocumentoEstudiante doc = new DocumentoEstudiante();
+        doc.setEstudiante(estudiante);
+        doc.setTipoDocumento(tipoDoc);
+        doc.setRutaArchivo("/api/admin/estudiantes/documentos/archivo/" + fileName);
+        doc.setFechaRegistro(LocalDateTime.now());
+        
+        DocumentoEstudiante saved = documentoEstudianteRepository.save(doc);
+
+        return new DocumentoEstudianteItem(
+            saved.getId(), saved.getTipoDocumento().getId(), saved.getTipoDocumento().getNombre(),
+            saved.getRutaArchivo(), saved.getFechaRegistro()
+        );
+    }
+
+    @Transactional
+    public void deleteDocumentoEstudiante(Long docId) {
+        DocumentoEstudiante doc = documentoEstudianteRepository.findById(docId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Documento no encontrado"));
+        
+        if (doc.getRutaArchivo() != null) {
+            String fileName = doc.getRutaArchivo().substring(doc.getRutaArchivo().lastIndexOf("/") + 1);
+            try {
+                Files.deleteIfExists(docsDirectory.resolve(fileName));
+            } catch (IOException ignored) {}
+        }
+        
+        documentoEstudianteRepository.delete(doc);
+    }
+
+    @Transactional(readOnly = true)
+    public Resource serveDocumentoEstudiante(String fileName) {
+        try {
+            Path target = docsDirectory.resolve(fileName).normalize();
+            Resource resource = new UrlResource(target.toUri());
+            if (resource.exists()) return resource;
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Archivo no encontrado");
+        } catch (Exception ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Archivo no encontrado", ex);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentoEstudianteItem> listDocumentosEstudiante(Long estudianteId) {
+        return documentoEstudianteRepository.findByEstudianteIdOrderByIdDesc(estudianteId).stream()
+                .map(doc -> new DocumentoEstudianteItem(
+                        doc.getId(),
+                        doc.getTipoDocumento() != null ? doc.getTipoDocumento().getId() : null,
+                        doc.getTipoDocumento() != null ? doc.getTipoDocumento().getNombre() : null,
+                        doc.getRutaArchivo(),
+                        doc.getFechaRegistro()
+                ))
+                .toList();
+    }
+
     private EstudianteAsignaturaItem toEstudianteAsignaturaItem(EstudianteAsignatura item) {
         return new EstudianteAsignaturaItem(
                 item.getId(),
@@ -945,5 +1051,13 @@ public class AcademicoService {
             String telefono,
             String cedula,
             String direccion
+    ) {}
+
+    public record DocumentoEstudianteItem(
+            Long id,
+            Long tipoDocumentoId,
+            String tipoDocumentoNombre,
+            String rutaArchivo,
+            LocalDateTime fechaRegistro
     ) {}
 }

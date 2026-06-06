@@ -38,11 +38,13 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.estadoPago.nombre as estado,
                 pc.metodoPago.nombre as metodoPago,
                 pc.esAnulado as anulado,
-                pc.motivoAnulacion as motivoAnulacion
+                pc.motivoAnulacion as motivoAnulacion,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
             from PagoCupo pc
             join pc.cupo c
             join c.participante part
             left join part.persona per
+            left join pc.usuario.persona userPer
             where lower(pc.usuario.email) = lower(:email)
             order by pc.id desc
             """)
@@ -60,11 +62,36 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.estadoPago.nombre as estado,
                 pc.metodoPago.nombre as metodoPago,
                 pc.esAnulado as anulado,
-                pc.motivoAnulacion as motivoAnulacion
+                pc.motivoAnulacion as motivoAnulacion,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
             from PagoCupo pc
             join pc.cupo c
             join c.participante part
             left join part.persona per
+            left join pc.usuario.persona userPer
+            order by pc.id desc
+            """)
+    List<PagoCupoCajaView> findAllRecentCaja();
+
+    @Query("""
+            select
+                pc.id as pagoCupoId,
+                pc.cupo.id as cupoId,
+                pc.cupo.taller.nombre as taller,
+                concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''), coalesce(part.nombreTmp, '')) as participante,
+                pc.numeroRecibo as numeroRecibo,
+                pc.monto as monto,
+                pc.fechaDePago as fechaPago,
+                pc.estadoPago.nombre as estado,
+                pc.metodoPago.nombre as metodoPago,
+                pc.esAnulado as anulado,
+                pc.motivoAnulacion as motivoAnulacion,
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
+            from PagoCupo pc
+            join pc.cupo c
+            join c.participante part
+            left join part.persona per
+            left join pc.usuario.persona userPer
             where pc.cajaSesion.id = :sessionId
             order by pc.id desc
             """)
@@ -82,5 +109,6 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
         String getMetodoPago();
         Boolean getAnulado();
         String getMotivoAnulacion();
+        String getCajero();
     }
 }
