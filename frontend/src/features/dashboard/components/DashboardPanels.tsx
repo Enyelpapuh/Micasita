@@ -39,6 +39,7 @@ import { getCajaHistorialGeneral } from './caja.api'
 import { AdminFinanzasPanel } from './AdminFinanzasPanel'
 import { ContactMessagesPanel } from './ContactMessagesPanel'
 import { AuditoriaPanel } from './AuditoriaPanel'
+import { BackupPanel } from './BackupPanel'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -906,6 +907,8 @@ export function getDashboardPanel(view: DashboardView, user?: AuthUser | null) {
       return <SettingsPanel />
     case 'auditoria':
       return <AuditoriaPanel />
+    case 'backup':
+      return <BackupPanel />
     default:
       return <OverviewPanel user={user} />
   }

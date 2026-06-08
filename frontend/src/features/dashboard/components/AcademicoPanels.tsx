@@ -387,7 +387,7 @@ function AcademicoNotasSegment({
                     placeholder="0-100"
                     className="w-24 rounded-lg border border-slate-300 px-2 py-1 text-xs"
                   />
-                  <p className="mt-1 text-[11px] text-slate-500">Acumulado final de la asignatura.</p>
+                  <p className="mt-1 text-[11px] text-slate-500">Acumulado final del grupo.</p>
                 </td>
                 <td className="px-3 py-2">
                   <button
@@ -413,7 +413,7 @@ function AcademicoNotasSegment({
   )
 }
 
-function ConfigGruposModal({ isOpen, onClose, grupos, profesores, token, reloadCatalogs }: { isOpen: boolean, onClose: () => void, grupos: GrupoItem[], profesores: Array<{id: number, nombre?: string | null, apellido?: string | null}>, token: string | null, reloadCatalogs: () => Promise<void> }) {
+function ConfigGruposModal({ isOpen, onClose, grupos, profesores, asignaturas, token, reloadCatalogs }: { isOpen: boolean, onClose: () => void, grupos: GrupoItem[], profesores: Array<{id: number, nombre?: string | null, apellido?: string | null}>, asignaturas: AsignaturaItem[], token: string | null, reloadCatalogs: () => Promise<void> }) {
   const [nombre, setNombre] = useState('')
   const [profesorNew, setProfesorNew] = useState('')
   const [grupoExisting, setGrupoExisting] = useState('')
@@ -427,6 +427,16 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, token, reloadC
     setBusy(true)
     try {
       const created = await createGrupo(token, { nombre })
+      
+      // MAGIA BACKEND: Vincular automáticamente la asignatura genérica (asistencia diaria) para ocultarlo del usuario
+      if (asignaturas && asignaturas.length > 0) {
+        try {
+          await asignarGrupoAsignatura(token, { grupoId: created.id, asignaturaId: asignaturas[0].id })
+        } catch (e) {
+          console.warn('Auto-vinculacion asignatura fallida', e)
+        }
+      }
+
       if (profesorNew) {
         await asignarProfesorGrupo(token, { profesorId: Number(profesorNew), grupoId: created.id })
       }
@@ -518,98 +528,6 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, token, reloadC
   , document.body)
 }
 
-function ConfigAsignaturasModal({ isOpen, onClose, grupos, asignaturas, token, reloadCatalogs }: { isOpen: boolean, onClose: () => void, grupos: GrupoItem[], asignaturas: AsignaturaItem[], token: string | null, reloadCatalogs: () => Promise<void> }) {
-  const [nombre, setNombre] = useState('')
-  const [descripcion, setDescripcion] = useState('')
-  const [grupoId, setGrupoId] = useState('')
-  const [asignaturaId, setAsignaturaId] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  if (!isOpen) return null;
-
-  const handleCrear = async () => {
-    if (!nombre.trim()) { toast.error('El nombre es requerido'); return; }
-    setBusy(true)
-    try {
-      await createAsignatura(token, { nombre, descripcion: descripcion || null })
-      toast.success('Asignatura creada')
-      setNombre(''); setDescripcion('');
-      await reloadCatalogs()
-      onClose()
-    } catch (e) { toast.error(normalizeApiError(e, 'Error al crear asignatura')) } finally { setBusy(false) }
-  }
-
-  const handleVincular = async () => {
-    if (!grupoId || !asignaturaId) { toast.error('Selecciona grupo y asignatura'); return; }
-    setBusy(true)
-    try {
-      await asignarGrupoAsignatura(token, { grupoId: Number(grupoId), asignaturaId: Number(asignaturaId) })
-      toast.success('Asignatura vinculada al grupo')
-      setGrupoId(''); setAsignaturaId('');
-      await reloadCatalogs()
-      onClose()
-    } catch (e) { toast.error(normalizeApiError(e, 'Error al vincular')) } finally { setBusy(false) }
-  }
-
-  return createPortal(
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
-      <div className="absolute inset-0" onClick={onClose} />
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
-          <h2 className="text-xl font-bold text-slate-900">Configurar Asignaturas</h2>
-          <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
-        </div>
-        <div className="p-6 space-y-6">
-          <section className="rounded-2xl border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Crear nueva asignatura</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Nombre de asignatura</label>
-                <input value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej. Matemática" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Descripción</label>
-                <input value={descripcion} onChange={e=>setDescripcion(e.target.value)} placeholder="Opcional" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={handleCrear} disabled={busy} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-70">
-                {busy ? 'Guardando...' : 'Crear Asignatura'}
-              </button>
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Vincular asignatura a un grupo</h3>
-            <p className="mt-1 text-xs text-slate-500">Esto habilita a la asignatura para que aparezca en la asistencia del grupo.</p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Grupo</label>
-                <select value={grupoId} onChange={e=>setGrupoId(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
-                  <option value="">Selecciona grupo</option>
-                  {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-700">Asignatura</label>
-                <select value={asignaturaId} onChange={e=>setAsignaturaId(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
-                  <option value="">Selecciona asignatura</option>
-                  {asignaturas.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
-                </select>
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button onClick={handleVincular} disabled={busy} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-70">
-                {busy ? 'Vinculando...' : 'Vincular Asignatura'}
-              </button>
-            </div>
-          </section>
-        </div>
-      </div>
-    </div>
-  , document.body)
-}
-
 export function AcademicoGestionPanel() {
   const { token } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -621,21 +539,32 @@ export function AcademicoGestionPanel() {
   const [studentsSearch, setStudentsSearch] = useState('')
   const [viewingStudentId, setViewingStudentId] = useState<number | null>(null)
 
+  const [activeTab, setActiveTab] = useState<'estudiantes' | 'grupos'>('estudiantes')
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('')
   const [isConfigGruposOpen, setIsConfigGruposOpen] = useState(false)
-  const [isConfigAsignaturasOpen, setIsConfigAsignaturasOpen] = useState(false)
-  const [studentToInscribe, setStudentToInscribe] = useState<EstudianteItem | null>(null)
+  const [studentToChangeGroup, setStudentToChangeGroup] = useState<EstudianteItem | null>(null)
 
   const filteredStudents = useMemo(() => {
+    let result = estudiantes
+
+    if (selectedGroupFilter) {
+      if (selectedGroupFilter === 'SIN_GRUPO') {
+        result = result.filter(student => !student.grupos || student.grupos.length === 0)
+      } else {
+        result = result.filter(student => student.grupos?.includes(selectedGroupFilter))
+      }
+    }
+
     const term = studentsSearch.trim().toLocaleLowerCase('es-NI')
     if (!term) {
-      return estudiantes
+      return result
     }
-    return estudiantes.filter((item) => {
+    return result.filter((item) => {
       const name = `${item.nombre ?? ''} ${item.apellido ?? ''}`.toLocaleLowerCase('es-NI')
       const idText = String(item.id)
       return name.includes(term) || idText.includes(term)
     })
-  }, [estudiantes, studentsSearch])
+  }, [estudiantes, studentsSearch, selectedGroupFilter])
 
   useEffect(() => {
     let cancelled = false
@@ -685,6 +614,54 @@ export function AcademicoGestionPanel() {
     setProfesores(p)
   }
 
+  const handlePrintFilteredList = () => {
+    if (filteredStudents.length === 0) {
+      toast.error('No hay estudiantes en la lista para imprimir')
+      return
+    }
+
+    const groupName = selectedGroupFilter === 'SIN_GRUPO' ? 'Sin grupo asignado' : (selectedGroupFilter || 'Todos los estudiantes')
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Directorio de Estudiantes - ${groupName}</title>
+        <style>
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 30px; color: #333; }
+          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          h1 { color: #0f766e; margin: 0 0 10px 0; font-size: 24px; text-transform: uppercase; }
+          p { margin: 5px 0; font-size: 14px; color: #555; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; }
+          th { background-color: #f8fafc; color: #334155; text-transform: uppercase; font-size: 12px; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Mi Casita</h1>
+          <p><strong>Directorio de Estudiantes</strong></p>
+          <p>Filtro aplicado: ${groupName}</p>
+          <p><strong>Fecha de impresión:</strong> ${new Date().toLocaleDateString('es-NI')}</p>
+        </div>
+        <table>
+          <thead><tr><th style="width: 50px;">#</th><th>Nombre del Estudiante</th><th>ID</th><th>Grupo(s)</th></tr></thead>
+          <tbody>
+            ${filteredStudents.map((student, i) => `<tr><td>${i + 1}</td><td>${student.nombre} ${student.apellido}</td><td>${student.id}</td><td>${student.grupos && student.grupos.length > 0 ? student.grupos.join(', ') : 'Sin grupo'}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </body>
+      </html>
+    `
+    const w = window.open('', '_blank')
+    if (!w) { toast.error('Permite las ventanas emergentes (popups) para poder imprimir'); return }
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => { w.focus(); w.print() }, 300)
+  }
+
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -692,12 +669,11 @@ export function AcademicoGestionPanel() {
           <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Académico</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Matrículas y Alumnos</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-            Gestiona las inscripciones de los estudiantes a sus grupos, asignaturas y configura el catálogo académico.
+            Gestiona las inscripciones de los estudiantes a sus grupos y profesores titulares.
           </p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-          <button onClick={() => setIsConfigGruposOpen(true)} className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Configurar Grupos</button>
-          <button onClick={() => setIsConfigAsignaturasOpen(true)} className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-500 transition hover:-translate-y-[1px]">Configurar Asignaturas</button>
+          <button onClick={() => setIsConfigGruposOpen(true)} className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">Configurar Grupos / Profesores</button>
         </div>
       </div>
 
@@ -708,54 +684,136 @@ export function AcademicoGestionPanel() {
         </div>
       ) : (
         <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
-            <Search className="h-5 w-5 text-slate-400" />
-              <input
-                value={studentsSearch}
-                onChange={(event) => setStudentsSearch(event.target.value)}
-                placeholder="Buscar estudiante por nombre o ID..."
-                className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
-              />
+          <div className="mb-6 flex gap-4 border-b border-slate-200 pb-px">
+            <button
+              onClick={() => setActiveTab('estudiantes')}
+              className={`pb-3 text-sm font-semibold transition-colors ${activeTab === 'estudiantes' ? 'border-b-2 border-teal-600 text-teal-800' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Directorio de Estudiantes
+            </button>
+            <button
+              onClick={() => setActiveTab('grupos')}
+              className={`pb-3 text-sm font-semibold transition-colors ${activeTab === 'grupos' ? 'border-b-2 border-teal-600 text-teal-800' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              Gestión de Grupos
+            </button>
           </div>
 
-          <div className="mt-6 flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            <span>Estudiantes ({filteredStudents.length})</span>
-          </div>
-
-          <div className="mt-4 flex flex-col gap-3">
-            {filteredStudents.length > 0 ? (
-              filteredStudents.map(student => (
-                <article key={student.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition-all hover:border-teal-300 hover:shadow-md">
-                   <div className="flex items-center gap-4">
-                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 transition-colors">
-                       {(student.nombre?.[0] ?? 'U').toUpperCase()}{(student.apellido?.[0] ?? '').toUpperCase()}
-                     </div>
-                     <div className="min-w-0">
-                       <p className="truncate font-semibold text-slate-900">{student.nombre} {student.apellido}</p>
-                       <p className="text-xs text-slate-500">ID estudiante: {student.id}</p>
-                       <div className="mt-2 flex flex-wrap gap-2">
-                         {student.grupos && student.grupos.length > 0 ? (
-                           student.grupos.map((g, i) => (
-                             <span key={i} className="inline-flex rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">{g}</span>
-                           ))
-                         ) : (
-                           <span className="inline-flex rounded-md bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/20">Sin grupo asignado</span>
-                         )}
-                       </div>
-                     </div>
-                   </div>
-                   <div className="flex items-center gap-2 sm:shrink-0">
-                      <button onClick={() => setViewingStudentId(student.id)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Ver ficha</button>
-                      <button onClick={() => setStudentToInscribe(student)} className="rounded-xl bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100">Inscribir</button>
-                   </div>
-                </article>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                No hay estudiantes que coincidan con la búsqueda.
+          {activeTab === 'estudiantes' ? (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="flex flex-1 items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
+                  <Search className="h-5 w-5 text-slate-400" />
+                    <input
+                      value={studentsSearch}
+                      onChange={(event) => setStudentsSearch(event.target.value)}
+                      placeholder="Buscar estudiante por nombre o ID..."
+                      className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+                    />
+                </div>
+                <select
+                  value={selectedGroupFilter}
+                  onChange={(e) => setSelectedGroupFilter(e.target.value)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 outline-none shadow-sm focus:border-teal-500 sm:w-64"
+                >
+                  <option value="">Todos los grupos</option>
+                  <option value="SIN_GRUPO">Sin grupo asignado</option>
+                  {grupos.map(g => (
+                    <option key={g.id} value={g.nombre || ''}>{g.nombre}</option>
+                  ))}
+                </select>
               </div>
-            )}
-          </div>
+
+              <div className="mt-6 flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <span>Estudiantes ({filteredStudents.length})</span>
+                <button
+                  type="button"
+                  onClick={handlePrintFilteredList}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors"
+                >
+                  <Printer className="h-4 w-4" />
+                  Imprimir lista
+                </button>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3">
+                {filteredStudents.length > 0 ? (
+                  filteredStudents.map(student => (
+                    <article key={student.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 transition-all hover:border-teal-300 hover:shadow-md">
+                       <div className="flex items-center gap-4">
+                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600 transition-colors">
+                           {(student.nombre?.[0] ?? 'U').toUpperCase()}{(student.apellido?.[0] ?? '').toUpperCase()}
+                         </div>
+                         <div className="min-w-0">
+                           <p className="truncate font-semibold text-slate-900">{student.nombre} {student.apellido}</p>
+                           <p className="text-xs text-slate-500">ID estudiante: {student.id}</p>
+                           <div className="mt-2 flex flex-wrap gap-2">
+                             {student.grupos && student.grupos.length > 0 ? (
+                               student.grupos.map((g, i) => (
+                                 <span key={i} className="inline-flex rounded-md bg-sky-50 px-2 py-1 text-[10px] font-medium text-sky-700 ring-1 ring-inset ring-sky-600/20">Grupo: {g}</span>
+                               ))
+                             ) : (
+                               <span className="inline-flex rounded-md bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/20">Sin grupo asignado</span>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                       <div className="flex items-center gap-2 sm:shrink-0">
+                          <button onClick={() => setViewingStudentId(student.id)} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Ver ficha</button>
+                          <button onClick={() => setStudentToChangeGroup(student)} className="rounded-xl bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100">Cambiar Grupo</button>
+                       </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                    No hay estudiantes que coincidan con la búsqueda.
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {grupos.map(grupo => {
+                const teacherName = (grupo as any).profesorNombre ? `${(grupo as any).profesorNombre} ${(grupo as any).profesorApellido || ''}` : null;
+                
+                return (
+                  <article key={grupo.id} className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-slate-900">{grupo.nombre}</h3>
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-200/50">Grupo</span>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-600">
+                        <span className="font-semibold">Profesor titular:</span><br/> {teacherName || 'Sin profesor asignado'}
+                      </p>
+                    </div>
+                    <div className="mt-5 flex gap-2">
+                      <button 
+                        onClick={() => {
+                          setSelectedGroupFilter(grupo.nombre ?? '')
+                          setActiveTab('estudiantes')
+                        }}
+                        className="w-full rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100"
+                      >
+                        Ver Estudiantes
+                      </button>
+                      <button 
+                        onClick={() => setIsConfigGruposOpen(true)} 
+                        className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      >
+                        Asignar Profesor Titular
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+              {grupos.length === 0 && (
+                <div className="col-span-full rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                  No hay grupos creados todavía.
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -771,56 +829,46 @@ export function AcademicoGestionPanel() {
         onClose={() => setIsConfigGruposOpen(false)} 
         grupos={grupos} 
         profesores={profesores} 
+        asignaturas={asignaturas}
         token={token} 
         reloadCatalogs={reloadCatalogs} 
       />
-
-      <ConfigAsignaturasModal 
-        isOpen={isConfigAsignaturasOpen} 
-        onClose={() => setIsConfigAsignaturasOpen(false)} 
-        grupos={grupos} 
-        asignaturas={asignaturas} 
-        token={token} 
-        reloadCatalogs={reloadCatalogs} 
-      />
-
-      {studentToInscribe ? createPortal(
+      {studentToChangeGroup ? createPortal(
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
-          <div className="absolute inset-0" onClick={() => setStudentToInscribe(null)} />
-          <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+          <div className="absolute inset-0" onClick={() => setStudentToChangeGroup(null)} />
+          <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
               <div>
-                <h2 className="text-xl font-bold text-slate-900">Inscripciones y vinculación</h2>
-                <p className="text-sm text-slate-500">{studentToInscribe.nombre} {studentToInscribe.apellido}</p>
+                <h2 className="text-xl font-bold text-slate-900">Asignar a Grupo</h2>
+                <p className="text-sm text-slate-500">{studentToChangeGroup.nombre} {studentToChangeGroup.apellido}</p>
               </div>
-              <button onClick={() => setStudentToInscribe(null)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
+              <button onClick={() => setStudentToChangeGroup(null)} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
             </div>
             <div className="p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <h3 className="font-semibold text-slate-900 text-sm">Inscribir a Grupo</h3>
-                  <select id="selGrupo" className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
-                    <option value="">Selecciona grupo</option>
-                    {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
-                  </select>
-                  <button onClick={async () => {
-                    const v = (document.getElementById('selGrupo') as HTMLSelectElement).value;
-                    if(!v) { toast.error('Selecciona un grupo'); return; }
-                    try { await inscribirEstudianteGrupo(token, { estudianteId: studentToInscribe.id, grupoId: Number(v) }); toast.success('Inscrito al grupo'); await reloadCatalogs(); setStudentToInscribe(null); } catch (e) { toast.error(normalizeApiError(e, 'Error al inscribir')) }
-                  }} className="mt-3 w-full rounded-xl bg-teal-600 py-2 text-sm font-semibold text-white hover:bg-teal-500">Inscribir Grupo</button>
-                </div>
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <h3 className="font-semibold text-slate-900 text-sm">Inscribir a Asignatura</h3>
-                  <select id="selAsig" className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
-                    <option value="">Selecciona asignatura</option>
-                    {asignaturas.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
-                  </select>
-                  <button onClick={async () => {
-                    const v = (document.getElementById('selAsig') as HTMLSelectElement).value;
-                    if(!v) { toast.error('Selecciona asignatura'); return; }
-                    try { await inscribirEstudianteAsignatura(token, { estudianteId: studentToInscribe.id, asignaturaId: Number(v) }); toast.success('Inscrito a asignatura'); await reloadCatalogs(); setStudentToInscribe(null); } catch (e) { toast.error(normalizeApiError(e, 'Error al inscribir')) }
-                  }} className="mt-3 w-full rounded-xl bg-indigo-600 py-2 text-sm font-semibold text-white hover:bg-indigo-500">Inscribir Asignatura</button>
-                </div>
+              <label className="block text-sm font-semibold text-slate-700">Selecciona el nuevo grupo</label>
+              <select id="selCambioGrupo" className="mt-2 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500">
+                <option value="">Seleccione...</option>
+                {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
+              </select>
+              
+              <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50 p-3 text-xs leading-relaxed text-sky-800">
+                <strong>Nota:</strong> Al asignar un grupo, el estudiante pasará automáticamente a estar a cargo del profesor titular de ese grupo. No es necesario inscribirlo manualmente a asignaturas para preescolar.
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button onClick={() => setStudentToChangeGroup(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                <button onClick={async () => {
+                  const v = (document.getElementById('selCambioGrupo') as HTMLSelectElement).value;
+                  if(!v) { toast.error('Selecciona un grupo'); return; }
+                  try { 
+                    await inscribirEstudianteGrupo(token, { estudianteId: studentToChangeGroup.id, grupoId: Number(v) }); 
+                    toast.success('Estudiante asignado al grupo con éxito'); 
+                    await reloadCatalogs(); 
+                    setStudentToChangeGroup(null); 
+                  } catch (e) { 
+                    toast.error(normalizeApiError(e, 'Error al cambiar de grupo')) 
+                  }
+                }} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500">Guardar Asignación</button>
               </div>
             </div>
           </div>
@@ -841,7 +889,7 @@ export function AcademicoAsistenciaNotasPanel({
   initialSegment = 'asistencia',
   lockSegment = false,
   title = 'Asistencia y notas',
-  subtitle = 'Vista intuitiva para docentes: selecciona grupo, asignatura y fecha, marca estados rápidos y registra notas.',
+  subtitle = 'Vista intuitiva para docentes: selecciona grupo y fecha, marca estados rápidos y guarda la asistencia.',
 }: AcademicoAsistenciaNotasPanelProps = {}) {
   const { token, user } = useAuth()
   const [activeSegment, setActiveSegment] = useState<'asistencia' | 'notas'>(initialSegment)
@@ -1255,7 +1303,6 @@ export function AcademicoAsistenciaNotasPanel({
       return
     }
     const grupo = gruposVisibles.find(g => g.id === selectedGrupoId)?.nombre || 'Sin Grupo'
-    const asignatura = asignaturasVisibles.find(a => a.id === selectedAsignaturaId)?.nombre || 'Sin Asignatura'
     
     const tableRows = rows.map((row, i) => {
       const estadoNombre = estados.find(e => e.id === row.selectedEstadoId)?.nombre
@@ -1264,7 +1311,7 @@ export function AcademicoAsistenciaNotasPanel({
     }).join('')
     
     const dateStr = new Date(selectedFecha + 'T00:00:00').toLocaleDateString('es-NI')
-    printDocument('Registro de Asistencia', `Grupo: ${grupo} | Asignatura: ${asignatura}`, dateStr, tableRows)
+    printDocument('Registro de Asistencia', `Grupo: ${grupo}`, dateStr, tableRows)
   }
 
   const handlePrintClassList = () => {
@@ -1303,7 +1350,7 @@ export function AcademicoAsistenciaNotasPanel({
     }).join('')
     
     const dateStr = new Date(item.fecha + 'T00:00:00').toLocaleDateString('es-NI')
-    printDocument('Histórico de Asistencia', `Grupo: ${item.grupoNombre} | Asignatura: ${item.asignaturaNombre}`, dateStr, tableRows)
+    printDocument('Histórico de Asistencia', `Grupo: ${item.grupoNombre}`, dateStr, tableRows)
   }
 
   return (
@@ -1323,10 +1370,10 @@ export function AcademicoAsistenciaNotasPanel({
             <p className="text-sm font-semibold text-slate-900">Contexto de clase</p>
             <p className="mb-3 text-xs text-slate-500">
               {isProfesor
-                ? 'Se muestran solo tus clases asignadas. Selecciona clase y fecha para abrir asistencia.'
-                : 'Primero selecciona el grupo, asignatura y fecha para abrir la hoja del día.'}
+                ? 'Se muestran solo tus grupos asignados. Selecciona el grupo y fecha para abrir asistencia.'
+                : 'Primero selecciona el grupo y fecha para abrir la hoja del día.'}
             </p>
-            <div className="grid gap-2 md:grid-cols-4">
+            <div className="grid gap-2 md:grid-cols-3">
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-700">Grupo</label>
                 <select value={selectedGrupoId ?? ''} onChange={(e) => setSelectedGrupoId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -1334,7 +1381,8 @@ export function AcademicoAsistenciaNotasPanel({
                 </select>
               </div>
 
-              <div className="grid gap-1">
+              {/* Opción 2: Oculto para el usuario, pero activo para el sistema */}
+              <div className="hidden">
                 <label className="text-xs font-semibold text-slate-700">Asignatura</label>
                 <select value={selectedAsignaturaId ?? ''} onChange={(e) => setSelectedAsignaturaId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
                   {asignaturasVisibles.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
@@ -1404,7 +1452,7 @@ export function AcademicoAsistenciaNotasPanel({
 
             {isProfesor && gruposVisibles.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                No tienes clases asignadas todavía. Solicita a administración que te vincule a un grupo y asignatura.
+                No tienes clases asignadas todavía. Solicita a administración que te vincule a un grupo.
               </div>
             ) : null}
           </div>
@@ -1452,7 +1500,7 @@ export function AcademicoAsistenciaNotasPanel({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">Historial de asistencias</p>
-                    <p className="text-xs text-slate-500">Últimas sesiones guardadas para este grupo y asignatura.</p>
+                    <p className="text-xs text-slate-500">Últimas sesiones guardadas para este grupo.</p>
                   </div>
                   {loadingHistorial ? <LoaderCircle className="h-4 w-4 animate-spin text-slate-500" /> : null}
                 </div>
@@ -1471,7 +1519,7 @@ export function AcademicoAsistenciaNotasPanel({
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{new Date(item.fecha).toLocaleDateString('es-NI', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                          <p className="text-xs text-slate-500">{item.grupoNombre} · {item.asignaturaNombre}</p>
+                          <p className="text-xs text-slate-500">{item.grupoNombre}</p>
                         </div>
                         <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600">{item.total} alumnos</span>
                       </div>
@@ -1548,7 +1596,7 @@ export function AcademicoAsistenciaPanel() {
       initialSegment="asistencia"
       lockSegment
       title="Control de asistencia"
-      subtitle="Vista exclusiva para pasar asistencia del día por grupo y asignatura."
+      subtitle="Vista exclusiva para pasar asistencia del día por grupo."
     />
   )
 }

@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Mail,
   Settings,
+  Database,
   ShieldCheck,
   Users,
   Zap,
@@ -32,6 +33,7 @@ export type DashboardView =
   | 'finanzasConfig'
   | 'recepcion'
   | 'mensajes'
+  | 'backup'
   | 'settings'
 
 export type DashboardMenuItem = {
@@ -355,6 +357,13 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     category: 'ajustes',
     permission: 'DASHBOARD_AUDITORIA',
     allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'DEVELOPER', 'ADMINISTRACION'],
+  },
+  {
+    icon: Database,
+    label: 'Copias de Seguridad',
+    view: 'backup',
+    category: 'ajustes',
+    allowedRoles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'],
   },
   {
     icon: Settings,
