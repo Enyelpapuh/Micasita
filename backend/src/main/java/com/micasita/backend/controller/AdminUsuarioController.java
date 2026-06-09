@@ -27,7 +27,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/admin/usuarios")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
-@PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+@PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
 public class AdminUsuarioController {
 
     private final AdminUsuarioService adminUsuarioService;

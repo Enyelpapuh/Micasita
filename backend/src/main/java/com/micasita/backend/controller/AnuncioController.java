@@ -42,13 +42,13 @@ public class AnuncioController {
         return ResponseEntity.ok(anuncioService.listPublic());
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     @GetMapping("/admin")
     public ResponseEntity<List<AnuncioResponse>> listAdmin() {
         return ResponseEntity.ok(anuncioService.listAdmin());
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
         @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AnuncioResponse> create(
             Authentication authentication,
@@ -58,7 +58,7 @@ public class AnuncioController {
         return ResponseEntity.status(HttpStatus.CREATED).body(anuncioService.create(authentication.getName(), request));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AnuncioResponse> update(
             Authentication authentication,
@@ -69,7 +69,7 @@ public class AnuncioController {
         return ResponseEntity.ok(anuncioService.update(authentication.getName(), id, request));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     @PostMapping(value = "/{id}/imagen", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<AnuncioResponse> uploadImage(
             Authentication authentication,
@@ -80,14 +80,14 @@ public class AnuncioController {
         return ResponseEntity.ok(anuncioService.uploadImage(id, file));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         anuncioService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','ADMIN_DIRECCION','DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     @PatchMapping("/{id}/activo")
     public ResponseEntity<AnuncioResponse> setActive(@PathVariable Long id, @RequestParam("activo") boolean activo) {
         return ResponseEntity.ok(anuncioService.setActive(id, activo));

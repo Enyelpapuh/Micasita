@@ -21,7 +21,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/academico")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
-@PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR')")
+@PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION','PROFESOR','CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_PROFESOR', 'ROLE_CAJA')")
 public class AcademicoController {
 
     private final AcademicoService academicoService;
@@ -94,7 +94,7 @@ public class AcademicoController {
     }
 
     @DeleteMapping("/estudiante-tutor")
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION')")
+    @PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION')")
     public ResponseEntity<Void> desvincularEstudianteTutor(
             @RequestParam Long estudianteId, 
             @RequestParam Long tutorId) {
@@ -103,30 +103,30 @@ public class AcademicoController {
     }
 
     @PostMapping("/tutores")
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION')")
+    @PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION')")
     public ResponseEntity<AcademicoService.TutorSimpleItem> createTutor(@RequestBody AcademicoService.CreateTutorRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(academicoService.createTutor(request));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR','CAJA')")
+    @PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION','PROFESOR','CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_PROFESOR', 'ROLE_CAJA')")
     @GetMapping("/catalogos/estudiantes")
     public ResponseEntity<List<AcademicoService.EstudianteSimpleItem>> listEstudiantes() {
         return ResponseEntity.ok(academicoService.listEstudiantes());
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR','CAJA')")
+    @PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION','PROFESOR','CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_PROFESOR', 'ROLE_CAJA')")
     @GetMapping("/catalogos/estudiantes/activos")
     public ResponseEntity<List<AcademicoService.EstudianteSimpleItem>> listEstudiantesActivos(@RequestParam(required = false) String anioLectivo) {
         return ResponseEntity.ok(academicoService.listEstudiantesActivos(anioLectivo));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION','DOCENTE','PROFESOR','CAJA')")
+    @PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION','PROFESOR','CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_PROFESOR', 'ROLE_CAJA')")
     @GetMapping("/catalogos/estudiantes/{estudianteId}/detalle")
     public ResponseEntity<AcademicoService.EstudianteDetailItem> getEstudianteDetalle(@PathVariable Long estudianteId) {
         return ResponseEntity.ok(academicoService.getEstudianteDetail(estudianteId));
     }
 
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','ADMIN_DIRECCION')")
+    @PreAuthorize("hasAnyAuthority('ADMIN','DIRECCION','ADMINISTRACION', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION')")
     @PutMapping("/catalogos/estudiantes/{estudianteId}/informacion-docente")
     public ResponseEntity<AcademicoService.EstudianteDetailItem> updateEstudianteInformacionDocente(
             @PathVariable Long estudianteId,

@@ -14,7 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/academico/docente")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
-@PreAuthorize("hasAnyAuthority('DASHBOARD_ACADEMICO','ROLE_ADMIN','ROLE_DEVELOPER','ROLE_ADMINISTRACION','ROLE_ADMIN_DIRECCION','ROLE_PROFESOR','ROLE_DOCENTE')")
+@PreAuthorize("hasAnyAuthority('DASHBOARD_ACADEMICO','ADMIN','DIRECCION','ADMINISTRACION','PROFESOR','ROLE_ADMIN','ROLE_DIRECCION','ROLE_ADMINISTRACION','ROLE_PROFESOR')")
 public class AcademicoDocenteController {
 
     private final AcademicoService academicoService;

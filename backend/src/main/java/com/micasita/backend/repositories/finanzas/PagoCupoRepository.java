@@ -37,7 +37,7 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.fechaDePago as fechaPago,
                 pc.estadoPago.nombre as estado,
                 pc.metodoPago.nombre as metodoPago,
-                pc.esAnulado as anulado,
+                coalesce(pc.esAnulado, false) as anulado,
                 pc.motivoAnulacion as motivoAnulacion,
                 coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
             from PagoCupo pc
@@ -61,7 +61,7 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.fechaDePago as fechaPago,
                 pc.estadoPago.nombre as estado,
                 pc.metodoPago.nombre as metodoPago,
-                pc.esAnulado as anulado,
+                coalesce(pc.esAnulado, false) as anulado,
                 pc.motivoAnulacion as motivoAnulacion,
                 coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
             from PagoCupo pc
@@ -84,7 +84,7 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.fechaDePago as fechaPago,
                 pc.estadoPago.nombre as estado,
                 pc.metodoPago.nombre as metodoPago,
-                pc.esAnulado as anulado,
+                coalesce(pc.esAnulado, false) as anulado,
                 pc.motivoAnulacion as motivoAnulacion,
                 coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
             from PagoCupo pc

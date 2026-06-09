@@ -127,6 +127,7 @@ export type CajaOperacionResult = {
 export type OpenCajaRequest = {
   saldoInicial?: number | null
   observacion?: string | null
+  password?: string
 }
 
 export type CloseCajaRequest = {
@@ -310,17 +311,16 @@ export type ConfiguracionFinanzasDto = {
   id?: number | null
   montoMatriculaBase?: number | null
   montoMensualidadBase?: number | null
-  montoMoraFija?: number | null
-  porcentajeDescuentoFamiliar?: number | null
-  maximoDescuentoFamiliar?: number | null
-  aplicarMoraAutomatica?: boolean | null
-  diasLimiteMora?: number | null
+  montoMora?: number | null
+  diasGracia?: number | null
   activo?: boolean | null
 }
 
 export type CajaTarifasResponse = {
   montoMatriculaBase?: number | null
   montoMensualidadBase?: number | null
+  montoMora?: number | null
+  diasGracia?: number | null
 }
 
 export async function getCajaTarifas(token: string | null): Promise<CajaTarifasResponse> {

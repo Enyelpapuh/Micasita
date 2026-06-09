@@ -141,7 +141,7 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                     when :mesLimite - count(mp.id) < 0 then 0
                     else :mesLimite - count(mp.id)
                 end as mesesPendientes,
-                min(mp.mesDePago) as proximoMes
+                coalesce(max(mp.mesDePago), 0) + 1 as proximoMes
             from Matricula mat
             join mat.estudiante e
             join e.persona p

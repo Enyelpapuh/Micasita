@@ -18,6 +18,7 @@ import com.micasita.backend.entities.finanzas.EstadoPago;
 import com.micasita.backend.entities.finanzas.EstadoMatricula;
 import com.micasita.backend.entities.finanzas.MetodoPago;
 import com.micasita.backend.entities.finanzas.TipoRecibo;
+import com.micasita.backend.entities.finanzas.ConfiguracionFinanzas;
 import com.micasita.backend.entities.talleres.Taller;
 import com.micasita.backend.entities.talleres.TipoPublicoTaller;
 import com.micasita.backend.repositories.academico.EstudianteRepository;
@@ -38,6 +39,7 @@ import com.micasita.backend.repositories.finanzas.EstadoPagoRepository;
 import com.micasita.backend.repositories.finanzas.EstadoMatriculaRepository;
 import com.micasita.backend.repositories.finanzas.MetodoPagoRepository;
 import com.micasita.backend.repositories.finanzas.TipoReciboRepository;
+import com.micasita.backend.repositories.finanzas.ConfiguracionFinanzasRepository;
 import com.micasita.backend.repositories.talleres.TallerRepository;
 import com.micasita.backend.repositories.talleres.TipoPublicoTallerRepository;
 import org.springframework.boot.CommandLineRunner;
@@ -49,7 +51,7 @@ import java.util.Objects;
 import java.time.LocalDate;
 import java.util.List;
 
-// @Component
+@Component
 public class DataInitializer implements CommandLineRunner {
 
     private final PersonaRepository personaRepository;
@@ -73,6 +75,7 @@ public class DataInitializer implements CommandLineRunner {
     private final GrupoRepository grupoRepository;
     private final ProfesorGrupoRepository profesorGrupoRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ConfiguracionFinanzasRepository configuracionFinanzasRepository;
     
 
 
@@ -97,7 +100,8 @@ public class DataInitializer implements CommandLineRunner {
                 ProfesorRepository profesorRepository,
                 GrupoRepository grupoRepository,
                 ProfesorGrupoRepository profesorGrupoRepository,
-                PasswordEncoder passwordEncoder
+                PasswordEncoder passwordEncoder,
+                ConfiguracionFinanzasRepository configuracionFinanzasRepository
     ) {
         this.personaRepository = personaRepository;
         this.usuarioRepository = usuarioRepository;
@@ -120,6 +124,7 @@ public class DataInitializer implements CommandLineRunner {
         this.grupoRepository = grupoRepository;
         this.profesorGrupoRepository = profesorGrupoRepository;
         this.passwordEncoder = passwordEncoder;
+        this.configuracionFinanzasRepository = configuracionFinanzasRepository;
     }
 
     @Override
@@ -143,17 +148,16 @@ public class DataInitializer implements CommandLineRunner {
         seedDemoUsuariosConRoles();
         seedDemoEstudiantes();
         seedDemoSolicitudesPendientes();
-        seedDemoTalleres();
+        // seedDemoTalleres();
+        seedConfiguracionFinanzas();
     }
 
     private void seedRoles() {
-        createRoleIfNotExists("DEVELOPER");
-        createRoleIfNotExists("ADMIN_DIRECCION");
+        createRoleIfNotExists("ADMIN");
+        createRoleIfNotExists("DIRECCION");
         createRoleIfNotExists("ADMINISTRACION");
         createRoleIfNotExists("CAJA");
         createRoleIfNotExists("PROFESOR");
-        createRoleIfNotExists("ADMIN");
-        createRoleIfNotExists("USER");
     }
 
     private void seedSuperAdmin() {
@@ -194,16 +198,15 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedEstadosSolicitud() {
         createEstadoSolicitudIfNotExists("PENDIENTE");
-        createEstadoSolicitudIfNotExists("EN_REVISION");
         createEstadoSolicitudIfNotExists("APROBADA");
         createEstadoSolicitudIfNotExists("RECHAZADA");
     }
 
     private void seedTiposDocumento() {
         createTipoDocumentoIfNotExists("CEDULA", true);
-        createTipoDocumentoIfNotExists("ACTA_NACIMIENTO", true);
-        createTipoDocumentoIfNotExists("CERTIFICADO_MEDICO", true);
-        createTipoDocumentoIfNotExists("RECORD_NOTAS", false);
+        createTipoDocumentoIfNotExists("ACTA NACIMIENTO", true);
+        createTipoDocumentoIfNotExists("CERTIFICADO MEDICO", true);
+        createTipoDocumentoIfNotExists("RECORD NOTAS", false);
     }
 
     private void seedEstadosPago() {
@@ -251,98 +254,15 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedTiposPublicoTaller() {
-        createTipoPublicoTallerIfNotExists("NINO");
+        createTipoPublicoTallerIfNotExists("NIÑO");
         createTipoPublicoTallerIfNotExists("ADULTO");
         createTipoPublicoTallerIfNotExists("GENERAL");
     }
 
-        private void seedDemoUsuariosConRoles() {
-        createUserWithRole(
-            "admin.dir@micasita.local",
-            "123",
-            "Ada",
-            "Direccion",
-            "88880001",
-            "ADM-DIR-001",
-            LocalDate.of(1988, 2, 10),
-            "ADMIN_DIRECCION"
-        );
-        createUserWithRole(
-            "admin.fin@micasita.local",
-            "123",
-            "Ana",
-            "Administracion",
-            "88880002",
-            "ADM-001",
-            LocalDate.of(1990, 5, 15),
-            "ADMINISTRACION"
-        );
-        createUserWithRole(
-            "caja.1@micasita.local",
-            "123",
-            "Carlos",
-            "Caja",
-            "88880003",
-            "CAJ-001",
-            LocalDate.of(1992, 7, 5),
-            "CAJA"
-        );
-        createUserWithRole(
-            "caja.2@micasita.local",
-            "123",
-            "Cecilia",
-            "Caja",
-            "88880004",
-            "CAJ-002",
-            LocalDate.of(1994, 9, 18),
-            "CAJA"
-        );
-        createUserWithRole(
-            "profe.1@micasita.local",
-            "123",
-            "Paula",
-            "Docente",
-            "88880005",
-            "PROF-001",
-            LocalDate.of(1987, 4, 8),
-            "PROFESOR"
-        );
-        createUserWithRole(
-            "profe.2@micasita.local",
-            "123",
-            "Pedro",
-            "Docente",
-            "88880006",
-            "PROF-002",
-            LocalDate.of(1986, 11, 21),
-            "PROFESOR"
-        );
-        createUserWithRole(
-            "recepcion@micasita.local",
-            "123",
-            "Rosa",
-            "Recepcion",
-            "88880007",
-            "REC-001",
-            LocalDate.of(1995, 1, 12),
-            "USER"
-        );
-        createUserWithRole(
-            "dev.ops@micasita.local",
-            "123",
-            "Diego",
-            "Dev",
-            "88880008",
-            "DEV-001",
-            LocalDate.of(1991, 3, 3),
-            "DEVELOPER"
-        );
-        }
 
         private void seedDemoEstudiantes() {
         ensureEstudiante(
             "estudiante.1@micasita.local",
-            "EST-001",
             "Elena",
             "Lopez",
             "88881001",
@@ -350,7 +270,6 @@ public class DataInitializer implements CommandLineRunner {
         );
         ensureEstudiante(
             "estudiante.2@micasita.local",
-            "EST-002",
             "Erick",
             "Martinez",
             "88881002",
@@ -358,7 +277,6 @@ public class DataInitializer implements CommandLineRunner {
         );
         ensureEstudiante(
             "estudiante.3@micasita.local",
-            "EST-003",
             "Eva",
             "Santos",
             "88881003",
@@ -366,7 +284,6 @@ public class DataInitializer implements CommandLineRunner {
         );
         ensureEstudiante(
             "estudiante.4@micasita.local",
-            "EST-004",
             "Elias",
             "Rojas",
             "88881004",
@@ -463,14 +380,14 @@ public class DataInitializer implements CommandLineRunner {
         solicitudAdmisionRepository.saveAll(solicitudes);
         }
 
-        private void seedDemoTalleres() {
-        TipoPublicoTaller general = tipoPublicoTallerRepository.findByNombre("GENERAL")
-            .orElseThrow(() -> new IllegalStateException("Tipo publico GENERAL no encontrado"));
+        // private void seedDemoTalleres() {
+        // TipoPublicoTaller general = tipoPublicoTallerRepository.findByNombre("GENERAL")
+        //     .orElseThrow(() -> new IllegalStateException("Tipo publico GENERAL no encontrado"));
 
-        createTallerIfNotExists("Taller 1", "Introduccion al arte", general, 35, 10, 7, 15);
-        createTallerIfNotExists("Taller 2", "Musica inicial", general, 40, 12, 8, 16);
-        createTallerIfNotExists("Taller 3", "Expresion corporal", general, 45, 15, 7, 17);
-        }
+        // createTallerIfNotExists("Taller 1", "Introduccion al arte", general, 35, 10, 7, 15);
+        // createTallerIfNotExists("Taller 2", "Musica inicial", general, 40, 12, 8, 16);
+        // createTallerIfNotExists("Taller 3", "Expresion corporal", general, 45, 15, 7, 17);
+        // }
 
     private void createRoleIfNotExists(String name) {
         rolesRepository.findByNombreRol(name)
@@ -539,8 +456,8 @@ public class DataInitializer implements CommandLineRunner {
 
     private void seedProfesores() {
         // ensure puesto DOCENTE exists (seedPuestos runs earlier)
-        createProfesorIfNotExists("profe.a@micasita.local", "PROF-A-001", "Ana", "Garcia", "89990001", LocalDate.of(1985, 4, 1), "Artes");
-        createProfesorIfNotExists("profe.b@micasita.local", "PROF-B-001", "Luis", "Martinez", "89990002", LocalDate.of(1980, 9, 12), "Musica");
+        createProfesorIfNotExists("profe.a@micasita.local", "001-010485-0001A", "Ana", "Garcia", "89990001", LocalDate.of(1985, 4, 1), "Artes");
+        createProfesorIfNotExists("profe.b@micasita.local", "001-120980-0002B", "Luis", "Martinez", "89990002", LocalDate.of(1980, 9, 12), "Musica");
     }
 
     private void seedProfesorGrupos() {
@@ -674,27 +591,113 @@ public class DataInitializer implements CommandLineRunner {
         }
         }
 
+    private void seedDemoUsuariosConRoles() {
+        createUserWithRole(
+            "admin.dir@micasita.local",
+            "123",
+            "Ada",
+            "Direccion",
+            "88880001",
+            "ADM-DIR-001",
+            LocalDate.of(1988, 2, 10),
+            "DIRECCION"
+        );
+        createUserWithRole(
+            "admin.fin@micasita.local",
+            "123",
+            "Ana",
+            "Administracion",
+            "88880002",
+            "ADM-001",
+            LocalDate.of(1990, 5, 15),
+            "ADMINISTRACION"
+        );
+        createUserWithRole(
+            "caja.1@micasita.local",
+            "123",
+            "Carlos",
+            "Caja",
+            "88880003",
+            "CAJ-001",
+            LocalDate.of(1992, 7, 5),
+            "CAJA"
+        );
+        createUserWithRole(
+            "caja.2@micasita.local",
+            "123",
+            "Cecilia",
+            "Caja",
+            "88880004",
+            "CAJ-002",
+            LocalDate.of(1994, 9, 18),
+            "CAJA"
+        );
+        createUserWithRole(
+            "profe.1@micasita.local",
+            "123",
+            "Paula",
+            "Docente",
+            "88880005",
+            "PROF-001",
+            LocalDate.of(1987, 4, 8),
+            "PROFESOR"
+        );
+        createUserWithRole(
+            "profe.2@micasita.local",
+            "123",
+            "Pedro",
+            "Docente",
+            "88880006",
+            "PROF-002",
+            LocalDate.of(1986, 11, 21),
+            "PROFESOR"
+        );
+        createUserWithRole(
+            "recepcion@micasita.local",
+            "123",
+            "Rosa",
+            "Recepcion",
+            "88880007",
+            "REC-001",
+            LocalDate.of(1995, 1, 12),
+            "ADMINISTRACION"
+        );
+        createUserWithRole(
+            "dev.ops@micasita.local",
+            "123",
+            "Diego",
+            "Dev",
+            "88880008",
+            "DEV-001",
+            LocalDate.of(1991, 3, 3),
+            "ADMIN"
+        );
+    }
+
         private void ensureEstudiante(
             String correo,
-            String identificador,
             String nombre,
             String apellido,
             String telefono,
             LocalDate nacimiento
         ) {
-        Persona persona = personaRepository.findFirstByCorreoOrIdentificador(correo, identificador)
+        Persona persona = personaRepository.findByCorreo(correo)
             .orElseGet(() -> personaRepository.save(Persona.builder()
                 .nombre(nombre)
                 .apellido(apellido)
                 .fechaNacimiento(nacimiento)
                 .telefono(telefono)
                 .correo(correo)
-                .identificador(identificador)
                 .activo(true)
                 .build()));
 
         if (!estudianteRepository.existsByPersonaId(persona.getId())) {
-            estudianteRepository.save(Estudiante.builder().persona(persona).build());
+            // 1. Guardamos el estudiante. Aquí SQL Server dispara el AUTO_INCREMENT (IDENTITY)
+            Estudiante estudianteGuardado = estudianteRepository.save(Estudiante.builder().persona(persona).build());
+            
+            // 2. Usamos ese ID automático de la base de datos para darle formato EST-XXX a la Persona
+            persona.setIdentificador(String.format("EST-%03d", estudianteGuardado.getId()));
+            personaRepository.save(persona);
         }
         }
 
@@ -728,4 +731,16 @@ public class DataInitializer implements CommandLineRunner {
             .activo(true)
             .build());
         }
+
+    private void seedConfiguracionFinanzas() {
+        if (configuracionFinanzasRepository.count() == 0) {
+            configuracionFinanzasRepository.save(ConfiguracionFinanzas.builder()
+                .montoMatriculaBase(new java.math.BigDecimal("50.00"))
+                .montoMensualidadBase(new java.math.BigDecimal("30.00"))
+                .montoMora(new java.math.BigDecimal("5.00"))
+                .diasGracia(5)
+                .activo(true)
+                .build());
+        }
+    }
 }

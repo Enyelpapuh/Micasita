@@ -428,9 +428,14 @@ public class AdmisionService {
         }
 
         if (!estudianteRepository.existsByPersonaId(persona.getId())) {
-            estudianteRepository.save(Estudiante.builder()
+            // 1. Guardamos el estudiante para que SQL Server asigne el ID numérico
+            Estudiante estudianteGuardado = estudianteRepository.save(Estudiante.builder()
                 .persona(persona)
                 .build());
+            
+            // 2. Sobreescribimos el UUID temporal usando el ID del estudiante para crear el formato EST-XXX
+            persona.setIdentificador(String.format("EST-%03d", estudianteGuardado.getId()));
+            personaRepository.save(persona);
         }
 
         Estudiante estudiante = estudianteRepository.findByPersonaId(persona.getId())

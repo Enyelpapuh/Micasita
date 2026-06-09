@@ -41,13 +41,13 @@ public class FinanzasConfiguracionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','CAJA')")
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_CAJA')")
     public ResponseEntity<ConfiguracionFinanzasService.ConfiguracionFinanzasResponse> getConfiguration() {
         return ResponseEntity.ok(configuracionFinanzasService.getConfiguration());
     }
 
     @PutMapping
-    @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION')")
+    @PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION')")
     public ResponseEntity<ConfiguracionFinanzasService.ConfiguracionFinanzasResponse> updateConfiguration(
             Authentication authentication,
             HttpServletRequest httpRequest,

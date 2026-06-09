@@ -846,7 +846,7 @@ export function SettingsPanel() {
 }
 
 export function FinanzasConfigPanel({ user }: { user?: AuthUser | null }) {
-  const canEditFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'DEVELOPER', 'ADMINISTRACION', 'ADMIN_DIRECCION', 'PROFESOR'].includes(role?.toUpperCase?.() ?? role))
+  const canEditFinanzas = (user?.roles ?? []).some((role) => ['ADMIN', 'ADMINISTRACION', 'DIRECCION'].includes(role?.toUpperCase?.() ?? role))
 
   // Debug: información para validar acceso
   console.log('=== FinanzasConfigPanel Debug ===')
@@ -856,7 +856,7 @@ export function FinanzasConfigPanel({ user }: { user?: AuthUser | null }) {
   console.log('Email del usuario:', user?.email)
   console.log('Roles en mayúscula:', user?.roles?.map(r => r?.toUpperCase?.() ?? r))
   console.log('¿Puede editar finanzas?:', canEditFinanzas)
-  console.log('Roles permitidos: ADMIN, DEVELOPER, ADMINISTRACION, ADMIN_DIRECCION, PROFESOR')
+  console.log('Roles permitidos: ADMIN, ADMINISTRACION, DIRECCION')
   console.log('================================')
 
   return (

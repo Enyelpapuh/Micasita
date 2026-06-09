@@ -14,7 +14,7 @@ import java.util.List;
 @CrossOrigin
 @RestController
 @RequestMapping("/admin/estudiantes")
-@PreAuthorize("hasAnyAuthority('DASHBOARD_ACADEMICO', 'ESTUDIANTES_MANAGE', 'ADMIN', 'DEVELOPER', 'ADMIN_DIRECCION', 'DIRECTOR')")
+@PreAuthorize("hasAnyAuthority('DASHBOARD_ACADEMICO', 'ESTUDIANTES_MANAGE', 'ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
 public class EstudianteDocumentoController {
 
     private final AcademicoService academicoService;

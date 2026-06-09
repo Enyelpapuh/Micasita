@@ -32,6 +32,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -67,6 +68,7 @@ public class CajaFinanzasService {
     private final MensualidadRepository mensualidadRepository;
     private final EstadoMatriculaRepository estadoMatriculaRepository;
     private final ConfiguracionFinanzasService configuracionFinanzasService;
+    private final PasswordEncoder passwordEncoder;
 
     public CajaFinanzasService(
             CajaSesionRepository cajaSesionRepository,
@@ -83,7 +85,8 @@ public class CajaFinanzasService {
             EstudianteRepository estudianteRepository,
             MensualidadRepository mensualidadRepository,
                 EstadoMatriculaRepository estadoMatriculaRepository,
-                ConfiguracionFinanzasService configuracionFinanzasService
+            ConfiguracionFinanzasService configuracionFinanzasService,
+            PasswordEncoder passwordEncoder
     ) {
         this.cajaSesionRepository = cajaSesionRepository;
         this.estadoCajaRepository = estadoCajaRepository;
@@ -100,6 +103,7 @@ public class CajaFinanzasService {
         this.mensualidadRepository = mensualidadRepository;
         this.estadoMatriculaRepository = estadoMatriculaRepository;
         this.configuracionFinanzasService = configuracionFinanzasService;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public CajaSesion getActiveSession(String email) {
@@ -113,8 +117,13 @@ public class CajaFinanzasService {
                 .toList();
     }
 
-    public CajaOperacionResult openSession(String email, BigDecimal saldoInicial, String observacion) {
+    public CajaOperacionResult openSession(String email, BigDecimal saldoInicial, String observacion, String password) {
         Usuario usuario = requireUser(email);
+
+        if (password == null || !passwordEncoder.matches(password, usuario.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Contraseña incorrecta para la apertura de caja.");
+        }
+
         if (getActiveSession(email) != null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "CAJA_SESSION_ALREADY_OPEN");
         }

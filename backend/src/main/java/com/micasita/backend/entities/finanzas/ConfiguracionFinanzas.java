@@ -10,10 +10,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "Configuracion_Finanzas")
@@ -25,34 +23,26 @@ public class ConfiguracionFinanzas {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID_config_finanzas")
+    @Column(name = "ID_configuracion")
     private Long id;
 
+    @Builder.Default
     @Column(name = "Monto_Matricula_Base", precision = 10, scale = 2, nullable = false)
-    private BigDecimal montoMatriculaBase;
+    private BigDecimal montoMatriculaBase = BigDecimal.ZERO;
 
+    @Builder.Default
     @Column(name = "Monto_Mensualidad_Base", precision = 10, scale = 2, nullable = false)
-    private BigDecimal montoMensualidadBase;
+    private BigDecimal montoMensualidadBase = BigDecimal.ZERO;
 
-    @Column(name = "Monto_Mora_Fija", precision = 10, scale = 2, nullable = false)
-    private BigDecimal montoMoraFija;
+    @Builder.Default
+    @Column(name = "Monto_Mora", precision = 10, scale = 2, nullable = false)
+    private BigDecimal montoMora = BigDecimal.ZERO;
 
-    @Column(name = "Porcentaje_Descuento_Familiar", precision = 5, scale = 2, nullable = false)
-    private BigDecimal porcentajeDescuentoFamiliar;
+    @Builder.Default
+    @Column(name = "Dias_Gracia", nullable = false)
+    private Integer diasGracia = 5;
 
-    @Column(name = "Maximo_Descuento_Familiar", precision = 10, scale = 2, nullable = false)
-    private BigDecimal maximoDescuentoFamiliar;
-
-    @Column(name = "Aplicar_Mora_Automatica", nullable = false)
-    private Boolean aplicarMoraAutomatica;
-
-    @Column(name = "Dias_Limite_Mora", nullable = false)
-    private Integer diasLimiteMora;
-
+    @Builder.Default
     @Column(name = "Activo", nullable = false)
-    private Boolean activo;
-
-    @UpdateTimestamp
-    @Column(name = "Ultima_Actualizacion")
-    private LocalDateTime ultimaActualizacion;
+    private Boolean activo = true;
 }

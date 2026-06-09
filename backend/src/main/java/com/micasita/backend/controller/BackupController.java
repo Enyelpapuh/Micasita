@@ -21,7 +21,7 @@ public class BackupController {
     private BackupService backupService;
 
     @PostMapping("/generar")
-    @PreAuthorize("hasAnyAuthority('DIRECTOR', 'ADMIN', 'DEVELOPER', 'ROLE_DIRECTOR', 'ROLE_ADMIN', 'ROLE_DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     public ResponseEntity<?> generarBackup() {
         try {
             String backupPath = backupService.generarBackupManual();
@@ -32,13 +32,13 @@ public class BackupController {
     }
 
     @GetMapping("/list")
-    @PreAuthorize("hasAnyAuthority('DIRECTOR', 'ADMIN', 'DEVELOPER', 'ROLE_DIRECTOR', 'ROLE_ADMIN', 'ROLE_DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     public ResponseEntity<?> listBackups() {
         return ResponseEntity.ok(backupService.listarBackups());
     }
 
     @GetMapping("/download/{fileName}")
-    @PreAuthorize("hasAnyAuthority('DIRECTOR', 'ADMIN', 'DEVELOPER', 'ROLE_DIRECTOR', 'ROLE_ADMIN', 'ROLE_DEVELOPER')")
+    @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     public ResponseEntity<Resource> downloadBackup(@PathVariable String fileName) {
         Resource resource = backupService.descargarBackup(fileName);
         return ResponseEntity.ok()

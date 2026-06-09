@@ -31,7 +31,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/finanzas/caja")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
-@PreAuthorize("hasAnyRole('ADMIN','DEVELOPER','ADMINISTRACION','CAJA')")
+@PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_CAJA')")
 public class FinanzasCajaController {
 
         private final CajaFinanzasService cajaFinanzasService;
@@ -79,7 +79,7 @@ public class FinanzasCajaController {
                         Authentication authentication,
                         @RequestBody OpenCajaRequest request
         ) {
-                return ResponseEntity.ok(cajaFinanzasService.openSession(authentication.getName(), request.saldoInicial(), request.observacion()));
+                return ResponseEntity.ok(cajaFinanzasService.openSession(authentication.getName(), request.saldoInicial(), request.observacion(), request.password()));
         }
 
         @PostMapping("/session/close")
@@ -91,7 +91,7 @@ public class FinanzasCajaController {
         }
 
         @PostMapping("/admin/close-all-open")
-        @PreAuthorize("hasAnyRole('ADMIN','DEVELOPER')")
+        @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
         public ResponseEntity<Void> closeAllOpenCajas() {
                 cajaFinanzasService.closeAllOpenCajas();
                 return ResponseEntity.ok().build();
@@ -196,7 +196,12 @@ public class FinanzasCajaController {
         @GetMapping("/tarifas")
         public ResponseEntity<CajaTarifasResponse> tarifas() {
                 var config = configuracionFinanzasService.getConfiguration();
-                return ResponseEntity.ok(new CajaTarifasResponse(config.montoMatriculaBase(), config.montoMensualidadBase()));
+                return ResponseEntity.ok(new CajaTarifasResponse(
+                        config.montoMatriculaBase(), 
+                        config.montoMensualidadBase(), 
+                        config.montoMora(), 
+                        config.diasGracia()
+                ));
         }
 
         @PostMapping("/payments/matricula/{id}/annul")
@@ -226,6 +231,7 @@ public class FinanzasCajaController {
         }
 
         @GetMapping("/dashboard")
+        @PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_CAJA')")
         public ResponseEntity<CajaDashboardResponse> dashboard(Authentication authentication, @RequestParam(defaultValue = "25") int limit) {
                 int safeLimit = Math.max(1, Math.min(limit, 100));
 
@@ -459,7 +465,9 @@ public class FinanzasCajaController {
 
     public record CajaTarifasResponse(
             BigDecimal montoMatriculaBase,
-            BigDecimal montoMensualidadBase
+            BigDecimal montoMensualidadBase,
+            BigDecimal montoMora,
+            Integer diasGracia
     ) {}
 
     public record CajaDashboardResponse(
@@ -509,7 +517,7 @@ public class FinanzasCajaController {
 
         public record AnulacionRequest(String motivo) {}
 
-        public record OpenCajaRequest(BigDecimal saldoInicial, String observacion) {}
+        public record OpenCajaRequest(BigDecimal saldoInicial, String observacion, String password) {}
 
         public record CloseCajaRequest(BigDecimal saldoCierre, String observacion) {}
 
@@ -520,6 +528,7 @@ public class FinanzasCajaController {
         public record MensualidadPaymentRequest(Long estudianteId, Integer mesDePago, BigDecimal montoBase, BigDecimal montoMora, Long metodoPagoId, String detalle) {}
 
             @GetMapping("/historial")
+            @PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_CAJA')")
             public ResponseEntity<CajaHistorialResponse> historial(
                     Authentication authentication,
                     @RequestParam(name = "sessionId", required = false) Long sessionId
@@ -597,6 +606,7 @@ public class FinanzasCajaController {
             }
 
         @GetMapping("/historial/general")
+        @PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_CAJA')")
         public ResponseEntity<CajaHistorialResponse> historialGeneral(
                 Authentication authentication,
                 @RequestParam(name = "limit", required = false) Integer limit

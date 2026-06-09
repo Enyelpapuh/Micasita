@@ -1,4 +1,4 @@
-﻿﻿import { useEffect, useMemo, useRef, useState } from 'react'
+﻿﻿﻿﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, CreditCard, LoaderCircle, ReceiptText, UserCircle, Wallet, X, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -1494,8 +1494,8 @@ export function CajaDashboardPanel() {
   const [mensualidadMontoBase, setMensualidadMontoBase] = useState('')
   const [mensualidadMontoMora, setMensualidadMontoMora] = useState('0')
   const [mensualidadMoraAutomatica, setMensualidadMoraAutomatica] = useState(true)
-  const [mensualidadMoraPorPeriodo] = useState('50')
-  const [mensualidadDiaLimitePago] = useState('10')
+  const [mensualidadMoraPorPeriodo, setMensualidadMoraPorPeriodo] = useState('0')
+  const [mensualidadDiaLimitePago, setMensualidadDiaLimitePago] = useState('5')
   const [mensualidadBuscarEstudiante, setMensualidadBuscarEstudiante] = useState('')
   const [mensualidadFiltroEstado, setMensualidadFiltroEstado] = useState<'todos' | 'activos' | 'anulados'>('todos')
   const [mensualidadMetodoPagoId, setMensualidadMetodoPagoId] = useState('1')
@@ -1761,14 +1761,22 @@ export function CajaDashboardPanel() {
 
     try {
       const currentYear = String(new Date().getFullYear())
-      const [dashboard, session, methods, activeStudents, tarifasResponse] = await Promise.all([
-        getCajaDashboard(token, 25),
-        getActiveCajaSession(token),
-        getMetodosPago(token),
-        listEstudiantesActivos(token, currentYear),
-        getCajaTarifas(token),
+      
+      console.log('🔄 Iniciando carga de datos de Caja...');
+
+      const pDashboard = getCajaDashboard(token, 25).catch(e => { console.error("❌ Error en getCajaDashboard:", e); throw e; });
+      const pSession = getActiveCajaSession(token).catch(e => { console.error("❌ Error en getActiveCajaSession:", e); throw e; });
+      const pMethods = getMetodosPago(token).catch(e => { console.error("❌ Error en getMetodosPago:", e); throw e; });
+      const pStudents = listEstudiantesActivos(token, currentYear).catch(e => { console.error("❌ Error en listEstudiantesActivos:", e); throw e; });
+      const pTarifas = getCajaTarifas(token).catch(e => { console.error("❌ Error en getCajaTarifas:", e); throw e; });
+      const pPending = getResumenPendientesMensualidad(token).catch(e => { console.error("❌ Error en getResumenPendientesMensualidad:", e); throw e; });
+
+      const [dashboard, session, methods, activeStudents, tarifasResponse, pendingStudents] = await Promise.all([
+        pDashboard, pSession, pMethods, pStudents, pTarifas, pPending
       ])
-      const pendingStudents = await getResumenPendientesMensualidad(token)
+
+      console.log('✅ Datos de caja cargados exitosamente');
+
       setData(dashboard)
       setActiveSession(session)
       setMetodosPago(methods)
@@ -1776,14 +1784,36 @@ export function CajaDashboardPanel() {
       setEstudiantesActivos(activeStudents)
       setMensualidadesPendientesEstudiantes(pendingStudents)
       setMensualidadMontoBase(String(Number(tarifasResponse.montoMensualidadBase ?? 0)))
+      setMensualidadMoraPorPeriodo(String(Number(tarifasResponse.montoMora ?? 0)))
+      setMensualidadDiaLimitePago(String(Number(tarifasResponse.diasGracia ?? 5)))
       const firstMethodId = methods[0] ? String(methods[0].id) : ''
       setTallerMetodoPagoId((current) => (methods.some((method) => String(method.id) === current) ? current : firstMethodId))
       setMensualidadMetodoPagoId((current) => (methods.some((method) => String(method.id) === current) ? current : firstMethodId))
 
       return dashboard
-    } catch {
-      setError('No se pudo cargar la información de caja.')
-      return null
+    } catch (error) {
+      console.error("🔥 Error crítico al cargar el dashboard de caja:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("📍 Endpoint que falló (RAIZ):", error.config?.url);
+        console.error("📍 Código HTTP:", error.response?.status);
+        console.error("📍 Respuesta del servidor:", error.response?.data);
+      }
+
+      setError('No se pudo cargar la información de caja. Verifica tu conexión o que hayas iniciado sesión nuevamente para renovar tus permisos.')
+      const emptyData: CajaDashboardResponse = {
+        metricas: { talleresPendientesPago: 0, matriculasPendientes: 0, pagosMatriculaPendientes: 0, mensualidadesPendientes: 0, registrosTaller: 0, registrosMatricula: 0, registrosMensualidad: 0 },
+        totalCobradoTalleres: 0,
+        totalCobradoMatriculas: 0,
+        totalCobradoMensualidades: 0,
+        totalCobradoGeneral: 0,
+        talleresPendientes: [],
+        matriculasPendientes: [],
+        pagosTaller: [],
+        pagosMatricula: [],
+        mensualidades: []
+      }
+      setData(emptyData)
+      return emptyData
     } finally {
       setIsLoading(false)
     }
@@ -1834,10 +1864,11 @@ export function CajaDashboardPanel() {
       setPaymentMessage(response.mensaje)
       const newData = await refreshAll()
       return { success: true, oldData, newData }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'No se pudo completar la operacion.'
-      toast.error(message)
-      setPaymentMessage(message)
+        } catch (err: any) {
+          const message = axios.isAxiosError(err) ? (err.response?.data?.message || err.response?.data || err.message) : (err instanceof Error ? err.message : 'No se pudo completar la operacion.')
+          const finalMsg = typeof message === 'string' ? message : 'Error en la operación'
+          toast.error(finalMsg)
+          setPaymentMessage(finalMsg)
       return { success: false, oldData: null, newData: null }
     } finally {
       setBusyAction(null)
@@ -1855,20 +1886,16 @@ export function CajaDashboardPanel() {
       return
     }
 
-    setBusyAction('open-session')
-    try {
-      const userEmail = (user as any)?.email || (user as any)?.correo
-      if (!userEmail) throw new Error('Usuario sin correo')
-      await login(userEmail, openPassword)
-    } catch (err) {
-      toast.error('Contraseña incorrecta. Verificación fallida.')
-      setBusyAction(null)
-      return
-    }
+      const result = await runAction('open-session', () => openCajaSession(token, { 
+        saldoInicial: readNumber(openSaldo), 
+        observacion: openObservacion,
+        password: openPassword 
+      }))
 
-    setShowOpenSessionModal(false)
-    setOpenPassword('')
-    await runAction('open-session', () => openCajaSession(token, { saldoInicial: readNumber(openSaldo), observacion: openObservacion }))
+      if (result.success) {
+        setShowOpenSessionModal(false)
+        setOpenPassword('')
+      }
   }
 
   const handleCloseAllOpenCajas = async () => {
@@ -2387,10 +2414,10 @@ export function CajaDashboardPanel() {
         ) : null}
 
         {!isLoading && error ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
         ) : null}
 
-        {!isLoading && !error && data ? (
+        {!isLoading && data ? (
           <>
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">

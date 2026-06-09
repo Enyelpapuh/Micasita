@@ -139,71 +139,66 @@ export function DashboardSidebar({
       ) : null}
 
       <aside
-        className={`fixed left-0 top-0 bottom-0 z-50 flex w-72 flex-col border-r border-white/10 bg-slate-950 text-white transition-all duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0 ${
-          isCollapsed ? 'md:w-24' : 'md:w-80'
+        className={`fixed left-0 top-0 bottom-0 z-50 flex w-[300px] flex-col border-r border-white/10 bg-slate-950 text-white transition-all duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+          isCollapsed ? 'md:w-24' : 'md:w-[320px] xl:w-[360px]'
         } ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
+        {/* Botón flotante para expandir/colapsar */}
+        <button
+          type="button"
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-4 top-8 z-[100] hidden h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-teal-500 text-slate-950 shadow-lg transition-all hover:scale-110 hover:bg-teal-400 active:scale-95 md:flex"
+          aria-label={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+          title={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+        >
+          {isCollapsed ? <ChevronRight className="h-5 w-5 ml-0.5" /> : <ChevronLeft className="h-5 w-5 mr-0.5" />}
+        </button>
+
         <div className="border-b border-white/10 p-4 md:p-5">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
             <div
               className="flex cursor-pointer items-center gap-3 transition-opacity hover:opacity-80"
               onClick={() => handleNavClick('overview')}
             >
-              <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl bg-white/10">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/10">
                 <img src={logo} alt="Micasita" className="h-8 w-8 object-contain" />
               </div>
-              {!isCollapsed ? (
-                <div>
-                  <h2 className="text-lg font-bold tracking-tight">Mi Casita</h2>
-                  <p className="text-xs text-white/60">Dashboard operativo</p>
-                </div>
-              ) : null}
+              <div className={`flex flex-col justify-center overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'}`}>
+                <h2 className="truncate text-lg font-bold tracking-tight">Mi Casita</h2>
+                <p className="truncate text-xs text-white/60">Dashboard operativo</p>
+              </div>
             </div>
-
-            <button
-              type="button"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="hidden items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-white/80 transition hover:bg-white/10 md:inline-flex"
-              aria-label={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-              title={isCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-            >
-              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </button>
           </div>
 
-          <div className={`mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 ${isCollapsed ? 'md:px-3' : ''}`}>
-            <p className={`text-xs uppercase tracking-[0.18em] text-white/55 ${isCollapsed ? 'md:sr-only' : ''}`}>Sesión activa</p>
-            <p className={`mt-1 text-sm font-semibold text-white ${isCollapsed ? 'md:text-center' : ''}`}>
+          <div className={`mt-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition-all duration-300 ${isCollapsed ? 'p-2' : 'px-4 py-3'}`}>
+            <p className={`truncate text-xs uppercase tracking-[0.18em] text-white/55 transition-all duration-300 ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-10 opacity-100'}`}>Sesión activa</p>
+            <p className={`truncate text-sm font-semibold text-white transition-all duration-300 ${isCollapsed ? 'mt-0 text-center' : 'mt-1'}`}>
               {isCollapsed ? (userName?.[0]?.toUpperCase() ?? 'U') : userName ?? 'Usuario'}
             </p>
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-5 md:px-4">
-          {!isCollapsed ? (
-            <div className="mb-4 px-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/50">
-              Menú por tareas
-            </div>
-          ) : null}
+        <nav className="flex-1 overflow-x-hidden overflow-y-auto px-3 py-5 md:px-4">
+          <div className={`overflow-hidden truncate px-3 text-xs font-semibold uppercase tracking-[0.18em] text-white/50 transition-all duration-300 ${isCollapsed ? 'mb-0 max-h-0 opacity-0' : 'mb-4 max-h-10 opacity-100'}`}>
+            Menú por tareas
+          </div>
 
           <div className="space-y-4">
             {groupedMenuItems.map((category) => (
-              <section key={category.key} className={`rounded-3xl border border-white/10 bg-white/5 ${isCollapsed ? 'p-2' : 'p-3'}`}>
-                <div className={`${isCollapsed ? 'px-1 pb-2' : 'px-2 pb-3'}`}>
+              <section key={category.key} className={`flex flex-col rounded-3xl border border-white/10 bg-white/5 transition-all duration-300 ${isCollapsed ? 'p-2' : 'p-3'}`}>
+                <div className={`overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-h-0 opacity-0' : 'mb-3 max-h-24 opacity-100 px-2'}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className={`font-semibold text-white ${isCollapsed ? 'text-xs uppercase tracking-[0.14em]' : 'text-sm'}`}>
+                      <p className="truncate text-sm font-semibold text-white">
                         {category.label}
                       </p>
-                      {!isCollapsed ? <p className="text-xs text-white/55">{category.description}</p> : null}
+                      <p className="truncate text-xs text-white/55">{category.description}</p>
                     </div>
-                    {!isCollapsed ? (
-                      <span className="rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
-                        {category.items.length}
-                      </span>
-                    ) : null}
+                    <span className="shrink-0 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                      {category.items.length}
+                    </span>
                   </div>
                 </div>
 
@@ -218,24 +213,23 @@ export function DashboardSidebar({
                         type="button"
                         title={item.label}
                         onClick={() => handleNavClick(item.view)}
-                        className={`group flex w-full items-center gap-3 rounded-2xl py-3 text-left transition-all duration-200 ${
-                          isCollapsed ? 'justify-center px-3' : 'px-4'
-                        } ${
+                        className={`group flex w-full items-center rounded-2xl py-2.5 text-left transition-all duration-300 ${
                           isActive
                             ? 'bg-white text-slate-950 shadow-lg shadow-black/20 ring-1 ring-white/80'
-                            : 'text-white/82 hover:-translate-y-[1px] hover:bg-white/8'
-                        }`}
+                            : 'text-white/80 hover:-translate-y-[1px] hover:bg-white/10'
+                        } ${isCollapsed ? 'justify-center px-0' : 'px-4'}`}
                       >
-                        <span className={`rounded-xl p-2 ${isActive ? 'bg-slate-950/10' : 'bg-white/10'}`}>
-                          <Icon className="h-5 w-5" />
-                        </span>
-                        {!isCollapsed ? (
-                          <span className={`text-sm font-medium ${isActive ? '' : defaultGradientClasses}`}>
+                        <div className="flex shrink-0 items-center justify-center">
+                          <span className={`flex items-center justify-center rounded-xl p-2.5 transition-colors ${isActive ? 'bg-slate-950/10' : 'bg-white/10 group-hover:bg-white/20'}`}>
+                            <Icon className="h-5 w-5" />
+                          </span>
+                        </div>
+                        
+                        <div className={`flex overflow-hidden transition-all duration-300 ${isCollapsed ? 'max-w-0 opacity-0' : 'ml-3 max-w-[200px] flex-1 opacity-100'}`}>
+                          <span className={`truncate text-sm font-medium ${isActive ? '' : defaultGradientClasses}`}>
                             {item.label}
                           </span>
-                        ) : (
-                          <span className="sr-only">{item.label}</span>
-                        )}
+                        </div>
                       </button>
                     )
                   })}
@@ -276,7 +270,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'overview', 
     category: 'reportes', 
     permission: 'DASHBOARD_OVERVIEW',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'CAJA', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA'],
   },
   {
     icon: ClipboardList,
@@ -284,7 +278,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'cashier',
     category: 'operaciones',
     permission: 'DASHBOARD_FINANZAS',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'CAJA', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA'],
   },
   {
     icon: ShieldCheck,
@@ -292,7 +286,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'attendance',
     category: 'operaciones',
     permission: 'DASHBOARD_ACADEMICO',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR'],
   },
   {
     icon: Users,
@@ -300,7 +294,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'students',
     category: 'estudiantes',
     permission: 'DASHBOARD_ACADEMICO',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR'],
   },
   {
     icon: Zap,
@@ -308,7 +302,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'workshops',
     category: 'estudiantes',
     permission: 'TALLERES_VIEW',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR'],
   },
   {
     icon: Inbox,
@@ -316,7 +310,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'recepcion',
     category: 'estudiantes',
     permission: 'DASHBOARD_ADMISION',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION'],
   },
   {
     icon: Users,
@@ -324,7 +318,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'people',
     category: 'estudiantes',
     permission: 'DASHBOARD_ACADEMICO',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION'],
   },
   {
     icon: Mail,
@@ -332,7 +326,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'mensajes',
     category: 'reportes',
     permission: 'DASHBOARD_ADMISION',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION'],
   },
   {
     icon: Settings,
@@ -340,7 +334,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'finanzasConfig',
     category: 'ajustes',
     permission: 'DASHBOARD_FINANZAS',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'ADMINISTRACION', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION'],
   },
   {
     icon: ShieldCheck,
@@ -348,7 +342,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'identityAccess',
     category: 'ajustes',
     permission: 'USUARIOS_MANAGE',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION'],
   },
   {
     icon: ShieldCheck,
@@ -356,14 +350,14 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'auditoria',
     category: 'ajustes',
     permission: 'DASHBOARD_AUDITORIA',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'ADMIN_DIRECCION', 'DEVELOPER', 'ADMINISTRACION'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION'],
   },
   {
     icon: Database,
     label: 'Copias de Seguridad',
     view: 'backup',
     category: 'ajustes',
-    allowedRoles: ['ADMIN', 'DIRECTOR', 'DEVELOPER'],
+    allowedRoles: ['ADMIN', 'DIRECCION'],
   },
   {
     icon: Settings,

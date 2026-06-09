@@ -50,6 +50,7 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/admision/solicitudes", "/api/admision/solicitudes").permitAll()
                     .requestMatchers("/auth/**", "/api/auth/**", "/db-status", "/api/db-status").permitAll()
                     .requestMatchers("/api/auth/recover-password/**").permitAll()
+                    .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
