@@ -141,9 +141,25 @@ public class AcademicoService {
 
     @Transactional(readOnly = true)
     public List<GrupoItem> listGrupos() {
+        List<ProfesorGrupo> allProfesorGrupos = profesorGrupoRepository.findAll();
+        Map<Long, ProfesorGrupo> grupoProfesorMap = allProfesorGrupos.stream()
+                .filter(pg -> pg.getGrupo() != null && pg.getProfesor() != null)
+                .collect(Collectors.toMap(
+                        pg -> pg.getGrupo().getId(),
+                        pg -> pg,
+                        (existing, replacement) -> replacement // usar el último/vigente en caso de múltiples
+                ));
+
         return grupoRepository.findAll().stream()
                 .sorted(Comparator.comparing(Grupo::getId))
-                .map(grupo -> new GrupoItem(grupo.getId(), grupo.getNombre(), grupo.getCodigoFuncion()))
+                .map(grupo -> {
+                    ProfesorGrupo pg = grupoProfesorMap.get(grupo.getId());
+                    Profesor profesor = pg != null ? pg.getProfesor() : null;
+                    return new GrupoItem(grupo.getId(), grupo.getNombre(), grupo.getCodigoFuncion(),
+                            profesor != null ? profesor.getId() : null,
+                            profesor != null && profesor.getPersona() != null ? profesor.getPersona().getNombre() : null,
+                            profesor != null && profesor.getPersona() != null ? profesor.getPersona().getApellido() : null);
+                })
                 .toList();
     }
 
@@ -158,7 +174,7 @@ public class AcademicoService {
                 .codigoFuncion(codigoFuncion)
                 .build());
 
-        return new GrupoItem(grupo.getId(), grupo.getNombre(), grupo.getCodigoFuncion());
+        return new GrupoItem(grupo.getId(), grupo.getNombre(), grupo.getCodigoFuncion(), null, null, null);
     }
 
     @Transactional(readOnly = true)
@@ -225,9 +241,14 @@ public class AcademicoService {
         Grupo grupo = grupoRepository.findById(grupoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_GRUPO_INVALIDO"));
 
-        if (profesorGrupoRepository.existsByProfesorIdAndGrupoId(profesorId, grupoId)) {
+        List<ProfesorGrupo> existentes = profesorGrupoRepository.findByGrupoIdOrderByIdAsc(grupoId);
+        boolean yaAsignado = existentes.stream().anyMatch(pg -> pg.getProfesor() != null && pg.getProfesor().getId().equals(profesorId));
+        if (yaAsignado) {
             return;
         }
+
+        // Eliminamos las asignaciones viejas para que solo haya 1 Profesor Titular por grupo
+        profesorGrupoRepository.deleteAll(existentes);
 
         profesorGrupoRepository.save(ProfesorGrupo.builder()
                 .profesor(profesor)
@@ -935,7 +956,14 @@ public class AcademicoService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    public record GrupoItem(Long id, String nombre, Integer codigoFuncion) {}
+    public record GrupoItem(
+            Long id, 
+            String nombre, 
+            Integer codigoFuncion,
+            Long profesorId,
+            String profesorNombre,
+            String profesorApellido
+    ) {}
 
     public record AsignaturaItem(Long id, String nombre, String descripcion) {}
 

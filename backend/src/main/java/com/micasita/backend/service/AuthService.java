@@ -414,7 +414,7 @@ public class AuthService {
             permissions.add("DASHBOARD_FINANZAS");
         }
 
-        if (roles.contains("PROFESOR")) {
+        if (roles.contains("PROFESOR") || roles.contains("DOCENTE")) {
            // permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ACADEMICO");
             permissions.add("DASHBOARD_CONFIGURACION");

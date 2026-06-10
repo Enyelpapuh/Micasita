@@ -418,6 +418,9 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, asignaturas, t
   const [profesorNew, setProfesorNew] = useState('')
   const [grupoExisting, setGrupoExisting] = useState('')
   const [profesorExisting, setProfesorExisting] = useState('')
+  const [grupoAsignatura, setGrupoAsignatura] = useState('')
+  const [asignaturaExisting, setAsignaturaExisting] = useState('')
+  const [nombreAsignatura, setNombreAsignatura] = useState('')
   const [busy, setBusy] = useState(false)
 
   if (!isOpen) return null;
@@ -465,6 +468,34 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, asignaturas, t
     } finally { setBusy(false) }
   }
 
+  const handleAsignarAsignatura = async () => {
+    if (!grupoAsignatura || !asignaturaExisting) { toast.error('Selecciona un grupo y una asignatura'); return; }
+    setBusy(true)
+    try {
+      await asignarGrupoAsignatura(token, { grupoId: Number(grupoAsignatura), asignaturaId: Number(asignaturaExisting) })
+      toast.success('Asignatura vinculada al grupo correctamente')
+      setGrupoAsignatura('')
+      setAsignaturaExisting('')
+      await reloadCatalogs()
+      onClose()
+    } catch (e) {
+      toast.error(normalizeApiError(e, 'Error al vincular asignatura'))
+    } finally { setBusy(false) }
+  }
+
+  const handleCrearAsignatura = async () => {
+    if (!nombreAsignatura.trim()) { toast.error('El nombre de la asignatura es requerido'); return; }
+    setBusy(true)
+    try {
+      await createAsignatura(token, { nombre: nombreAsignatura })
+      toast.success('Asignatura creada con éxito')
+      setNombreAsignatura('')
+      await reloadCatalogs()
+    } catch (e) {
+      toast.error(normalizeApiError(e, 'Error al crear asignatura'))
+    } finally { setBusy(false) }
+  }
+
   return createPortal(
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm sm:p-6">
       <div className="absolute inset-0" onClick={onClose} />
@@ -474,7 +505,7 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, asignaturas, t
           <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100"><X className="h-5 w-5"/></button>
         </div>
         
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
           <section className="rounded-2xl border border-slate-200 p-5">
             <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Crear un nuevo grupo</h3>
             <p className="mt-1 text-sm text-slate-500">Puedes crear el grupo y asignarle de inmediato un profesor titular.</p>
@@ -519,6 +550,48 @@ function ConfigGruposModal({ isOpen, onClose, grupos, profesores, asignaturas, t
             <div className="mt-4 flex justify-end">
               <button onClick={handleAsignar} disabled={busy} className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-70">
                 {busy ? 'Asignando...' : 'Asignar Profesor'}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Crear nueva asignatura</h3>
+            <p className="mt-1 text-sm text-slate-500">Crea una asignatura (ej. Asistencia Diaria) para luego vincularla a un grupo.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Nombre de la asignatura</label>
+                <input value={nombreAsignatura} onChange={e=>setNombreAsignatura(e.target.value)} placeholder="Ej. Asistencia Diaria" className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none" />
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleCrearAsignatura} disabled={busy} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-70">
+                {busy ? 'Creando...' : 'Crear Asignatura'}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-900 text-sm uppercase tracking-wide">Vincular asignatura a grupo existente</h3>
+            <p className="mt-1 text-sm text-slate-500">Es necesario que el grupo tenga asignaturas vinculadas para poder cargar la hoja de asistencia.</p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Grupo</label>
+                <select value={grupoAsignatura} onChange={e=>setGrupoAsignatura(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Selecciona grupo</option>
+                  {grupos.map(g=><option key={g.id} value={g.id}>{g.nombre}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-700">Asignatura</label>
+                <select value={asignaturaExisting} onChange={e=>setAsignaturaExisting(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none">
+                  <option value="">Selecciona asignatura</option>
+                  {asignaturas.map(a=><option key={a.id} value={a.id}>{a.nombre}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleAsignarAsignatura} disabled={busy} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-70">
+                {busy ? 'Vinculando...' : 'Vincular Asignatura'}
               </button>
             </div>
           </section>
@@ -956,6 +1029,10 @@ export function AcademicoAsistenciaNotasPanel({
         })
       })
 
+    if (unique.size === 0 && asignaturas.length > 0) {
+      return asignaturas
+    }
+
     return Array.from(unique.values())
   }, [asignaturas, isProfesor, misClasesDocente, selectedGrupoId])
 
@@ -1373,7 +1450,7 @@ export function AcademicoAsistenciaNotasPanel({
                 ? 'Se muestran solo tus grupos asignados. Selecciona el grupo y fecha para abrir asistencia.'
                 : 'Primero selecciona el grupo y fecha para abrir la hoja del día.'}
             </p>
-            <div className="grid gap-2 md:grid-cols-3">
+        <div className="grid gap-2 md:grid-cols-4">
               <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-700">Grupo</label>
                 <select value={selectedGrupoId ?? ''} onChange={(e) => setSelectedGrupoId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
@@ -1381,8 +1458,7 @@ export function AcademicoAsistenciaNotasPanel({
                 </select>
               </div>
 
-              {/* Opción 2: Oculto para el usuario, pero activo para el sistema */}
-              <div className="hidden">
+              <div className="grid gap-1">
                 <label className="text-xs font-semibold text-slate-700">Asignatura</label>
                 <select value={selectedAsignaturaId ?? ''} onChange={(e) => setSelectedAsignaturaId(Number(e.target.value))} className="rounded-xl border border-slate-300 px-3 py-2 text-sm">
                   {asignaturasVisibles.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
@@ -1406,6 +1482,12 @@ export function AcademicoAsistenciaNotasPanel({
                 </button>
               </div>
             </div>
+
+        {asignaturas.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+            <strong>¡Atención!</strong> No hay ninguna Asignatura creada en el sistema. Solicita a administración que cree al menos una (ej. "Asistencia Diaria") para poder registrar asistencia.
+          </div>
+        ) : null}
 
             {isProfesor ? (
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">

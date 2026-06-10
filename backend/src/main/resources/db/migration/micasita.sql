@@ -876,4 +876,4 @@ BEGIN
         FROM inserted i INNER JOIN deleted d ON i.ID_caja_sesion = d.ID_caja_sesion;
     END
 END;
-GO
+GOa

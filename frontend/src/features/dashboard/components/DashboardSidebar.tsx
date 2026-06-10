@@ -286,7 +286,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'attendance',
     category: 'operaciones',
     permission: 'DASHBOARD_ACADEMICO',
-    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DOCENTE'],
   },
   {
     icon: Users,
@@ -294,7 +294,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'students',
     category: 'estudiantes',
     permission: 'DASHBOARD_ACADEMICO',
-    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DOCENTE'],
   },
   {
     icon: Zap,
@@ -302,7 +302,7 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     view: 'workshops',
     category: 'estudiantes',
     permission: 'TALLERES_VIEW',
-    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR'],
+    allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DOCENTE'],
   },
   {
     icon: Inbox,
