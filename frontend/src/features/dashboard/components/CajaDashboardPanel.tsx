@@ -18,6 +18,7 @@ import {
   getMensualidadMesesResumen,
   getMetodosPago,
   getResumenPendientesMensualidad,
+  getPendientesMensualidades,
   openCajaSession,
   payMatricula,
   payMensualidad,
@@ -288,84 +289,6 @@ function buildCajaHistorialFromParts(
     const fechaB = b.fecha ? new Date(b.fecha as string).getTime() : 0
     return fechaB - fechaA
   })
-}
-
-function CompactSessionBar({
-  session,
-  onOpenSession,
-  onCloseSession,
-  busy,
-  showAdminAction,
-  onCloseAllOpenCajas,
-}: {
-  session: CajaSessionInfo | null
-  onOpenSession: () => void
-  onCloseSession: () => void
-  busy: boolean
-  showAdminAction: boolean
-  onCloseAllOpenCajas: () => void
-}) {
-  return (
-    <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_auto] xl:items-end">
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sesión de caja</p>
-          {session ? (
-            <div className="mt-3 space-y-1 text-sm text-slate-600">
-              <p className="text-base font-semibold text-slate-900">Caja activa {session.codigo}</p>
-              <p>Estado: {session.estado}</p>
-              <p>Apertura: {formatDate(session.fechaApertura)}</p>
-              <p>Saldo inicial: {formatMoney(session.saldoInicial)}</p>
-              {session.observacionApertura ? <p>Observación: {session.observacionApertura}</p> : null}
-            </div>
-          ) : (
-            <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white px-3 py-3 text-sm text-slate-600">
-              Presiona "Abrir caja" para ingresar monto de apertura y observación en el modal.
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm text-teal-950">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Acción principal</p>
-          <p className="mt-2 font-semibold">{session ? 'Cerrar la caja activa cuando termine el turno.' : 'Abrir una nueva sesión para registrar cobros.'}</p>
-          <p className="mt-1 text-teal-800/80">Los cambios se guardan al instante y el historial queda ordenado por recibo.</p>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {session ? (
-            <button
-              type="button"
-              onClick={onCloseSession}
-              disabled={busy}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy ? 'Procesando...' : 'Cerrar caja'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onOpenSession}
-              disabled={busy}
-              className="rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {busy ? 'Procesando...' : 'Abrir caja'}
-            </button>
-          )}
-
-          {showAdminAction ? (
-            <button
-              type="button"
-              onClick={onCloseAllOpenCajas}
-              disabled={busy}
-              className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Cerrar todas las cajas abiertas
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </div>
-  )
 }
 
 function TalleresTab({
@@ -1506,6 +1429,7 @@ export function CajaDashboardPanel() {
   const [historialModalOpen, setHistorialModalOpen] = useState(false)
   const [showPreCloseModal, setShowPreCloseModal] = useState(false)
   const [pendingAnnulments, setPendingAnnulments] = useState<PendingAnnulment[]>([])
+  const [isResumenModalOpen, setIsResumenModalOpen] = useState(false)
   const [showPendingAnnulmentsModal, setShowPendingAnnulmentsModal] = useState(false)
   const [preCloseCounted, setPreCloseCounted] = useState('')
   const [preCloseCambioDevuelto, setPreCloseCambioDevuelto] = useState('0')
@@ -1516,6 +1440,7 @@ export function CajaDashboardPanel() {
   const [historialTipoFiltro, setHistorialTipoFiltro] = useState<'todos' | 'Taller' | 'Matrícula' | 'Mensualidad'>('todos')
   const [historialCajeroFiltro, setHistorialCajeroFiltro] = useState<string>('todos')
   const [cajeroFilter, setCajeroFilter] = useState<string>('todos')
+  const [historialSearchTerm, setHistorialSearchTerm] = useState('')
   const [historialFechaFiltro, setHistorialFechaFiltro] = useState('')
 
   const selfRequestedIdsRef = useRef<Set<string>>(new Set())
@@ -1748,16 +1673,18 @@ export function CajaDashboardPanel() {
         return true
       }
 
-      return [item.tipo, item.titulo, item.numeroRecibo, item.detalle, item.metodoPago, item.estado]
+      return [item.tipo, item.titulo, item.numeroRecibo, item.detalle, item.metodoPago, item.estado, item.cajero]
         .filter(Boolean)
         .some((value) => String(value).toLocaleLowerCase('es-NI').includes(term))
     })
   }, [historialGeneral, searchTerm, historialTipoFiltro, historialFechaFiltro])
 
 
-  const loadData = async () => {
-    setIsLoading(true)
-    setError(null)
+  const loadData = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true)
+      setError(null)
+    }
 
     try {
       const currentYear = String(new Date().getFullYear())
@@ -1815,7 +1742,9 @@ export function CajaDashboardPanel() {
       setData(emptyData)
       return emptyData
     } finally {
-      setIsLoading(false)
+      if (!silent) {
+        setIsLoading(false)
+      }
     }
   }
 
@@ -1845,9 +1774,9 @@ export function CajaDashboardPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodFilter, token, generalHistorialData])
 
-  const refreshAll = async () => {
-    const newData = await loadData()
-    setGeneralHistorialData(null)
+  const refreshAll = async (silent = false) => {
+    const newData = await loadData(silent)
+    if (!silent) setGeneralHistorialData(null)
     if (periodFilter !== 'mi_caja') {
       await loadGeneralHistorialData()
     }
@@ -1862,7 +1791,7 @@ export function CajaDashboardPanel() {
       const response = await executor()
       toast.success(response.mensaje)
       setPaymentMessage(response.mensaje)
-      const newData = await refreshAll()
+        const newData = await refreshAll(true)
       return { success: true, oldData, newData }
         } catch (err: any) {
           const message = axios.isAxiosError(err) ? (err.response?.data?.message || err.response?.data || err.message) : (err instanceof Error ? err.message : 'No se pudo completar la operacion.')
@@ -1985,6 +1914,21 @@ export function CajaDashboardPanel() {
     }
   }
 
+  const refreshStudentPendingList = async (estId: string) => {
+    if (!token || !estId) return
+    try {
+      const [list, resumen] = await Promise.all([
+        getPendientesMensualidades(token, Number(estId)),
+        getMensualidadMesesResumen(token, Number(estId)),
+      ])
+      setPendientesMensualidadesList(list)
+      setMensualidadMesesResumen(resumen)
+    } catch (e) {
+      setPendientesMensualidadesList([])
+      setMensualidadMesesResumen({ mesesPagados: [], mesActual: new Date().getMonth() + 1 })
+    }
+  }
+
   const handlePayMensualidad = async () => {
     const result = await runAction('pay-mensualidad', () => payMensualidad(token, {
       estudianteId: Number(mensualidadEstudianteId),
@@ -1994,6 +1938,10 @@ export function CajaDashboardPanel() {
       metodoPagoId: Number(mensualidadMetodoPagoId),
       detalle: 'Cobro desde caja',
     }))
+
+    if (result.success) {
+      void refreshStudentPendingList(mensualidadEstudianteId)
+    }
 
     if (result.success && result.newData && result.oldData) {
       const oldIds = new Set(result.oldData.mensualidades?.map((p) => p.mensualidadId) || [])
@@ -2285,124 +2233,110 @@ export function CajaDashboardPanel() {
 
   return (
     <section className="rounded-[2rem] border border-slate-200/80 bg-white/90 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Finanzas</p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Caja</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-          Panel operativo para el rol CAJA. Aquí puedes revisar lo pendiente de talleres, matrícula y mensualidad,
-          además de ver los pagos recientes de cada tipo.
-        </p>
-      </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-teal-700">Finanzas</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">Caja</h2>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">
+            Panel operativo para el rol CAJA. Aquí puedes revisar lo pendiente de talleres, matrícula y mensualidad.
+          </p>
+        </div>
 
-      <CompactSessionBar
-        session={activeSession}
-        onOpenSession={handleOpenSession}
-        onCloseSession={handleCloseSession}
-        busy={busyAction === 'open-session' || busyAction === 'close-session' || busyAction === 'close-all-open-cajas'}
-        showAdminAction={isCajaAdmin}
-        onCloseAllOpenCajas={handleCloseAllOpenCajas}
-      />
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-6">
+            <div className="flex items-center gap-3">
+              <div className={`h-10 w-10 flex items-center justify-center rounded-full ${activeSession ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                {activeSession ? <Check /> : <X />}
+              </div>
+              <div>
+                <p className="font-semibold text-slate-900">{activeSession ? `Caja Abierta (${activeSession.codigo})` : 'Caja Cerrada'}</p>
+                <p className="text-xs text-slate-500">{activeSession ? `Abierta por ${user?.nombre}` : 'Inicia sesión para cobrar.'}</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {activeSession ? (
+                <button type="button" onClick={handleCloseSession} disabled={busyAction === 'close-session'} className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                  {busyAction === 'close-session' ? '...' : 'Cerrar'}
+                </button>
+              ) : (
+                <button type="button" onClick={handleOpenSession} disabled={busyAction === 'open-session'} className="rounded-xl bg-teal-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                  {busyAction === 'open-session' ? '...' : 'Abrir'}
+                </button>
+              )}
+            </div>
+          </div>
+          {isCajaAdmin && (
+            <button
+              type="button"
+              onClick={handleCloseAllOpenCajas}
+              disabled={busyAction === 'close-all-open-cajas'}
+              className="mt-2 w-full rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+            >
+              Forzar Cierre de Cajas
+            </button>
+          )}
+        </div>
+      </div>
 
       {paymentMessage ? (
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
           {paymentMessage}
         </div>
       ) : null}
-      <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <SectionCard title="Talleres pendiente" value={`${metricas?.talleresPendientesPago ?? 0}`} detail="Inscripciones en espera de pago" />
-        <SectionCard title="Matrículas pendiente" value={`${metricas?.matriculasPendientes ?? 0}`} detail="Estudiantes pendientes en caja" />
-        <SectionCard title="Pago matrícula pendiente" value={`${metricas?.pagosMatriculaPendientes ?? 0}`} detail="Registros en estado pendiente" />
-        <SectionCard title="Mensualidades pendiente" value={`${metricas?.mensualidadesPendientes ?? 0}`} detail="Cuotas por cobrar" />
-        <SectionCard title="Pagos talleres" value={`${metricas?.registrosTaller ?? 0}`} detail="Últimos registros cargados" />
-        <SectionCard title="Pagos matr./mens." value={`${(metricas?.registrosMatricula ?? 0) + (metricas?.registrosMensualidad ?? 0)}`} detail="Actividad reciente de caja" />
-      </div>
 
-      {/* Search central */}
-      <div className="mt-4 grid gap-3 md:grid-cols-[1fr_220px_220px_220px]">
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Buscar por estudiante, tutor o número de recibo"
+          placeholder="Buscar en pendientes por estudiante, tutor o recibo..."
           className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-teal-500"
         />
-
-        <select
-          value={periodFilter}
-          onChange={(e) => setPeriodFilter(e.target.value as 'mi_caja' | 'hoy_todos' | 'todo')}
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-        >
-          <option value="mi_caja">Mi caja (Hoy)</option>
-          <option value="hoy_todos">General (Hoy todas las cajas)</option>
-          <option value="todo">General (Histórico completo)</option>
-        </select>
-
-        <select
-          value={historialTipoFiltro}
-          onChange={(e) => setHistorialTipoFiltro(e.target.value as 'todos' | 'Taller' | 'Matrícula' | 'Mensualidad')}
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-        >
-          <option value="todos">Todos los tipos</option>
-          <option value="Taller">Taller</option>
-          <option value="Matrícula">Matrícula</option>
-          <option value="Mensualidad">Mensualidad</option>
-        </select>
-
-        <select
-          value={historialCajeroFiltro}
-          onChange={(e) => setHistorialCajeroFiltro(e.target.value)}
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-        >
-          <option value="todos">Todos los cajeros</option>
-          {uniqueHistorialCajeros.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-
-        <input
-          value={historialFechaFiltro}
-          onChange={(e) => setHistorialFechaFiltro(e.target.value)}
-          type="date"
-          className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button onClick={() => setIsResumenModalOpen(true)} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Ver Resumen
+          </button>
+          <button onClick={openHistorialModal} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            Ver Historial
+          </button>
+          {pendingAnnulments.length > 0 && (
+            <button
+              onClick={() => setShowPendingAnnulmentsModal(true)}
+              className={`inline-flex items-center rounded-xl border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
+                isCajaAdmin 
+                  ? 'border-rose-400 bg-rose-50 text-rose-700 hover:bg-rose-100'
+                  : 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100'
+              }`}
+            >
+              <span className="relative flex h-3 w-3 mr-2">
+                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCajaAdmin ? 'bg-rose-400' : 'bg-amber-400'}`}></span>
+                <span className={`relative inline-flex rounded-full h-3 w-3 ${isCajaAdmin ? 'bg-rose-500' : 'bg-amber-500'}`}></span>
+              </span>
+              Anulaciones ({pendingAnnulments.length})
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2 justify-between items-center">
+      <div className="mt-6 flex flex-wrap gap-2">
         {activeSession ? (
-          <div className="flex flex-wrap gap-2">
-            {tabs.map(({ id, label, icon: Icon }) => {
-              const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setTab(id)}
-                  className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
-                >
-                  <Icon className="mr-2 h-4 w-4" />
-                  {label}
-                  <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
-                    {count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          tabs.map(({ id, label, icon: Icon }) => {
+            const count = id === 'talleres' ? metricas?.talleresPendientesPago ?? 0 : id === 'matricula' ? metricas?.matriculasPendientes ?? 0 : metricas?.mensualidadesPendientes ?? 0
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`inline-flex items-center rounded-xl border px-3 py-2 text-sm font-semibold transition ${tab === id ? 'border-teal-500 bg-teal-100 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'}`}
+              >
+                <Icon className="mr-2 h-4 w-4" />
+                {label}
+                <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-100 px-2 text-xs font-semibold text-slate-700">
+                  {count}
+                </span>
+              </button>
+            )
+          })
         ) : <div />}
-        
-        {pendingAnnulments.length > 0 && (
-          <button
-            onClick={() => setShowPendingAnnulmentsModal(true)}
-            className={`inline-flex items-center rounded-xl border px-4 py-2 text-sm font-bold shadow-sm transition-colors ${
-              isCajaAdmin 
-                ? 'border-rose-400 bg-rose-50 text-rose-700 hover:bg-rose-100'
-                : 'border-amber-400 bg-amber-50 text-amber-700 hover:bg-amber-100'
-            }`}
-          >
-            <span className="relative flex h-3 w-3 mr-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isCajaAdmin ? 'bg-rose-400' : 'bg-amber-400'}`}></span>
-              <span className={`relative inline-flex rounded-full h-3 w-3 ${isCajaAdmin ? 'bg-rose-500' : 'bg-amber-500'}`}></span>
-            </span>
-            {isCajaAdmin ? `Autorizar anulaciones (${pendingAnnulments.length})` : `Anulaciones en espera (${pendingAnnulments.length})`}
-          </button>
-        )}
       </div>
 
       <div className="mt-4">
@@ -2419,8 +2353,6 @@ export function CajaDashboardPanel() {
 
         {!isLoading && data ? (
           <>
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="lg:col-span-2">
                     {!activeSession ? (
                       <div className="flex h-full min-h-[400px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-200 text-slate-500">
@@ -2495,20 +2427,7 @@ export function CajaDashboardPanel() {
                     estudiantesActivos={estudiantesActivos}
                     estudiantesPendientesMensualidad={mensualidadesPendientesEstudiantes}
                     globalSearchTerm={searchTerm}
-                    onBuscarPendientes={async (estId: string) => {
-                      if (!token || !estId) return
-                      try {
-                        const [list, resumen] = await Promise.all([
-                          (await import('./caja.api') as any).getPendientesMensualidades(token ?? null, Number(estId)),
-                          getMensualidadMesesResumen(token ?? null, Number(estId)),
-                        ])
-                        setPendientesMensualidadesList(list)
-                        setMensualidadMesesResumen(resumen)
-                      } catch (e) {
-                        setPendientesMensualidadesList([])
-                        setMensualidadMesesResumen({ mesesPagados: [], mesActual: new Date().getMonth() + 1 })
-                      }
-                    }}
+                    onBuscarPendientes={refreshStudentPendingList}
                     onPay={handlePayMensualidad}
                     onAnnul={requestAnnulMensualidad}
                     metodosPago={metodosPago}
@@ -2517,98 +2436,30 @@ export function CajaDashboardPanel() {
                 ) : null}
                       </>
                     )}
-              </div>
-
-              <aside className="lg:col-span-1">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">Historial general</h3>
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="mt-1 text-xs text-slate-600">Un solo listado cronológico para talleres, matrícula y mensualidad.</p>
-                        <div className="flex shrink-0 flex-col gap-2">
-                          <button type="button" onClick={openHistorialModal} className="rounded-xl border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Ver todos</button>
-                          <button type="button" onClick={printHistorialGeneral} className="rounded-xl border border-teal-300 bg-white px-3 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-50">Imprimir</button>
-                        </div>
-                      </div>
-                      {historialFechaFiltro ? (
-                        <p className="mt-2 text-xs text-slate-500">Filtrando por fecha de pago: {historialFechaFiltro}</p>
-                      ) : null}
-                  <div className="mt-4 max-h-[600px] space-y-3 overflow-y-auto pr-1">
-                    {historialFiltrado.map((item) => (
-                      <article
-                        key={item.key}
-                        className={`rounded-2xl border p-4 transition-all hover:shadow-sm ${item.anulado ? 'border-rose-200 bg-rose-50 hover:bg-rose-100' : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-teal-200'}`}
-                      >
-                        <div className="flex flex-col gap-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="font-semibold text-slate-900">{item.titulo}</p>
-                              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-teal-700">{item.tipo}</p>
-                            </div>
-                            <span className="shrink-0 rounded-lg bg-white px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-200">
-                              {item.numeroRecibo}
-                            </span>
-                          </div>
-                          
-                          <div className="text-sm text-slate-600">
-                            <p className="line-clamp-2">{item.detalle}</p>
-                            <p className="mt-1 font-medium text-slate-900">{formatMoney(item.monto)}</p>
-                          </div>
-                          
-                          <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                            <span className="rounded-md bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">{item.metodoPago || '-'}</span>
-                            <span className="rounded-md bg-white px-2 py-1 ring-1 ring-inset ring-slate-200">{formatDate(item.fecha)}</span>
-                          </div>
-
-                          <div className="mt-2 flex items-center gap-2">
-                            <button type="button" onClick={() => openReceipt(item)} className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">Imprimir</button>
-                            <button type="button" onClick={() => downloadReceipt(item)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-100">Descargar</button>
-                                  {!item.anulado ? (
-                                    (() => {
-                                      const isPending = 
-                                        (item.pagoCupoId && pendingTallerIds.includes(item.pagoCupoId)) ||
-                                        (item.pagoMatriculaId && pendingMatriculaIds.includes(item.pagoMatriculaId)) ||
-                                        (item.mensualidadId && pendingMensualidadIds.includes(item.mensualidadId));
-                                      
-                                      if (isPending) {
-                                        return <span className="ml-auto rounded-xl bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">En espera</span>;
-                                      }
-                                      
-                                      if (!activeSession) {
-                                        return null;
-                                      }
-
-                                      return (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            if (item.pagoCupoId) {
-                                              requestAnnulTaller(item.pagoCupoId, item.numeroRecibo || '', item.monto ?? 0)
-                                            } else if (item.pagoMatriculaId) {
-                                              requestAnnulMatricula(item.pagoMatriculaId, item.numeroRecibo || '', item.monto ?? 0)
-                                            } else if (item.mensualidadId) {
-                                              requestAnnulMensualidad(item.mensualidadId, item.numeroRecibo || '', item.monto ?? 0)
-                                            }
-                                          }}
-                                          className="ml-auto rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
-                                        >
-                                          Anular
-                                        </button>
-                                      )
-                                    })()
-                                  ) : (
-                                    <span className="ml-auto rounded-xl bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">Anulado</span>
-                                  )}
-                          </div>
-                        </div>
-                      </article>
-                    ))}
-                    {historialFiltrado.length === 0 ? <EmptyState message="No hay movimientos que coincidan con la búsqueda." /> : null}
-                  </div>
-                </div>
-              </aside>
-            </div>
           </>
         ) : null}
+
+        {isResumenModalOpen && createPortal(
+          <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setIsResumenModalOpen(false)} />
+            <div className="relative w-full max-w-2xl rounded-[2rem] border border-slate-200 bg-white p-5 sm:p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-lg font-semibold text-slate-900">Resumen de Caja</h4>
+                  <p className="text-sm text-slate-600">Métricas de cobros pendientes.</p>
+                </div>
+                <button onClick={() => setIsResumenModalOpen(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700">Cerrar</button>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                <SectionCard title="Talleres pendiente" value={`${metricas?.talleresPendientesPago ?? 0}`} detail="Inscripciones en espera de pago" />
+                <SectionCard title="Matrículas pendiente" value={`${metricas?.matriculasPendientes ?? 0}`} detail="Estudiantes pendientes en caja" />
+                <SectionCard title="Pago matrícula pendiente" value={`${metricas?.pagosMatriculaPendientes ?? 0}`} detail="Registros en estado pendiente" />
+                <SectionCard title="Mensualidades pendiente" value={`${metricas?.mensualidadesPendientes ?? 0}`} detail="Cuotas por cobrar" />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
         {annulModal ? createPortal(
           <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 sm:p-6">
@@ -2880,12 +2731,39 @@ export function CajaDashboardPanel() {
 
               {/* Buscador Fijo */}
               <div className="shrink-0 border-b border-slate-100 bg-slate-50/50 p-4 sm:px-6">
-                <input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar en el historial por estudiante, número de recibo o detalle..."
-                  className="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm outline-none shadow-sm focus:border-teal-500"
-                />
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                  <input
+                    value={historialSearchTerm}
+                    onChange={(e) => setHistorialSearchTerm(e.target.value)}
+                    placeholder="Buscar en historial..."
+                    className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm outline-none shadow-sm focus:border-teal-500"
+                  />
+                  <select
+                    value={periodFilter}
+                    onChange={(e) => setPeriodFilter(e.target.value as 'mi_caja' | 'hoy_todos' | 'todo')}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                  >
+                    <option value="mi_caja">Mi caja (Hoy)</option>
+                    <option value="hoy_todos">General (Hoy todas las cajas)</option>
+                    <option value="todo">General (Histórico completo)</option>
+                  </select>
+                  <select
+                    value={historialTipoFiltro}
+                    onChange={(e) => setHistorialTipoFiltro(e.target.value as 'todos' | 'Taller' | 'Matrícula' | 'Mensualidad')}
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                  >
+                    <option value="todos">Todos los tipos</option>
+                    <option value="Taller">Taller</option>
+                    <option value="Matrícula">Matrícula</option>
+                    <option value="Mensualidad">Mensualidad</option>
+                  </select>
+                  <input
+                    value={historialFechaFiltro}
+                    onChange={(e) => setHistorialFechaFiltro(e.target.value)}
+                    type="date"
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                  />
+                </div>
               </div>
 
               {/* Área Desplazable */}

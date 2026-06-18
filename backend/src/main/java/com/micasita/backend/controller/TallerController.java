@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -62,6 +63,9 @@ public class TallerController {
     private final TipoPublicoTallerRepository tipoPublicoTallerRepository;
     private final Path uploadDirectory;
     private final long maxUploadBytes;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     public TallerController(
             TallerRepository tallerRepository,
@@ -206,6 +210,55 @@ public class TallerController {
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @DeleteMapping("/{id}/inscripciones/{cupoId}")
+    @Transactional
+    public ResponseEntity<Void> desinscribirParticipante(
+            @PathVariable Long id,
+            @PathVariable Long cupoId
+    ) {
+        CupoTaller cupo = cupoTallerRepository.findById(cupoId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Inscripcion no encontrada"));
+
+        if (!cupo.getTaller().getId().equals(id)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La inscripcion no pertenece a este taller");
+        }
+
+        Integer totalPagos = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM Pago_cupo WHERE ID_cupo = ?", 
+            Integer.class, cupoId);
+
+        if (totalPagos != null && totalPagos > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Este cupo tiene un registro de pago en Caja. No se puede eliminar por integridad financiera.");
+        }
+
+        Participante participante = cupo.getParticipante();
+
+        cupoTallerRepository.delete(cupo);
+
+        if (participante != null) {
+            Integer otrosCupos = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM Cupo_taller WHERE ID_participante = ? AND ID_cupo != ?",
+                Integer.class, participante.getId(), cupoId
+            );
+            if (otrosCupos != null && otrosCupos == 0) {
+                participanteRepository.delete(participante);
+            }
+        }
+
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/{id}/inscripciones/pagados")
+    public ResponseEntity<List<Long>> obtenerCuposPagados(@PathVariable Long id) {
+        List<Long> cuposPagados = jdbcTemplate.queryForList(
+            "SELECT p.ID_cupo FROM Pago_cupo p " +
+            "JOIN Cupo_taller c ON p.ID_cupo = c.ID_cupo " +
+            "WHERE c.ID_taller = ? AND p.Es_Anulado = 0",
+            Long.class, id
+        );
+        return ResponseEntity.ok(cuposPagados);
     }
 
     @DeleteMapping("/{id}")

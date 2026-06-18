@@ -5,9 +5,10 @@ import toast from 'react-hot-toast'
 import { Calendar, LoaderCircle, Pencil, Plus, Printer, Users } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { appPermissions, useAuthorization } from '../../auth/authorization'
-import { createTaller, getTalleres, resolveTallerImageUrl, updateTaller, uploadTallerImage } from '../talleres-view.api'
+import { createTaller, getTalleres, resolveTallerImageUrl, updateTaller, uploadTallerImage, inscribirEnTaller, desinscribirDeTaller, getCuposPagadosTaller } from '../talleres-view.api'
 import { emptyTallerForm, initialTalleres } from '../talleres-view.data'
-import type { SaveTallerPayload, Taller, TallerFormValues } from '../talleres-view.types'
+import type { InscripcionTallerPayload, SaveTallerPayload, Taller, TallerFormValues } from '../talleres-view.types'
+import { listEstudiantes, getEstudianteDetail, type EstudianteItem } from '../../dashboard/components/academico.api'
 
 type EditingState = {
   mode: 'create' | 'edit'
@@ -155,11 +156,22 @@ export function TalleresView() {
   const [feedback, setFeedback] = useState<string | null>(null)
   const imageInputRef = useRef<HTMLInputElement | null>(null)
 
+  const [inscribirTaller, setInscribirTaller] = useState<Taller | null>(null)
+  const [inscripcionMode, setInscripcionMode] = useState<'existing' | 'new'>('existing')
+  const [inscripcionStudents, setInscripcionStudents] = useState<EstudianteItem[]>([])
+  const [inscripcionSearch, setInscripcionSearch] = useState('')
+  const [isLoadingStudents, setIsLoadingStudents] = useState(false)
+  const [inscripcionForm, setInscripcionForm] = useState<InscripcionTallerPayload>({ nombre: '', apellido: '', fechaNacimiento: '', telefono: '', correo: '', identificador: '' })
+  const [isInscribiendo, setIsInscribiendo] = useState(false)
+  const [isDesinscribiendo, setIsDesinscribiendo] = useState(false)
+  const [cuposPagados, setCuposPagados] = useState<Set<number>>(new Set())
+  const [isLoadingPagados, setIsLoadingPagados] = useState(false)
+
   const canView =
-    can(appPermissions.talleresView, ['ADMIN', 'COORDINADOR', 'DOCENTE']) ||
+    can(appPermissions.talleresView, ['ADMIN', 'COORDINADOR', 'DOCENTE', 'PROFESOR', 'DIRECCION', 'ADMINISTRACION']) ||
     can(appPermissions.dashboardAcademico)
-  const canCreate = can(appPermissions.talleresCreate, ['ADMIN', 'COORDINADOR'])
-  const canEdit = can(appPermissions.talleresEdit, ['ADMIN', 'COORDINADOR'])
+  const canCreate = can(appPermissions.talleresCreate, ['ADMIN', 'COORDINADOR', 'DIRECCION', 'ADMINISTRACION'])
+  const canEdit = can(appPermissions.talleresEdit, ['ADMIN', 'COORDINADOR', 'DIRECCION', 'ADMINISTRACION'])
 
   useEffect(() => {
     let cancelled = false
@@ -222,6 +234,8 @@ export function TalleresView() {
       total,
       completos,
       utilization,
+      totalCupos,
+      totalInscritos,
     }
   }, [talleres])
 
@@ -267,6 +281,97 @@ export function TalleresView() {
 
   const closeInscritos = () => {
     setInscritosTaller(null)
+  }
+
+  const openInscripcion = (taller: Taller) => {
+    setInscribirTaller(taller)
+    setInscripcionMode('existing')
+    setInscripcionSearch('')
+    setInscripcionForm({ nombre: '', apellido: '', fechaNacimiento: '', telefono: '', correo: '', identificador: '' })
+    
+    if (inscripcionStudents.length === 0) {
+      setIsLoadingStudents(true)
+      listEstudiantes(token)
+        .then(setInscripcionStudents)
+        .catch(() => toast.error('No se pudieron cargar los estudiantes'))
+        .finally(() => setIsLoadingStudents(false))
+    }
+  }
+
+  const closeInscripcion = () => {
+    setInscribirTaller(null)
+  }
+
+  const handleSelectStudentForInscripcion = async (student: EstudianteItem) => {
+    try {
+      const detail = await getEstudianteDetail(token, student.id)
+      setInscripcionForm({
+        nombre: detail.nombre || '',
+        apellido: detail.apellido || '',
+        fechaNacimiento: detail.fechaNacimiento ? detail.fechaNacimiento.split('T')[0] : '',
+        telefono: detail.telefono || '',
+        correo: detail.correo || '',
+        identificador: detail.identificador || ''
+      })
+      setInscripcionMode('new')
+      toast.success('Datos del estudiante cargados')
+    } catch {
+      toast.error('No se pudo cargar el detalle del estudiante')
+    }
+  }
+
+  const submitInscripcion = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!inscribirTaller) return
+    
+    if (!inscripcionForm.nombre.trim() || !inscripcionForm.apellido.trim() || !inscripcionForm.fechaNacimiento) {
+      toast.error('Nombre, apellido y fecha de nacimiento son obligatorios')
+      return
+    }
+
+    setIsInscribiendo(true)
+    try {
+      await inscribirEnTaller(inscribirTaller.id, inscripcionForm)
+      toast.success('Inscripción realizada con éxito')
+      const updatedTalleres = await getTalleres(token)
+      setTalleres(updatedTalleres)
+      closeInscripcion()
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        toast.error(err.response?.data?.message || 'Error al inscribir al participante')
+      } else {
+        toast.error('Error al inscribir al participante')
+      }
+    } finally {
+      setIsInscribiendo(false)
+    }
+  }
+
+  const handleDesinscribir = async (tallerId: number, cupoId: number) => {
+    if (!window.confirm('¿Seguro que deseas eliminar esta inscripción? Si el participante ya pagó, deberás anular el recibo en Caja en lugar de eliminarlo por aquí.')) return;
+    
+    setIsDesinscribiendo(true)
+    try {
+      await desinscribirDeTaller(token, tallerId, cupoId)
+      toast.success('Participante desinscrito con éxito')
+      const updatedTalleres = await getTalleres(token)
+      setTalleres(updatedTalleres)
+      
+      const updatedInscritosTaller = updatedTalleres.find(t => t.id === tallerId)
+      if (updatedInscritosTaller) {
+        setInscritosTaller(updatedInscritosTaller)
+      } else {
+        closeInscritos()
+      }
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        toast.error(err.response?.data?.message || 'Error al desinscribir al participante')
+      } else {
+        toast.error('Error al desinscribir al participante')
+      }
+    } finally {
+      setIsDesinscribiendo(false)
+    }
   }
 
   const formatInscrito = (cupo: Taller['cupos'][number]) => {
@@ -397,12 +502,14 @@ export function TalleresView() {
           <tbody>
             ${taller.cupos.map((cupo, index) => {
               const contacto = [cupo.participanteTelefono, cupo.participanteCorreo].filter(Boolean).join(' • ') || 'Sin información';
+              const isPagado = cuposPagados.has(cupo.id);
+              const statusLabel = isPagado ? '<span style="color: #166534; font-weight: bold;">Pagado</span>' : '<span style="color: #92400e;">Pendiente</span>';
               return `
               <tr>
                 <td style="text-align: center;">${index + 1}</td>
                 <td>${formatInscrito(cupo)}</td>
                 <td>${contacto}</td>
-                <td>${cupo.fecha || 'Sin fecha'}</td>
+                <td>${cupo.fecha || 'Sin fecha'} - ${statusLabel}</td>
               </tr>
               `;
             }).join('')}
@@ -457,7 +564,7 @@ export function TalleresView() {
         ) : null}
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-3">
+      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-sm text-slate-500">Total talleres</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{metrics.total}</p>
@@ -470,6 +577,10 @@ export function TalleresView() {
           <p className="text-sm text-slate-500">Uso de cupos</p>
           <p className="mt-1 text-2xl font-semibold text-slate-900">{metrics.utilization}%</p>
         </article>
+        <article className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm text-slate-500">Capacidad total</p>
+          <p className="mt-1 text-2xl font-semibold text-slate-900">{metrics.totalInscritos} / {metrics.totalCupos}</p>
+        </article>
       </div>
 
       {feedback ? (
@@ -478,9 +589,9 @@ export function TalleresView() {
         </div>
       ) : null}
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-        <div className="rounded-2xl border border-slate-200 p-4">
-          <div className="flex flex-wrap items-center gap-3">
+      <div className="mt-6 flex flex-col gap-6 lg:grid lg:grid-cols-[1.1fr_0.9fr] xl:grid-cols-[1.25fr_0.75fr]">
+        <div className="order-2 flex flex-col rounded-2xl border border-slate-200 p-4 lg:order-1">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
             <input
               type="search"
               value={query}
@@ -490,7 +601,7 @@ export function TalleresView() {
             />
           </div>
 
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3 overflow-y-auto pr-2 max-h-[60vh] lg:max-h-[calc(100vh-16rem)]">
             {isLoading ? (
               <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 px-4 py-10 text-slate-600">
                 <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
@@ -507,50 +618,41 @@ export function TalleresView() {
                   key={taller.id}
                   type="button"
                   onClick={() => setSelectedId(taller.id)}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${
+                  className={`w-full flex flex-col rounded-[1.5rem] border p-5 text-left transition-all duration-300 hover:-translate-y-1 ${
                     isSelected
-                      ? 'border-teal-400 bg-teal-50/70 shadow-[0_10px_30px_rgba(15,118,110,0.12)]'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                      ? 'border-teal-400 bg-teal-50/40 shadow-lg ring-1 ring-teal-400/50'
+                      : 'border-slate-200 bg-white hover:border-teal-300 hover:shadow-md'
                   }`}
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-slate-900">{taller.nombre}</p>
-                      <p className="text-sm text-slate-600">{taller.descripcion || 'Sin descripcion'}</p>
+                  <div className="flex w-full items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-lg font-bold ${isSelected ? 'text-teal-900' : 'text-slate-900'}`}>{taller.nombre}</p>
+                      <p className="mt-1 line-clamp-2 text-sm text-slate-600 leading-relaxed">{taller.descripcion || 'Sin descripcion'}</p>
                     </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${occupancy.classes}`}>
+                    <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold shadow-sm ${occupancy.classes}`}>
                       {occupancy.text}
                     </span>
                   </div>
 
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    <span className={`rounded-full px-2.5 py-1 font-semibold ${taller.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
-                      {taller.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                    <span className="rounded-full bg-indigo-100 px-2.5 py-1 font-semibold text-indigo-700">
-                      {taller.tipoPublico || 'GENERAL'}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => openInscritos(taller)}
-                      className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
-                    >
-                      Ver inscritos
-                    </button>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-600">
-                    <span className="inline-flex items-center gap-1">
+                  <div className="mt-4 flex flex-wrap gap-3 text-xs font-medium text-slate-500">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-slate-700">
                       <Calendar className="h-3.5 w-3.5" />
                       {taller.fechaInicial || 'Sin inicio'} - {taller.fechaFinal || 'Sin cierre'}
                     </span>
-                    <span className="inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-slate-700">
                       <Users className="h-3.5 w-3.5" />
                       {taller.cupos.length}/{taller.cuposMaximos} cupos ({utilizationRate(taller)}%)
                     </span>
+                  </div>
+
+                  <div className="mt-5 flex w-full flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
+                    <div
+                      className={`inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+                        isSelected ? 'bg-teal-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {isSelected ? 'Viendo detalle' : 'Ver detalle'}
+                    </div>
                   </div>
                 </button>
               )
@@ -564,91 +666,118 @@ export function TalleresView() {
           </div>
         </div>
 
-        <aside className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+        <aside className="order-1 flex flex-col self-start overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl lg:sticky lg:top-6 lg:order-2">
           {selectedTaller ? (
             <>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Detalle del taller</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-900">{selectedTaller.nombre}</h3>
-              <p className="mt-1 text-sm text-slate-600">Costo: {formatCordobas(selectedTaller.costo)}</p>
-
-              <dl className="mt-4 space-y-2 text-sm text-slate-700">
-                <div className="flex justify-between gap-2">
-                  <dt>Fecha inicial</dt>
-                  <dd className="font-medium text-slate-900">{selectedTaller.fechaInicial || 'Sin fecha'}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Fecha final</dt>
-                  <dd className="font-medium text-slate-900">{selectedTaller.fechaFinal || 'Sin fecha'}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Cupos</dt>
-                  <dd className="font-medium text-slate-900">
-                    {selectedTaller.cupos.length}/{selectedTaller.cuposMaximos}
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Rango edad</dt>
-                  <dd className="font-medium text-slate-900">
-                    {selectedTaller.edadMinima} - {selectedTaller.edadMaxima} anos
-                  </dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Estado</dt>
-                  <dd className="font-medium text-slate-900">{selectedTaller.activo ? 'Activo' : 'Inactivo'}</dd>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <dt>Tipo publico</dt>
-                  <dd className="font-medium text-slate-900">{selectedTaller.tipoPublico || 'GENERAL'}</dd>
-                </div>
-              </dl>
-
-              {selectedTaller.descripcion ? (
-                <p className="mt-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
-                  {selectedTaller.descripcion}
-                </p>
-              ) : null}
-
               {selectedTaller.rutaImagen ? (
-                <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="relative h-48 w-full bg-slate-100">
                   <img
                     src={resolveTallerImageUrl(selectedTaller.rutaImagen)}
                     alt={selectedTaller.nombre}
-                    className="h-44 w-full object-cover"
+                    className="h-full w-full object-cover"
                   />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <span className="inline-block rounded-full bg-teal-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
+                      {selectedTaller.activo ? 'Activo' : 'Inactivo'}
+                    </span>
+                    <h3 className="mt-2 text-2xl font-bold text-white leading-tight">{selectedTaller.nombre}</h3>
+                  </div>
                 </div>
-              ) : null}
+              ) : (
+                <div className="bg-slate-50 p-6 border-b border-slate-100">
+                  <span className="inline-block rounded-full bg-teal-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-800">
+                    {selectedTaller.activo ? 'Activo' : 'Inactivo'}
+                  </span>
+                  <h3 className="mt-3 text-2xl font-bold text-slate-900 leading-tight">{selectedTaller.nombre}</h3>
+                </div>
+              )}
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {canEdit ? (
+              <div className="p-6">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-100 pb-4 mb-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Costo</p>
+                    <p className="text-xl font-bold text-teal-700">{formatCordobas(selectedTaller.costo)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Cupos</p>
+                    <p className="text-lg font-bold text-slate-900">{selectedTaller.cupos.length} <span className="text-sm font-medium text-slate-500">/ {selectedTaller.cuposMaximos}</span></p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Inicio</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">{selectedTaller.fechaInicial || 'Sin fecha'}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Fin</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">{selectedTaller.fechaFinal || 'Sin fecha'}</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Edades</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">{selectedTaller.edadMinima} a {selectedTaller.edadMaxima} años</p>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Público</p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">{selectedTaller.tipoPublico || 'GENERAL'}</p>
+                  </div>
+                </div>
+
+                {selectedTaller.descripcion ? (
+                  <div className="mb-6">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Descripción</p>
+                    <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 rounded-xl p-4 border border-slate-100">
+                      {selectedTaller.descripcion}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-3">
                   <button
                     type="button"
-                    onClick={() => openEdit(selectedTaller)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+                    onClick={() => openInscripcion(selectedTaller)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-teal-700"
                   >
-                    <Pencil className="h-4 w-4" />
-                    Editar
+                    <Plus className="h-4 w-4" />
+                    Inscribir Estudiante
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => openInscritos(selectedTaller)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-teal-300 bg-white px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50"
-                >
-                  <Users className="h-4 w-4" />
-                  Ver inscritos
-                </button>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openInscritos(selectedTaller)}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                    >
+                      <Users className="h-4 w-4" />
+                      Inscritos
+                    </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(selectedTaller)}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </>
           ) : (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
-              Selecciona un taller para ver su detalle.
+            <div className="p-8 text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+                <Calendar className="h-8 w-8" />
+              </div>
+              <p className="text-slate-500 font-medium">Selecciona un taller de la lista para ver todos sus detalles aquí.</p>
             </div>
           )}
 
           <div className="mt-6 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600">
             Rol actual: {user?.roles.join(', ') || 'sin roles'}
             <br />
-            Nivel gestion: {hasRole('ADMIN', 'COORDINADOR') ? 'Gestion total' : 'Consulta'}
+            Nivel gestion: {canEdit ? 'Gestión total' : 'Consulta e Inscripción'}
           </div>
         </aside>
       </div>
@@ -919,15 +1048,48 @@ export function TalleresView() {
               </button>
             </div>
 
-            <div className="mt-4 max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+            <div className="mt-4 rounded-xl bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800 mb-4">
+              <strong>Nota sobre pagos:</strong> Los participantes marcados como pendientes pueden ser eliminados. Si ya pagaron, la anulación debe realizarse desde el módulo de <strong>Caja</strong>.
+            </div>
+
+            <div className="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-2">
               {inscritosTaller.cupos.length > 0 ? (
-                inscritosTaller.cupos.map((cupo) => (
-                  <article key={cupo.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                    <p className="font-semibold text-slate-900">{formatInscrito(cupo)}</p>
-                    <p className="text-slate-600">Contacto: {[cupo.participanteTelefono, cupo.participanteCorreo].filter(Boolean).join(' • ') || 'Sin información'}</p>
-                    <p className="text-slate-500">Fecha inscripción: {cupo.fecha || 'Sin fecha'}</p>
+                inscritosTaller.cupos.map((cupo) => {
+                  const isPagado = cuposPagados.has(cupo.id)
+                  
+                  return (
+                  <article key={cupo.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:bg-white hover:border-slate-300">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-slate-900 text-base">{formatInscrito(cupo)}</p>
+                      <p className="text-sm text-slate-600 mt-0.5">
+                        Contacto: {[cupo.participanteTelefono, cupo.participanteCorreo].filter(Boolean).join(' • ') || 'Sin información'}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2 text-xs">
+                        <span className="rounded-md bg-slate-200 px-2 py-1 font-medium text-slate-700">Inscrito: {cupo.fecha || 'Sin fecha'}</span>
+                        {isLoadingPagados ? (
+                          <span className="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-500 animate-pulse">Verificando...</span>
+                        ) : isPagado ? (
+                          <span className="rounded-md bg-emerald-100 px-2 py-1 font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">Pagado</span>
+                        ) : (
+                          <span className="rounded-md bg-amber-100 px-2 py-1 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">Pendiente de pago</span>
+                        )}
+                      </div>
+                    </div>
+                    {canEdit ? (
+                      <div className="flex shrink-0 items-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDesinscribir(inscritosTaller.id, cupo.id)}
+                          disabled={isDesinscribiendo || isPagado || isLoadingPagados}
+                          className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm transition hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={isPagado ? "No se puede eliminar un cupo pagado. Anule el recibo en Caja." : "Eliminar inscripción"}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ) : null}
                   </article>
-                ))
+                )})
               ) : (
                 <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   Este taller todavía no tiene participantes inscritos.
@@ -951,6 +1113,153 @@ export function TalleresView() {
               >
                 Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      , document.body) : null}
+
+      {inscribirTaller ? createPortal(
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm sm:p-6">
+          <div className="absolute inset-0" onClick={closeInscripcion} />
+          <div className="relative flex max-h-[95vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="shrink-0 border-b border-slate-200 px-6 py-5">
+              <h3 className="text-xl font-semibold text-slate-900">Inscribir en {inscribirTaller.nombre}</h3>
+              <p className="mt-1 text-sm text-slate-600">Busca un estudiante existente o registra uno nuevo.</p>
+            </div>
+            
+            <div className="flex border-b border-slate-200 bg-slate-50 px-6">
+              <button
+                onClick={() => setInscripcionMode('existing')}
+                className={`py-3 px-4 text-sm font-semibold transition-colors ${inscripcionMode === 'existing' ? 'border-b-2 border-teal-600 text-teal-800' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Buscar estudiante
+              </button>
+              <button
+                onClick={() => setInscripcionMode('new')}
+                className={`py-3 px-4 text-sm font-semibold transition-colors ${inscripcionMode === 'new' ? 'border-b-2 border-teal-600 text-teal-800' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Formulario de inscripción
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-6 py-5">
+              {inscripcionMode === 'existing' ? (
+                <div className="flex flex-col gap-4 h-[400px]">
+                  <input
+                    type="search"
+                    value={inscripcionSearch}
+                    onChange={(e) => setInscripcionSearch(e.target.value)}
+                    placeholder="Buscar por nombre..."
+                    className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                  />
+                  <div className="flex-1 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50">
+                    {isLoadingStudents ? (
+                      <div className="flex h-full items-center justify-center text-slate-500">
+                        <LoaderCircle className="h-6 w-6 animate-spin" />
+                      </div>
+                    ) : (
+                      <ul className="divide-y divide-slate-100">
+                        {inscripcionStudents
+                          .filter(s => `${s.nombre} ${s.apellido}`.toLowerCase().includes(inscripcionSearch.toLowerCase()))
+                          .map(s => (
+                            <li key={s.id}>
+                              <button
+                                onClick={() => handleSelectStudentForInscripcion(s)}
+                                className="flex w-full items-center justify-between p-3 text-left hover:bg-white transition-colors"
+                              >
+                                <div>
+                                  <p className="font-semibold text-slate-900">{s.nombre} {s.apellido}</p>
+                                  <p className="text-xs text-slate-500">ID: {s.id}</p>
+                                </div>
+                                <span className="rounded-lg bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">Seleccionar</span>
+                              </button>
+                            </li>
+                          ))}
+                        {inscripcionStudents.filter(s => `${s.nombre} ${s.apellido}`.toLowerCase().includes(inscripcionSearch.toLowerCase())).length === 0 && (
+                          <li className="p-4 text-center text-sm text-slate-500">No se encontraron estudiantes.</li>
+                        )}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <form id="inscripcion-form" onSubmit={submitInscripcion} className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Nombre *</label>
+                    <input
+                      required
+                      value={inscripcionForm.nombre}
+                      onChange={e => setInscripcionForm(prev => ({...prev, nombre: e.target.value}))}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Apellido *</label>
+                    <input
+                      required
+                      value={inscripcionForm.apellido}
+                      onChange={e => setInscripcionForm(prev => ({...prev, apellido: e.target.value}))}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Fecha de Nacimiento *</label>
+                    <input
+                      required
+                      type="date"
+                      value={inscripcionForm.fechaNacimiento}
+                      onChange={e => setInscripcionForm(prev => ({...prev, fechaNacimiento: e.target.value}))}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Teléfono</label>
+                    <input
+                      value={inscripcionForm.telefono}
+                      onChange={e => setInscripcionForm(prev => ({...prev, telefono: e.target.value}))}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Correo</label>
+                    <input
+                      type="email"
+                      value={inscripcionForm.correo}
+                      onChange={e => setInscripcionForm(prev => ({...prev, correo: e.target.value}))}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-600">Identificador / Cédula</label>
+                    <input
+                      value={inscripcionForm.identificador}
+                      onChange={e => setInscripcionForm(prev => ({...prev, identificador: e.target.value}))}
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </form>
+              )}
+            </div>
+
+            <div className="shrink-0 flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={closeInscripcion}
+                className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+              >
+                Cancelar
+              </button>
+              {inscripcionMode === 'new' && (
+                <button
+                  type="submit"
+                  form="inscripcion-form"
+                  disabled={isInscribiendo}
+                  className="inline-flex items-center rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700 disabled:opacity-70"
+                >
+                  {isInscribiendo ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Confirmar inscripción
+                </button>
+              )}
             </div>
           </div>
         </div>

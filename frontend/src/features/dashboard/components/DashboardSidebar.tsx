@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import {
   ClipboardList,
   ChevronLeft,
+  BookCheck,
   ChevronRight,
   Inbox,
   LayoutDashboard,
@@ -10,7 +11,7 @@ import {
   Database,
   ShieldCheck,
   Users,
-  Zap,
+  Presentation,
   type LucideIcon,
   X,
 } from 'lucide-react'
@@ -45,7 +46,7 @@ export type DashboardMenuItem = {
   allowedRoles?: string[]
 }
 
-export type DashboardCategoryKey = 'operaciones' | 'estudiantes' | 'reportes' | 'ajustes'
+export type DashboardCategoryKey = 'acciones_rapidas' | 'estudiantes' | 'reportes' | 'ajustes'
 
 type DashboardCategory = {
   key: DashboardCategoryKey
@@ -54,8 +55,8 @@ type DashboardCategory = {
 }
 
 export const dashboardCategories: DashboardCategory[] = [
-  { key: 'operaciones', label: 'Operaciones diarias', description: 'Caja, asistencia y notas' },
-  { key: 'estudiantes', label: 'Gestión de estudiantes', description: 'Admisiones, matrículas y talleres' },
+  { key: 'acciones_rapidas', label: 'Acciones rápidas', description: 'Caja, asistencia, catálogos y accesos directos' },
+  { key: 'estudiantes', label: 'Gestión de estudiantes', description: 'Admisiones y matrículas' },
   { key: 'reportes', label: 'Reportes y dirección', description: 'Resumen, mensajes y avisos' },
   { key: 'ajustes', label: 'Ajustes y control', description: 'Precios, seguridad y auditoría' },
 ]
@@ -276,15 +277,15 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     icon: ClipboardList,
     label: 'Caja y Cobros',
     view: 'cashier',
-    category: 'operaciones',
+    category: 'acciones_rapidas',
     permission: 'DASHBOARD_FINANZAS',
     allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA'],
   },
   {
-    icon: ShieldCheck,
+    icon: BookCheck,
     label: 'Asistencia y Notas',
     view: 'attendance',
-    category: 'operaciones',
+    category: 'acciones_rapidas',
     permission: 'DASHBOARD_ACADEMICO',
     allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DOCENTE'],
   },
@@ -297,10 +298,10 @@ export const dashboardMenuConfig: DashboardMenuItem[] = [
     allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DOCENTE'],
   },
   {
-    icon: Zap,
+    icon: Presentation,
     label: 'Catálogo de Talleres',
     view: 'workshops',
-    category: 'estudiantes',
+    category: 'acciones_rapidas',
     permission: 'TALLERES_VIEW',
     allowedRoles: ['ADMIN', 'DIRECCION', 'ADMINISTRACION', 'PROFESOR', 'DOCENTE'],
   },

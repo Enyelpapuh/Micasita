@@ -219,3 +219,26 @@ export async function inscribirEnTaller(
     mensaje: response.data.mensaje,
   }
 }
+
+export async function desinscribirDeTaller(
+  token: string | null,
+  tallerId: number,
+  cupoId: number,
+): Promise<void> {
+  ensureToken(token)
+
+  await talleresApi.delete(`/talleres/${tallerId}/inscripciones/${cupoId}`, {
+    headers: authHeaders(token),
+  })
+}
+
+export async function getCuposPagadosTaller(
+  token: string | null,
+  tallerId: number,
+): Promise<number[]> {
+  const response = await talleresApi.get<number[]>(`/talleres/${tallerId}/inscripciones/pagados`, {
+    headers: authHeaders(token),
+  })
+  
+  return response.data
+}
