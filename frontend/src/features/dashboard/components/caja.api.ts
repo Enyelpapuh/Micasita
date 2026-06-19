@@ -314,6 +314,10 @@ export type ConfiguracionFinanzasDto = {
   montoMora?: number | null
   diasGracia?: number | null
   activo?: boolean | null
+  porcentajeDescuentoFamiliar?: number | null
+  maximoDescuentoFamiliar?: number | null
+  diasLimiteMora?: number | null
+  aplicarMoraAutomatica?: boolean | null
 }
 
 export type CajaTarifasResponse = {

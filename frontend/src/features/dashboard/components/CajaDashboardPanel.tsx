@@ -1394,7 +1394,7 @@ function MensualidadTab({
 }
 
 export function CajaDashboardPanel() {
-  const { token, user, login } = useAuth()
+  const { token, user,  } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [tab, setTab] = useState<CajaTab>('talleres')
   const [isLoading, setIsLoading] = useState(true)
@@ -1438,8 +1438,8 @@ export function CajaDashboardPanel() {
   const [showOpenPassword, setShowOpenPassword] = useState(false)
   const [periodFilter, setPeriodFilter] = useState<'mi_caja' | 'hoy_todos' | 'todo'>('mi_caja')
   const [historialTipoFiltro, setHistorialTipoFiltro] = useState<'todos' | 'Taller' | 'Matrícula' | 'Mensualidad'>('todos')
-  const [historialCajeroFiltro, setHistorialCajeroFiltro] = useState<string>('todos')
-  const [cajeroFilter, setCajeroFilter] = useState<string>('todos')
+  const [historialCajeroFiltro, ] = useState<string>('todos')
+  //const [cajeroFilter, setCajeroFilter] = useState<string>('todos')
   const [historialSearchTerm, setHistorialSearchTerm] = useState('')
   const [historialFechaFiltro, setHistorialFechaFiltro] = useState('')
 
@@ -1623,11 +1623,11 @@ export function CajaDashboardPanel() {
     return full.filter((item) => isSameLocalDay(item.fecha))
   }, [pagosTallerSource, pagosMatriculaSource, mensualidadesSource, periodFilter])
 
-  const uniqueHistorialCajeros = useMemo(() => {
-    const cajeros = new Set<string>()
-    historialGeneral.forEach(item => item.cajero && cajeros.add(item.cajero))
-    return Array.from(cajeros).sort()
-  }, [historialGeneral])
+  // const uniqueHistorialCajeros = useMemo(() => {
+  //   const cajeros = new Set<string>()
+  //   historialGeneral.forEach(item => item.cajero && cajeros.add(item.cajero))
+  //   return Array.from(cajeros).sort()
+  // }, [historialGeneral])
 
   const pagosTallerFiltradosPeriodo = useMemo(() => {
     const items = pagosTallerSource
