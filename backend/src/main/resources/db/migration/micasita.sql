@@ -57,7 +57,7 @@ CREATE TABLE Puesto (
   ID_Puesto INT IDENTITY(1,1) PRIMARY KEY,
   Nombre NVARCHAR(200) NOT NULL,
   Descripcion NVARCHAR(300),
-  Rango INT 
+  Rango NVARCHAR(50) 
 );
 
 CREATE TABLE Tipo_Publico_Taller (
@@ -876,4 +876,4 @@ BEGIN
         FROM inserted i INNER JOIN deleted d ON i.ID_caja_sesion = d.ID_caja_sesion;
     END
 END;
-GOa
+GO

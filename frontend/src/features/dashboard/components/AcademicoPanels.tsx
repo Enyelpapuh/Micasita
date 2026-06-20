@@ -11,7 +11,7 @@ import {
   createGrupo,
   getMisClasesDocente,
   getAsistenciaSheet,
-  inscribirEstudianteAsignatura,
+  //inscribirEstudianteAsignatura,
   inscribirEstudianteGrupo,
   listAsignaturas,
   getAsistenciaHistorial,

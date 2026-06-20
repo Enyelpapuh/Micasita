@@ -9,6 +9,7 @@ export function AdminFinanzasPanel() {
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
 
   useEffect(() => {
     let cancelled = false
@@ -98,7 +99,7 @@ export function AdminFinanzasPanel() {
 
             <label className="text-sm text-slate-700">
               Monto mora fija
-              <input value={config?.montoMoraFija ?? ''} onChange={(e) => onChange('montoMoraFija', Number(e.target.value) || 0)} type="number" step="0.01" className="mt-1 w-full rounded-md border px-2 py-1" />
+              <input value={config?.montoMora ?? ''} onChange={(e) => onChange('montoMora', Number(e.target.value) || 0)} type="number" step="0.01" className="mt-1 w-full rounded-md border px-2 py-1" />
             </label>
 
             <label className="text-sm text-slate-700">

@@ -1,18 +1,10 @@
-import { useEffect, useState, useMemo, type ChangeEvent, type ReactNode } from 'react'
+import { useState, type ChangeEvent, type ReactNode } from 'react'
 import toast from 'react-hot-toast'
 import {
   Camera,
   Eye,
   EyeOff,
   LoaderCircle,
-  Printer,
-  PlusCircle,
-  Pencil,
-  Trash2,
-  LogIn,
-  AlertTriangle,
-  Search,
-  History,
 } from 'lucide-react'
 import type { AuthUser } from '../../auth/auth.types'
 import type { DashboardView } from './DashboardSidebar'
@@ -22,7 +14,7 @@ import { AdmisionDashboardPanel } from '../../admision/components/AdmisionDashbo
 import { AcademicoAsistenciaPanel, AcademicoGestionPanel, AcademicoNotasPanel } from './AcademicoPanels'
 import { StudentDirectoryPanel } from './StudentDirectoryPanel'
 import { useAuth } from '../../auth/AuthContext'
-import axios from 'axios'
+//import axios from 'axios'
 import { changeMyPassword, resolveMyAvatarUrl, updateMyProfile, uploadMyAvatar } from './settings.api'
 import { CajaDashboardPanel } from './CajaDashboardPanel'
 import { AdminFinanzasPanel } from './AdminFinanzasPanel'
@@ -31,9 +23,9 @@ import { AuditoriaPanel } from './AuditoriaPanel'
 import { BackupPanel } from './BackupPanel'
 import { OverviewPanel } from './OverviewPanel'
 
-type DashboardPanelProps = {
-  user?: AuthUser | null
-}
+// type DashboardPanelProps = {
+//   user?: AuthUser | null
+// }
 
 export function PanelShell({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (

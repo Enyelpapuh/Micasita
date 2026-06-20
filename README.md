@@ -83,3 +83,5 @@ npm run preview
 
 - El backend carga automaticamente backend/.env con spring.config.import.
 - No subas credenciales reales al repositorio. ------->  Importante
+
+## update

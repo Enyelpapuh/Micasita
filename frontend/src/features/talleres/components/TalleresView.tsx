@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { Calendar, LoaderCircle, Pencil, Plus, Printer, Users } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { appPermissions, useAuthorization } from '../../auth/authorization'
-import { createTaller, getTalleres, resolveTallerImageUrl, updateTaller, uploadTallerImage, inscribirEnTaller, desinscribirDeTaller, getCuposPagadosTaller } from '../talleres-view.api'
+import { createTaller, getTalleres, resolveTallerImageUrl, updateTaller, uploadTallerImage, inscribirEnTaller, desinscribirDeTaller, } from '../talleres-view.api'
 import { emptyTallerForm, initialTalleres } from '../talleres-view.data'
 import type { InscripcionTallerPayload, SaveTallerPayload, Taller, TallerFormValues } from '../talleres-view.types'
 import { listEstudiantes, getEstudianteDetail, type EstudianteItem } from '../../dashboard/components/academico.api'
@@ -141,7 +141,7 @@ function toFormValues(taller: Taller): TallerFormValues {
 
 export function TalleresView() {
   const { token } = useAuth()
-  const { user, can, hasRole } = useAuthorization()
+  const { user, can, } = useAuthorization()
   const [talleres, setTalleres] = useState<Taller[]>(initialTalleres)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<number | null>(initialTalleres[0]?.id ?? null)
@@ -164,8 +164,8 @@ export function TalleresView() {
   const [inscripcionForm, setInscripcionForm] = useState<InscripcionTallerPayload>({ nombre: '', apellido: '', fechaNacimiento: '', telefono: '', correo: '', identificador: '' })
   const [isInscribiendo, setIsInscribiendo] = useState(false)
   const [isDesinscribiendo, setIsDesinscribiendo] = useState(false)
-  const [cuposPagados, setCuposPagados] = useState<Set<number>>(new Set())
-  const [isLoadingPagados, setIsLoadingPagados] = useState(false)
+  const [cuposPagados, ] = useState<Set<number>>(new Set())
+  const [isLoadingPagados, ] = useState(false)
 
   const canView =
     can(appPermissions.talleresView, ['ADMIN', 'COORDINADOR', 'DOCENTE', 'PROFESOR', 'DIRECCION', 'ADMINISTRACION']) ||
