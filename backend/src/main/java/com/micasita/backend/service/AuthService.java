@@ -17,7 +17,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Transactional(readOnly = true)
+@SuppressWarnings("null")
 public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
@@ -65,7 +65,9 @@ public class AuthService {
     private final Path avatarDirectory;
     private final long maxAvatarBytes;
 
-    private record RecoveryData(String code, LocalDateTime expiry) {}
+    private record RecoveryData(String code, LocalDateTime expiry) {
+    }
+
     private final Map<String, RecoveryData> recoveryStore = new ConcurrentHashMap<>();
 
     public AuthService(
@@ -76,8 +78,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             JwtService jwtService,
             @Value("${app.upload.usuarios-avatar-dir:uploads/usuarios}") String avatarDirectory,
-            @Value("${app.upload.usuarios-avatar-max-bytes:5242880}") long maxAvatarBytes
-    ) {
+            @Value("${app.upload.usuarios-avatar-max-bytes:5242880}") long maxAvatarBytes) {
         this.usuarioRepository = usuarioRepository;
         this.personaRepository = personaRepository;
         this.personaRolesRepository = personaRolesRepository;
@@ -108,7 +109,8 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.password(), usuario.getPasswordHash())) {
-            usuario.setIntentosFallidos((usuario.getIntentosFallidos() == null ? 0 : usuario.getIntentosFallidos()) + 1);
+            usuario.setIntentosFallidos(
+                    (usuario.getIntentosFallidos() == null ? 0 : usuario.getIntentosFallidos()) + 1);
             usuarioRepository.save(usuario);
             registerFailedLoginAudit(usuario);
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_INVALID_CREDENTIALS");
@@ -127,8 +129,7 @@ public class AuthService {
                 user.apellido(),
                 user.roles(),
                 user.permisos(),
-                usuario.getTokenVersion()
-        );
+                usuario.getTokenVersion());
 
         registerSuccessfulLoginAudit(usuario);
 
@@ -202,7 +203,8 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_SESSION_INVALID"));
 
         String extension = getFileExtension(file.getOriginalFilename());
-        String fileName = "usuario-" + usuario.getId() + "-" + UUID.randomUUID().toString().replace("-", "") + extension;
+        String fileName = "usuario-" + usuario.getId() + "-" + UUID.randomUUID().toString().replace("-", "")
+                + extension;
 
         try {
             Files.createDirectories(avatarDirectory);
@@ -243,8 +245,7 @@ public class AuthService {
                 usuario.getEmail(),
                 usuario.getPersona().getNombre(),
                 usuario.getPersona().getApellido(),
-                usuario.getPersona().getIdentificador()
-        );
+                usuario.getPersona().getIdentificador());
         if (passwordPolicyError != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, passwordPolicyError);
         }
@@ -264,7 +265,8 @@ public class AuthService {
         }
 
         Usuario usuario = usuarioRepository.findByEmail(email.trim().toLowerCase(Locale.ROOT))
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe un usuario con este correo"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "No existe un usuario con este correo"));
 
         if (Boolean.FALSE.equals(usuario.getActivo())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "AUTH_USER_INACTIVE");
@@ -305,8 +307,7 @@ public class AuthService {
                 usuario.getEmail(),
                 usuario.getPersona().getNombre(),
                 usuario.getPersona().getApellido(),
-                usuario.getPersona().getIdentificador()
-        );
+                usuario.getPersona().getIdentificador());
         if (passwordPolicyError != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, passwordPolicyError);
         }
@@ -340,8 +341,7 @@ public class AuthService {
                 usuario.getPathAvatar(),
                 usuario.getActivo(),
                 new ArrayList<>(roles),
-                permissions
-        );
+                permissions);
     }
 
     @Transactional(readOnly = true)
@@ -394,8 +394,9 @@ public class AuthService {
             permissions.add("USUARIOS_MANAGE");
             // Permiso para acceder al panel de auditoría
             permissions.add("DASHBOARD_AUDITORIA");
-            
-            // Nuevos permisos explícitos para garantizar que el superusuario no tenga bloqueos
+
+            // Nuevos permisos explícitos para garantizar que el superusuario no tenga
+            // bloqueos
             permissions.add("DOCUMENTOS_MANAGE");
             permissions.add("ESTUDIANTES_MANAGE");
             permissions.add("EXPEDIENTES_MANAGE");
@@ -415,7 +416,7 @@ public class AuthService {
         }
 
         if (roles.contains("PROFESOR") || roles.contains("DOCENTE")) {
-           // permissions.add("DASHBOARD_OVERVIEW");
+            // permissions.add("DASHBOARD_OVERVIEW");
             permissions.add("DASHBOARD_ACADEMICO");
             permissions.add("DASHBOARD_CONFIGURACION");
         }
@@ -427,7 +428,8 @@ public class AuthService {
         try {
             HttpServletRequest request = resolveRequest();
             String ip = extractClientIp(request);
-            String userAgent = request != null ? defaultIfNull(request.getHeader("User-Agent"), "<unknown>") : "<unknown>";
+            String userAgent = request != null ? defaultIfNull(request.getHeader("User-Agent"), "<unknown>")
+                    : "<unknown>";
 
             AuditoriaAccesoSistema record = AuditoriaAccesoSistema.builder()
                     .usuario(usuario)
@@ -452,7 +454,8 @@ public class AuthService {
         try {
             HttpServletRequest request = resolveRequest();
             String ip = extractClientIp(request);
-            String userAgent = request != null ? defaultIfNull(request.getHeader("User-Agent"), "<unknown>") : "<unknown>";
+            String userAgent = request != null ? defaultIfNull(request.getHeader("User-Agent"), "<unknown>")
+                    : "<unknown>";
 
             AuditoriaAccesoSistema record = AuditoriaAccesoSistema.builder()
                     .usuario(usuario)
@@ -479,7 +482,8 @@ public class AuthService {
     }
 
     private String extractClientIp(HttpServletRequest request) {
-        if (request == null) return "<unknown>";
+        if (request == null)
+            return "<unknown>";
 
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {

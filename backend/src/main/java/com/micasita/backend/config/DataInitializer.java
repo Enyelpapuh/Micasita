@@ -52,6 +52,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 @Component
+@SuppressWarnings("null")
 public class DataInitializer implements CommandLineRunner {
 
     private final PersonaRepository personaRepository;

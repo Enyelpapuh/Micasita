@@ -4,6 +4,8 @@ import com.micasita.backend.entities.finanzas.Mensualidad;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import org.springframework.data.repository.query.Param;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -26,6 +28,31 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         BigDecimal sumCobradoCaja();
 
     @Query("""
+            select coalesce(sum(coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)), 0)
+            from Mensualidad m
+            where m.cajaSesion.id = :sessionId
+              and upper(m.estadoPago.nombre) = 'PAGADO'
+              and (m.esAnulado is null or m.esAnulado = false)
+            """)
+    BigDecimal sumCobradoBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
+            select coalesce(sum(coalesce(m.montoBase, 0) + coalesce(m.montoMora, 0)), 0)
+            from Mensualidad m
+            where m.cajaSesion.id = :sessionId
+              and (m.esAnulado = true or upper(m.estadoPago.nombre) = 'ANULADO')
+            """)
+    BigDecimal sumAnuladoBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
+            select count(m)
+            from Mensualidad m
+            where m.cajaSesion.id = :sessionId
+              and (m.esAnulado = true or upper(m.estadoPago.nombre) = 'ANULADO')
+            """)
+    long countAnuladoBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
             select
                 m.id as mensualidadId,
                 concat(coalesce(p.nombre, ''), ' ', coalesce(p.apellido, '')) as estudiante,
@@ -40,7 +67,9 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 coalesce(m.esAnulado, false) as anulado,
                 m.motivoAnulacion as motivoAnulacion,
                 m.numeroRecibo as numeroRecibo,
-                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero,
+                m.montoRecibido as montoRecibido,
+                m.cambioDevuelto as cambioDevuelto
             from Mensualidad m
             join m.estudiante e
             join e.persona p
@@ -65,7 +94,9 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 coalesce(m.esAnulado, false) as anulado,
                 m.motivoAnulacion as motivoAnulacion,
                 m.numeroRecibo as numeroRecibo,
-                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero,
+                m.montoRecibido as montoRecibido,
+                m.cambioDevuelto as cambioDevuelto
             from Mensualidad m
             join m.estudiante e
             join e.persona p
@@ -89,7 +120,9 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
                 coalesce(m.esAnulado, false) as anulado,
                 m.motivoAnulacion as motivoAnulacion,
                 m.numeroRecibo as numeroRecibo,
-                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), m.usuario.email) as cajero,
+                m.montoRecibido as montoRecibido,
+                m.cambioDevuelto as cambioDevuelto
             from Mensualidad m
             join m.estudiante e
             join e.persona p
@@ -114,6 +147,8 @@ public interface MensualidadRepository extends JpaRepository<Mensualidad, Long> 
         Boolean getAnulado();
         String getMotivoAnulacion();
         String getCajero();
+        BigDecimal getMontoRecibido();
+        BigDecimal getCambioDevuelto();
     }
 
     @Query("""

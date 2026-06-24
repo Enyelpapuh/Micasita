@@ -22,7 +22,7 @@ type Props = {
   onMontoBaseChange: (v: string) => void
   onMontoMoraChange: (v: string) => void
   onMetodoPagoChange: (v: string) => void
-  onPay: () => void
+  onPay: (montoRecibido: number, cambioDevuelto: number) => void
 }
 
 export default function MensualidadPaymentPanel({
@@ -275,7 +275,7 @@ export default function MensualidadPaymentPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={onPay}
+                  onClick={() => onPay(recibidoNumber, vuelto >= 0 ? vuelto : 0)}
                   disabled={!mesDePago || !metodoPagoId}
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >

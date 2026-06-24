@@ -42,6 +42,8 @@ export type GrupoItem = {
   id: number
   nombre: string
   codigoFuncion?: number | null
+  profesorNombre?: string | null
+  profesorApellido?: string | null
 }
 
 export type AsignaturaItem = {
@@ -129,6 +131,7 @@ export type AsistenciaSheetResponse = {
   fecha: string
   estados: EstadoAsistenciaItem[]
   rows: AsistenciaRowItem[]
+  docenteNombre?: string | null
 }
 
 export type AsistenciaHistorialItem = {
@@ -142,6 +145,17 @@ export type AsistenciaHistorialItem = {
   justificados: number
   total: number
   ultimaObservacion?: string | null
+  docenteNombre?: string | null
+}
+
+export type AsistenciaEstudianteMetricaItem = {
+  estudianteId: number
+  nombre?: string | null
+  apellido?: string | null
+  presentes: number
+  ausentes: number
+  justificados: number
+  total: number
 }
 
 export type DocenteClaseEstudianteItem = {
@@ -284,11 +298,30 @@ export async function getMisClasesDocente(token: string | null): Promise<Docente
   return response.data
 }
 
+export function normalizeDate(fecha: any): string {
+  if (!fecha) return ''
+  if (Array.isArray(fecha)) {
+    const [year, month, day] = fecha
+    const y = String(year)
+    const m = String(month).padStart(2, '0')
+    const d = String(day).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  return String(fecha)
+}
+
 export async function getAsistenciaSheet(token: string | null, params: { grupoId: number; asignaturaId: number; fecha: string }) {
+  const normalizedFecha = normalizeDate(params.fecha)
   const response = await adminApi.get<AsistenciaSheetResponse>('/academico/asistencia/sheet', {
     headers: authHeaders(token),
-    params,
+    params: {
+      ...params,
+      fecha: normalizedFecha,
+    },
   })
+  if (response.data) {
+    response.data.fecha = normalizeDate(response.data.fecha)
+  }
   return response.data
 }
 
@@ -301,7 +334,11 @@ export async function registrarAsistenciaSheet(
     registros: Array<{ estudianteId: number; estadoAsistenciaId: number; observaciones?: string | null }>
   },
 ) {
-  await adminApi.post('/academico/asistencia/sheet', payload, { headers: authHeaders(token) })
+  const normalizedFecha = normalizeDate(payload.fecha)
+  await adminApi.post('/academico/asistencia/sheet', {
+    ...payload,
+    fecha: normalizedFecha,
+  }, { headers: authHeaders(token) })
 }
 
 export async function getAsistenciaHistorial(
@@ -312,6 +349,12 @@ export async function getAsistenciaHistorial(
     headers: authHeaders(token),
     params,
   })
+  if (Array.isArray(response.data)) {
+    return response.data.map((item) => ({
+      ...item,
+      fecha: normalizeDate(item.fecha),
+    }))
+  }
   return response.data
 }
 
@@ -325,6 +368,21 @@ export async function actualizarNotaFinal(token: string | null, estudianteAsigna
     notaFinal,
   }, {
     headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export async function getAsistenciaMetrics(
+  token: string | null,
+  params: { grupoId: number; asignaturaId: number; fechaInicio: string; fechaFin: string },
+): Promise<AsistenciaEstudianteMetricaItem[]> {
+  const response = await adminApi.get<AsistenciaEstudianteMetricaItem[]>('/academico/asistencia/metrics', {
+    headers: authHeaders(token),
+    params: {
+      ...params,
+      fechaInicio: normalizeDate(params.fechaInicio),
+      fechaFin: normalizeDate(params.fechaFin),
+    },
   })
   return response.data
 }

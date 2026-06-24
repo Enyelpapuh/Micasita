@@ -8,6 +8,7 @@ import com.micasita.backend.repositories.finanzas.PagoCupoRepository;
 import com.micasita.backend.repositories.finanzas.PagoMatriculaRepository;
 import com.micasita.backend.repositories.talleres.CupoTallerRepository;
 import com.micasita.backend.repositories.finanzas.CajaSesionRepository;
+import com.micasita.backend.dto.finanzas.CorteSessionResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -69,6 +70,16 @@ public class FinanzasCajaController {
                 return ResponseEntity.ok(session == null ? null : CajaSesionResponse.from(session));
         }
 
+        @GetMapping("/session/{sessionId}/corte")
+        public ResponseEntity<CorteSessionResponse> getCorteSession(@PathVariable Long sessionId) {
+                return ResponseEntity.ok(cajaFinanzasService.getCorteSession(sessionId));
+        }
+
+        @GetMapping("/cortes")
+        public ResponseEntity<List<CorteSessionResponse>> getHistoricalCortes() {
+                return ResponseEntity.ok(cajaFinanzasService.getHistoricalCortes());
+        }
+
         @GetMapping("/metodos-pago")
         public ResponseEntity<List<CajaFinanzasService.MetodoPagoOption>> metodosPago() {
                 return ResponseEntity.ok(cajaFinanzasService.listMetodosPago());
@@ -107,7 +118,9 @@ public class FinanzasCajaController {
                                 request.matriculaId(),
                                 request.monto(),
                                 request.metodoPagoId(),
-                                request.detalle()
+                                request.detalle(),
+                                request.montoRecibido(),
+                                request.cambioDevuelto()
                 ));
         }
 
@@ -121,7 +134,9 @@ public class FinanzasCajaController {
                                 request.cupoId(),
                                 request.monto(),
                                 request.metodoPagoId(),
-                                request.detalle()
+                                request.detalle(),
+                                request.montoRecibido(),
+                                request.cambioDevuelto()
                 ));
         }
 
@@ -137,7 +152,9 @@ public class FinanzasCajaController {
                                 request.montoBase(),
                                 request.montoMora(),
                                 request.metodoPagoId(),
-                                request.detalle()
+                                request.detalle(),
+                                request.montoRecibido(),
+                                request.cambioDevuelto()
                 ));
         }
 
@@ -275,29 +292,34 @@ public class FinanzasCajaController {
                         clean(v.getDetalle()),
                         Boolean.TRUE.equals(v.getAnulado()),
                         clean(v.getMotivoAnulacion()),
-                        clean(v.getCajero())
+                        clean(v.getCajero()),
+                        clean(v.getAnioLectivo()),
+                        v.getMontoRecibido(),
+                        v.getCambioDevuelto()
                 ))
                 .toList();
 
-        List<MensualidadItem> mensualidades = mensualidadRepository.findAllRecentCaja().stream()
-                .limit(safeLimit)
-                .map(v -> new MensualidadItem(
-                        v.getMensualidadId(),
-                        clean(v.getEstudiante()),
-                        monthLabel(v.getMes()),
-                        clean(v.getNumeroRecibo()),
-                        v.getMontoBase(),
-                        v.getMontoMora(),
-                        v.getMonto(),
-                        v.getFechaPago(),
-                        clean(v.getEstado()),
-                        clean(v.getMetodoPago()),
-                        clean(v.getDetalle()),
-                        Boolean.TRUE.equals(v.getAnulado()),
-                        clean(v.getMotivoAnulacion()),
-                        clean(v.getCajero())
-                ))
-                .toList();
+                List<MensualidadItem> mensualidades = mensualidadRepository.findAllRecentCaja().stream()
+                                .limit(safeLimit)
+                                .map(v -> new MensualidadItem(
+                                        v.getMensualidadId(),
+                                        clean(v.getEstudiante()),
+                                        monthLabel(v.getMes()),
+                                        clean(v.getNumeroRecibo()),
+                                        v.getMontoBase(),
+                                        v.getMontoMora(),
+                                        v.getMonto(),
+                                        v.getFechaPago(),
+                                        clean(v.getEstado()),
+                                        clean(v.getMetodoPago()),
+                                        clean(v.getDetalle()),
+                                        Boolean.TRUE.equals(v.getAnulado()),
+                                        clean(v.getMotivoAnulacion()),
+                                        clean(v.getCajero()),
+                                        v.getMontoRecibido(),
+                                        v.getCambioDevuelto()
+                                ))
+                                .toList();
 
         List<PagoCupoItem> pagosTaller = pagoCupoRepository.findAllRecentCaja().stream()
                 .limit(safeLimit)
@@ -313,7 +335,9 @@ public class FinanzasCajaController {
                         clean(v.getMetodoPago()),
                         Boolean.TRUE.equals(v.getAnulado()),
                         clean(v.getMotivoAnulacion()),
-                        clean(v.getCajero())
+                        clean(v.getCajero()),
+                        v.getMontoRecibido(),
+                        v.getCambioDevuelto()
                 ))
                 .toList();
 
@@ -403,7 +427,9 @@ public class FinanzasCajaController {
             String metodoPago,
             boolean anulado,
             String motivoAnulacion,
-            String cajero
+            String cajero,
+            BigDecimal montoRecibido,
+            BigDecimal cambioDevuelto
     ) {}
 
     public record PagoMatriculaItem(
@@ -418,7 +444,10 @@ public class FinanzasCajaController {
             String detalle,
             boolean anulado,
             String motivoAnulacion,
-            String cajero
+            String cajero,
+            String anioLectivo,
+            BigDecimal montoRecibido,
+            BigDecimal cambioDevuelto
     ) {}
 
     public record MensualidadItem(
@@ -435,7 +464,9 @@ public class FinanzasCajaController {
             String detalle,
             boolean anulado,
             String motivoAnulacion,
-            String cajero
+            String cajero,
+            BigDecimal montoRecibido,
+            BigDecimal cambioDevuelto
     ) {}
 
     public record PendienteMensualidadResponse(
@@ -521,11 +552,11 @@ public class FinanzasCajaController {
 
         public record CloseCajaRequest(BigDecimal saldoCierre, String observacion) {}
 
-        public record MatriculaPaymentRequest(Long matriculaId, BigDecimal monto, Long metodoPagoId, String detalle) {}
+        public record MatriculaPaymentRequest(Long matriculaId, BigDecimal monto, Long metodoPagoId, String detalle, BigDecimal montoRecibido, BigDecimal cambioDevuelto) {}
 
-        public record TallerPaymentRequest(Long cupoId, BigDecimal monto, Long metodoPagoId, String detalle) {}
+        public record TallerPaymentRequest(Long cupoId, BigDecimal monto, Long metodoPagoId, String detalle, BigDecimal montoRecibido, BigDecimal cambioDevuelto) {}
 
-        public record MensualidadPaymentRequest(Long estudianteId, Integer mesDePago, BigDecimal montoBase, BigDecimal montoMora, Long metodoPagoId, String detalle) {}
+        public record MensualidadPaymentRequest(Long estudianteId, Integer mesDePago, BigDecimal montoBase, BigDecimal montoMora, Long metodoPagoId, String detalle, BigDecimal montoRecibido, BigDecimal cambioDevuelto) {}
 
             @GetMapping("/historial")
             @PreAuthorize("hasAnyAuthority('DASHBOARD_FINANZAS', 'ADMIN', 'DIRECCION', 'ADMINISTRACION', 'CAJA', 'ROLE_ADMIN', 'ROLE_DIRECCION', 'ROLE_ADMINISTRACION', 'ROLE_CAJA')")
@@ -560,7 +591,9 @@ public class FinanzasCajaController {
                                 clean(v.getMetodoPago()),
                                 Boolean.TRUE.equals(v.getAnulado()),
                                 clean(v.getMotivoAnulacion()),
-                                clean(v.getCajero())
+                                clean(v.getCajero()),
+                                v.getMontoRecibido(),
+                                v.getCambioDevuelto()
                         ))
                         .toList();
 
@@ -578,7 +611,10 @@ public class FinanzasCajaController {
                                 clean(v.getDetalle()),
                                 Boolean.TRUE.equals(v.getAnulado()),
                                 clean(v.getMotivoAnulacion()),
-                                clean(v.getCajero())
+                                clean(v.getCajero()),
+                                clean(v.getAnioLectivo()),
+                                v.getMontoRecibido(),
+                                v.getCambioDevuelto()
                         ))
                         .toList();
 
@@ -598,7 +634,9 @@ public class FinanzasCajaController {
                                 clean(v.getDetalle()),
                                 Boolean.TRUE.equals(v.getAnulado()),
                                 clean(v.getMotivoAnulacion()),
-                                clean(v.getCajero())
+                                clean(v.getCajero()),
+                                v.getMontoRecibido(),
+                                v.getCambioDevuelto()
                         ))
                         .toList();
 
@@ -613,41 +651,46 @@ public class FinanzasCajaController {
         ) {
                 int safeLimit = limit == null || limit <= 0 ? Integer.MAX_VALUE : Math.max(1, Math.min(limit, 10000));
 
-        List<PagoCupoItem> pagosTaller = pagoCupoRepository.findAllRecentCaja().stream()
-                        .limit(safeLimit)
-                        .map(v -> new PagoCupoItem(
-                                v.getPagoCupoId(),
-                                v.getCupoId(),
-                                clean(v.getTaller()),
-                                clean(v.getParticipante()),
-                                clean(v.getNumeroRecibo()),
-                                v.getMonto(),
-                                v.getFechaPago(),
-                                clean(v.getEstado()),
-                                clean(v.getMetodoPago()),
-                                Boolean.TRUE.equals(v.getAnulado()),
-                                clean(v.getMotivoAnulacion()),
-                                clean(v.getCajero())
-                        ))
-                        .toList();
+                        List<PagoCupoItem> pagosTaller = pagoCupoRepository.findAllRecentCaja().stream()
+                                .limit(safeLimit)
+                                .map(v -> new PagoCupoItem(
+                                        v.getPagoCupoId(),
+                                        v.getCupoId(),
+                                        clean(v.getTaller()),
+                                        clean(v.getParticipante()),
+                                        clean(v.getNumeroRecibo()),
+                                        v.getMonto(),
+                                        v.getFechaPago(),
+                                        clean(v.getEstado()),
+                                        clean(v.getMetodoPago()),
+                                        Boolean.TRUE.equals(v.getAnulado()),
+                                        clean(v.getMotivoAnulacion()),
+                                        clean(v.getCajero()),
+                                        v.getMontoRecibido(),
+                                        v.getCambioDevuelto()
+                                ))
+                                .toList();
 
-        List<PagoMatriculaItem> pagosMatricula = pagoMatriculaRepository.findAllRecentCaja().stream()
-                        .limit(safeLimit)
-                        .map(v -> new PagoMatriculaItem(
-                                v.getPagoMatriculaId(),
-                                v.getMatriculaId(),
-                                clean(v.getEstudiante()),
-                                clean(v.getNumeroRecibo()),
-                                v.getMonto(),
-                                v.getFechaPago(),
-                                clean(v.getEstado()),
-                                clean(v.getMetodoPago()),
-                                clean(v.getDetalle()),
-                                Boolean.TRUE.equals(v.getAnulado()),
-                                clean(v.getMotivoAnulacion()),
-                                clean(v.getCajero())
-                        ))
-                        .toList();
+                        List<PagoMatriculaItem> pagosMatricula = pagoMatriculaRepository.findAllRecentCaja().stream()
+                                .limit(safeLimit)
+                                .map(v -> new PagoMatriculaItem(
+                                        v.getPagoMatriculaId(),
+                                        v.getMatriculaId(),
+                                        clean(v.getEstudiante()),
+                                        clean(v.getNumeroRecibo()),
+                                        v.getMonto(),
+                                        v.getFechaPago(),
+                                        clean(v.getEstado()),
+                                        clean(v.getMetodoPago()),
+                                        clean(v.getDetalle()),
+                                        Boolean.TRUE.equals(v.getAnulado()),
+                                        clean(v.getMotivoAnulacion()),
+                                        clean(v.getCajero()),
+                                        clean(v.getAnioLectivo()),
+                                        v.getMontoRecibido(),
+                                        v.getCambioDevuelto()
+                                ))
+                                .toList();
 
         List<MensualidadItem> mensualidades = mensualidadRepository.findAllRecentCaja().stream()
                         .limit(safeLimit)
@@ -665,9 +708,11 @@ public class FinanzasCajaController {
                                 clean(v.getDetalle()),
                                 Boolean.TRUE.equals(v.getAnulado()),
                                 clean(v.getMotivoAnulacion()),
-                                clean(v.getCajero())
-                        ))
-                        .toList();
+                                        clean(v.getCajero()),
+                                        v.getMontoRecibido(),
+                                        v.getCambioDevuelto()
+                                ))
+                                .toList();
 
                 return ResponseEntity.ok(new CajaHistorialResponse(pagosTaller, pagosMatricula, mensualidades));
         }

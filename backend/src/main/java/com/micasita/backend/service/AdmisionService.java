@@ -65,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @Service
+@SuppressWarnings("null")
 public class AdmisionService {
 
     private final SolicitudAdmisionRepository solicitudAdmisionRepository;

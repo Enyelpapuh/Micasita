@@ -8,18 +8,16 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
 
 @Service
 @Transactional
+@SuppressWarnings("null")
 public class ConfiguracionFinanzasService {
 
     private final ConfiguracionFinanzasRepository configuracionFinanzasRepository;
 
     public ConfiguracionFinanzasService(
-            ConfiguracionFinanzasRepository configuracionFinanzasRepository
-    ) {
+            ConfiguracionFinanzasRepository configuracionFinanzasRepository) {
         this.configuracionFinanzasRepository = configuracionFinanzasRepository;
     }
 
@@ -30,9 +28,11 @@ public class ConfiguracionFinanzasService {
     public ConfiguracionFinanzasResponse updateConfiguration(UpdateConfiguracionFinanzasRequest request) {
         ConfiguracionFinanzas current = getOrCreateConfiguration();
         current.setMontoMatriculaBase(defaultMoney(request.montoMatriculaBase(), current.getMontoMatriculaBase()));
-        current.setMontoMensualidadBase(defaultMoney(request.montoMensualidadBase(), current.getMontoMensualidadBase()));
+        current.setMontoMensualidadBase(
+                defaultMoney(request.montoMensualidadBase(), current.getMontoMensualidadBase()));
         current.setMontoMora(defaultMoney(request.montoMora(), current.getMontoMora()));
-        current.setDiasGracia(request.diasGracia() != null ? Math.max(1, request.diasGracia()) : current.getDiasGracia());
+        current.setDiasGracia(
+                request.diasGracia() != null ? Math.max(1, request.diasGracia()) : current.getDiasGracia());
         current.setActivo(request.activo() != null ? request.activo() : current.getActivo());
         return toResponse(configuracionFinanzasRepository.save(current));
     }
@@ -106,8 +106,7 @@ public class ConfiguracionFinanzasService {
                 defaultMoney(config.getMontoMensualidadBase(), BigDecimal.ZERO),
                 defaultMoney(config.getMontoMora(), BigDecimal.ZERO),
                 config.getDiasGracia() != null ? config.getDiasGracia() : 5,
-                Boolean.TRUE.equals(config.getActivo())
-        );
+                Boolean.TRUE.equals(config.getActivo()));
     }
 
     private BigDecimal normalizeAmount(BigDecimal value) {
@@ -127,14 +126,14 @@ public class ConfiguracionFinanzasService {
             BigDecimal montoMensualidadBase,
             BigDecimal montoMora,
             int diasGracia,
-            boolean activo
-    ) {}
+            boolean activo) {
+    }
 
     public record UpdateConfiguracionFinanzasRequest(
             BigDecimal montoMatriculaBase,
             BigDecimal montoMensualidadBase,
             BigDecimal montoMora,
             Integer diasGracia,
-            Boolean activo
-    ) {}
+            Boolean activo) {
+    }
 }

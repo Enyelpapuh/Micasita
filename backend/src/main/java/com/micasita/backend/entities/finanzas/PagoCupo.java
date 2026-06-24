@@ -70,8 +70,18 @@ public class PagoCupo {
     @Column(name = "Fecha_de_pago")
     private LocalDate fechaDePago;
 
+    @Column(name = "Monto_Reembolsado", precision = 10, scale = 2)
+    @Builder.Default
+    private BigDecimal montoReembolsado = BigDecimal.ZERO;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ID_caja_sesion")
     @ToString.Exclude
     private CajaSesion cajaSesion;
+
+    @Column(name = "Monto_Recibido", precision = 10, scale = 2)
+    private BigDecimal montoRecibido;
+
+    @Column(name = "Cambio_Devuelto", precision = 10, scale = 2)
+    private BigDecimal cambioDevuelto;
 }

@@ -56,6 +56,8 @@ export type CajaPagoTallerItem = {
   metodoPago: string
   anulado: boolean
   motivoAnulacion?: string | null
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 export type CajaPagoMatriculaItem = {
@@ -70,6 +72,9 @@ export type CajaPagoMatriculaItem = {
   detalle: string
   anulado: boolean
   motivoAnulacion?: string | null
+  anioLectivo?: string
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 export type CajaMensualidadItem = {
@@ -84,6 +89,8 @@ export type CajaMensualidadItem = {
   detalle: string
   anulado: boolean
   motivoAnulacion?: string | null
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 export type CajaDashboardResponse = {
@@ -135,11 +142,41 @@ export type CloseCajaRequest = {
   observacion?: string | null
 }
 
+export type CategoriaCorte = {
+  cobrado: number
+  anulado: number
+}
+
+export type DesgloseCorte = {
+  matriculas: CategoriaCorte
+  talleres: CategoriaCorte
+  mensualidades: CategoriaCorte
+}
+
+export type CorteSessionResponse = {
+  sessionId: number
+  codigo: string
+  fechaApertura: string
+  fechaCierre?: string | null
+  saldoInicial: number
+  saldoCierre?: number | null
+  totalCobrado: number
+  totalAnulado: number
+  desglose: DesgloseCorte
+  cantidadAnulaciones: number
+  diferencia: number
+  observacionCierre?: string | null
+  usuarioAperturaNombre?: string | null
+  usuarioCierreNombre?: string | null
+}
+
 export type MatriculaPaymentRequest = {
   matriculaId: number
   monto: number
   metodoPagoId: number
   detalle?: string | null
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 export type TallerPaymentRequest = {
@@ -147,6 +184,8 @@ export type TallerPaymentRequest = {
   monto?: number | null
   metodoPagoId: number
   detalle?: string | null
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 export type MensualidadPaymentRequest = {
@@ -156,6 +195,8 @@ export type MensualidadPaymentRequest = {
   montoMora?: number | null
   metodoPagoId: number
   detalle?: string | null
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 export type MetodoPagoOption = {
@@ -206,6 +247,20 @@ export async function openCajaSession(token: string | null, body: OpenCajaReques
 
 export async function closeCajaSession(token: string | null, body: CloseCajaRequest): Promise<CajaOperacionResult> {
   const response = await api.post<CajaOperacionResult>('/finanzas/caja/session/close', body, {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export async function getCorteSession(token: string | null, sessionId: number): Promise<CorteSessionResponse> {
+  const response = await api.get<CorteSessionResponse>(`/finanzas/caja/session/${sessionId}/corte`, {
+    headers: authHeaders(token),
+  })
+  return response.data
+}
+
+export async function getHistoricalCortes(token: string | null): Promise<CorteSessionResponse[]> {
+  const response = await api.get<CorteSessionResponse[]>('/finanzas/caja/cortes', {
     headers: authHeaders(token),
   })
   return response.data

@@ -33,6 +33,7 @@ import java.util.UUID;
 
 @Service
 @Transactional
+@SuppressWarnings("null")
 public class AnuncioService {
 
     private static final String IMAGE_ROUTE_PREFIX = "/api/noticias/imagen/";

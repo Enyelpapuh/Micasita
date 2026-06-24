@@ -19,7 +19,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.MediaType;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +53,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/talleres")
 @CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
+@SuppressWarnings("null")
 public class TallerController {
 
     private final TallerRepository tallerRepository;
@@ -61,18 +61,17 @@ public class TallerController {
     private final ParticipanteRepository participanteRepository;
     private final CupoTallerRepository cupoTallerRepository;
     private final TipoPublicoTallerRepository tipoPublicoTallerRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final Path uploadDirectory;
     private final long maxUploadBytes;
-
-    @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     public TallerController(
             TallerRepository tallerRepository,
             PersonaRepository personaRepository,
             ParticipanteRepository participanteRepository,
             CupoTallerRepository cupoTallerRepository,
-                TipoPublicoTallerRepository tipoPublicoTallerRepository,
+            TipoPublicoTallerRepository tipoPublicoTallerRepository,
+            org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
             @Value("${app.upload.talleres-dir:uploads/talleres}") String uploadDirectory,
             @Value("${app.upload.talleres-max-bytes:5242880}") long maxUploadBytes
     ) {
@@ -81,6 +80,7 @@ public class TallerController {
         this.participanteRepository = participanteRepository;
         this.cupoTallerRepository = cupoTallerRepository;
         this.tipoPublicoTallerRepository = tipoPublicoTallerRepository;
+        this.jdbcTemplate = jdbcTemplate;
         this.uploadDirectory = Paths.get(uploadDirectory).toAbsolutePath().normalize();
         this.maxUploadBytes = maxUploadBytes;
     }

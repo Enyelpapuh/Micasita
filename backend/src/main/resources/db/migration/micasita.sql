@@ -335,6 +335,20 @@ CREATE TABLE Caja_Sesion (
   CONSTRAINT FK_CajaSesion_UsuarioCierre FOREIGN KEY (ID_usuario_cierre) REFERENCES Usuario(ID_usuario)
 );
 
+CREATE TABLE Corte_Caja (
+  ID_corte INT IDENTITY(1,1) PRIMARY KEY,
+  ID_caja_sesion INT NOT NULL,
+  Total_cobrado DECIMAL(10,2) NOT NULL DEFAULT 0,
+  Total_anulado DECIMAL(10,2) NOT NULL DEFAULT 0,
+  Total_matriculas DECIMAL(10,2) NOT NULL DEFAULT 0,
+  Total_talleres DECIMAL(10,2) NOT NULL DEFAULT 0,
+  Total_mensualidades DECIMAL(10,2) NOT NULL DEFAULT 0,
+  Cantidad_anulaciones INT NOT NULL DEFAULT 0,
+  Diferencia DECIMAL(10,2) NOT NULL DEFAULT 0,
+  Fecha_corte DATETIME NOT NULL DEFAULT GETDATE(),
+  CONSTRAINT FK_CorteCaja_CajaSesion FOREIGN KEY (ID_caja_sesion) REFERENCES Caja_Sesion(ID_caja_sesion)
+);
+
 CREATE TABLE Secuencia_Recibo (
   ID_secuencia_recibo INT IDENTITY(1,1) PRIMARY KEY,
   ID_tipo_recibo INT NOT NULL,
@@ -358,6 +372,9 @@ CREATE TABLE Pago_matricula (
   Motivo_Anulacion VARCHAR(255),
   ID_caja_sesion INT NULL,
   Detalle VARCHAR(200),
+  Monto_Reembolsado DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  Monto_Recibido DECIMAL(10,2) NULL,
+  Cambio_Devuelto DECIMAL(10,2) NULL,
   FOREIGN KEY (ID_matricula) REFERENCES Matricula(ID_matricula),
   FOREIGN KEY (ID_usuario) REFERENCES Usuario(ID_usuario),
   FOREIGN KEY (ID_metodo_pago) REFERENCES Metodo_Pago(ID_metodo_pago),
@@ -380,6 +397,9 @@ CREATE TABLE Mensualidad (
   Motivo_Anulacion VARCHAR(255),
   ID_caja_sesion INT NULL,
   Detalle VARCHAR(200),
+  Monto_Reembolsado DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  Monto_Recibido DECIMAL(10,2) NULL,
+  Cambio_Devuelto DECIMAL(10,2) NULL,
   FOREIGN KEY (ID_estudiante) REFERENCES Estudiante(ID_estudiante),
   FOREIGN KEY (ID_usuario) REFERENCES Usuario(ID_usuario),
   FOREIGN KEY (ID_metodo_pago) REFERENCES Metodo_Pago(ID_metodo_pago),
@@ -430,6 +450,9 @@ CREATE TABLE Pago_cupo (
   Motivo_Anulacion VARCHAR(255),
   Fecha_de_pago DATE,
   ID_caja_sesion INT NULL,
+  Monto_Reembolsado DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  Monto_Recibido DECIMAL(10,2) NULL,
+  Cambio_Devuelto DECIMAL(10,2) NULL,
   FOREIGN KEY (ID_cupo) REFERENCES Cupo_taller(ID_cupo),
   FOREIGN KEY (ID_usuario) REFERENCES Usuario(ID_usuario),
   FOREIGN KEY (ID_metodo_pago) REFERENCES Metodo_Pago(ID_metodo_pago),
@@ -874,6 +897,45 @@ BEGIN
                 CASE WHEN ISNULL(d.Saldo_cierre,0) <> ISNULL(i.Saldo_cierre,0) THEN 'Saldo_cierre' ELSE NULL END AS Saldo_cierre 
              FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)
         FROM inserted i INNER JOIN deleted d ON i.ID_caja_sesion = d.ID_caja_sesion;
+    END
+END;
+GO
+
+CREATE TRIGGER TR_Auditoria_Corte_Caja
+ON Corte_Caja
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
+            'Corte_Caja',
+            i.ID_corte,
+            'UPDATE',
+            (SELECT d.Total_cobrado, d.Diferencia FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            (SELECT i.Total_cobrado, i.Diferencia FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM inserted i
+        INNER JOIN deleted d ON i.ID_corte = d.ID_corte;
+    END
+
+    IF NOT EXISTS(SELECT * FROM inserted) AND EXISTS(SELECT * FROM deleted)
+    BEGIN
+        INSERT INTO Log_Auditoria (ID_usuario, Tabla_Afectada, ID_Registro, Accion, Valor_Anterior, Valor_Nuevo, IP_Terminal, Navegador_Cliente)
+        SELECT 
+            CAST(SESSION_CONTEXT(N'UserId') AS INT),
+            'Corte_Caja',
+            d.ID_corte,
+            'DELETE',
+            (SELECT d.Total_cobrado, d.Diferencia FOR JSON PATH, WITHOUT_ARRAY_WRAPPER),
+            NULL,
+            CAST(CONNECTIONPROPERTY('client_net_address') AS NVARCHAR(45)),
+            CAST(SESSION_CONTEXT(N'UserAgent') AS NVARCHAR(255))
+        FROM deleted d;
     END
 END;
 GO

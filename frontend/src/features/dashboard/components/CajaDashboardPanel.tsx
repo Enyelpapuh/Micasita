@@ -1,8 +1,9 @@
-﻿﻿﻿﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, CreditCard, LoaderCircle, ReceiptText, UserCircle, Wallet, X, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import logoSvg from '../../../assets/MiCASITALOGO-cropped.svg?raw'
 import { useAuth } from '../../auth/AuthContext'
 import { listEstudiantesActivos, type EstudianteItem } from './academico.api'
 import {
@@ -10,6 +11,8 @@ import {
   annulPagoMensualidad,
   annulPagoTaller,
   closeAllOpenCajas,
+  getCorteSession,
+  type CorteSessionResponse,
   closeCajaSession,
   getActiveCajaSession,
   getCajaDashboard,
@@ -73,6 +76,31 @@ function formatDate(value?: string | null) {
     month: 'short',
     day: '2-digit',
   })
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return '-'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+  return date.toLocaleString('es-NI', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function getMonthName(monthNumberStr: string) {
+  const monthNumber = parseInt(monthNumberStr, 10)
+  if (isNaN(monthNumber) || monthNumber < 1 || monthNumber > 12) return monthNumberStr
+  const date = new Date(2024, monthNumber - 1, 1)
+  const month = date.toLocaleString('es-NI', { month: 'long' })
+  return month.charAt(0).toUpperCase() + month.slice(1)
 }
 
 function parseDateValue(value: string) {
@@ -229,6 +257,10 @@ type CajaHistorialItem = {
   pagoCupoId?: number
   pagoMatriculaId?: number
   mensualidadId?: number
+  mes?: string
+  anioLectivo?: string
+  montoRecibido?: number | null
+  cambioDevuelto?: number | null
 }
 
 function buildCajaHistorialFromParts(
@@ -250,6 +282,8 @@ function buildCajaHistorialFromParts(
     motivoAnulacion: item.motivoAnulacion,
     cajero: (item as any).cajero,
     pagoCupoId: item.pagoCupoId,
+    montoRecibido: item.montoRecibido,
+    cambioDevuelto: item.cambioDevuelto,
   }))
 
   const historialMatricula = pagosMatricula.map((item) => ({
@@ -266,6 +300,9 @@ function buildCajaHistorialFromParts(
     motivoAnulacion: item.motivoAnulacion,
     cajero: (item as any).cajero,
     pagoMatriculaId: item.pagoMatriculaId,
+    anioLectivo: item.anioLectivo,
+    montoRecibido: item.montoRecibido,
+    cambioDevuelto: item.cambioDevuelto,
   }))
 
   const historialMensualidad = mensualidades.map((item) => ({
@@ -273,7 +310,7 @@ function buildCajaHistorialFromParts(
     tipo: 'Mensualidad' as const,
     titulo: item.estudiante || 'Mensualidad',
     numeroRecibo: item.numeroRecibo || `ME-${item.mensualidadId}`,
-    detalle: item.detalle || item.mes || 'Cobro mensualidad',
+    detalle: item.detalle || 'Cobro mensualidad',
     monto: item.monto,
     fecha: item.fechaPago,
     metodoPago: item.metodoPago,
@@ -282,6 +319,9 @@ function buildCajaHistorialFromParts(
     motivoAnulacion: item.motivoAnulacion,
     cajero: (item as any).cajero,
     mensualidadId: item.mensualidadId,
+    mes: item.mes,
+    montoRecibido: item.montoRecibido,
+    cambioDevuelto: item.cambioDevuelto,
   }))
 
   return [...historialTaller, ...historialMatricula, ...historialMensualidad].sort((a, b) => {
@@ -305,7 +345,7 @@ function TalleresTab({
 }: {
   pendientes: CajaTallerPendienteItem[]
   pagos: CajaPagoTallerItem[]
-  onPay: (cupoId: number, monto: number) => void
+  onPay: (cupoId: number, monto: number, montoRecibido: number, cambioDevuelto: number) => void
   onAnnul: (pagoCupoId: number, numeroRecibo: string, monto: number) => void
   metodoPagoId: string
   onMetodoPagoChange: (value: string) => void
@@ -362,7 +402,7 @@ function TalleresTab({
       return
     }
 
-    await onPay(selectedPendiente.cupoId, montoCobroNumber)
+    await onPay(selectedPendiente.cupoId, montoCobroNumber, montoRecibidoNumber, vuelto >= 0 ? vuelto : 0)
     cerrarModal()
   }
 
@@ -515,6 +555,14 @@ function TalleresTab({
                 <p className="font-semibold text-slate-900">{formatMoney(selectedPago.monto)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Recibido</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedPago.montoRecibido)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Cambio devuelto</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedPago.cambioDevuelto)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Método de pago</p>
                 <p className="font-semibold text-slate-900">{selectedPago.metodoPago || '-'}</p>
               </div>
@@ -610,7 +658,7 @@ function MatriculaTab({
 }: {
   pendientes: CajaMatriculaPendienteItem[]
   pagos: CajaPagoMatriculaItem[]
-  onPay: (payload: { matriculaId: number; monto: number; metodoPagoId: number; detalle: string }) => Promise<void>
+  onPay: (payload: { matriculaId: number; monto: number; metodoPagoId: number; detalle: string; montoRecibido: number; cambioDevuelto: number }) => Promise<void>
   onAnnul: (pagoMatriculaId: number, numeroRecibo: string, monto: number) => void
   metodosPago: MetodoPagoOption[]
   busy: boolean
@@ -719,6 +767,8 @@ function MatriculaTab({
       monto: montoCobroNumber,
       metodoPagoId: Number(metodoPagoId),
       detalle,
+      montoRecibido: montoRecibidoNumber,
+      cambioDevuelto: saldoCaja >= 0 ? saldoCaja : 0,
     })
     cerrarModal()
   }
@@ -984,6 +1034,14 @@ function MatriculaTab({
                 <p className="font-semibold text-slate-900">{formatMoney(selectedPagoMatricula.monto)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Recibido</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedPagoMatricula.montoRecibido)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Cambio devuelto</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedPagoMatricula.cambioDevuelto)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Método de pago</p>
                 <p className="font-semibold text-slate-900">{selectedPagoMatricula.metodoPago || '-'}</p>
               </div>
@@ -1070,7 +1128,7 @@ function MensualidadTab({
   onMoraAutomaticaChange: (value: boolean) => void
   onBuscarEstudianteChange: (value: string) => void
   onFiltroEstadoChange: (value: 'todos' | 'activos' | 'anulados') => void
-  onPay: () => void
+                    onPay: (montoRecibido: number, cambioDevuelto: number) => void
   onAnnul: (mensualidadId: number, numeroRecibo: string, monto: number) => void
   metodosPago: MetodoPagoOption[]
   pendientesMensualidadesList?: Array<import('./caja.api').PendienteMensualidadResponse>
@@ -1332,6 +1390,14 @@ function MensualidadTab({
                 <p className="font-semibold text-slate-900">{formatMoney(selectedMensualidad!.monto)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Recibido</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedMensualidad!.montoRecibido)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                <p className="text-slate-500">Cambio devuelto</p>
+                <p className="font-semibold text-slate-900">{formatMoney(selectedMensualidad!.cambioDevuelto)}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                 <p className="text-slate-500">Método de pago</p>
                 <p className="font-semibold text-slate-900">{selectedMensualidad!.metodoPago || '-'}</p>
               </div>
@@ -1387,7 +1453,7 @@ function MensualidadTab({
         onMontoBaseChange={onMontoBaseChange}
         onMontoMoraChange={onMontoMoraChange}
         onMetodoPagoChange={onMetodoPagoChange}
-        onPay={onPay}
+        onPay={(montoRecibido, cambioDevuelto) => onPay(montoRecibido, cambioDevuelto)}
       />
     </div>
   )
@@ -1428,6 +1494,7 @@ export function CajaDashboardPanel() {
   const [annulReason, setAnnulReason] = useState('')
   const [historialModalOpen, setHistorialModalOpen] = useState(false)
   const [showPreCloseModal, setShowPreCloseModal] = useState(false)
+  const [cortePreCierre, setCortePreCierre] = useState<CorteSessionResponse | null>(null)
   const [pendingAnnulments, setPendingAnnulments] = useState<PendingAnnulment[]>([])
   const [isResumenModalOpen, setIsResumenModalOpen] = useState(false)
   const [showPendingAnnulmentsModal, setShowPendingAnnulmentsModal] = useState(false)
@@ -1586,13 +1653,18 @@ export function CajaDashboardPanel() {
     return filterAndCount(pagosTallerSourceCompleto) + filterAndCount(pagosMatriculaSourceCompleto) + filterAndCount(mensualidadesSourceCompleto)
   }, [activeSession, pagosTallerSourceCompleto, pagosMatriculaSourceCompleto, mensualidadesSourceCompleto])
 
-  const totalCobradoGeneralPreClose = pagosDelTurno.total
+  const totalCobradoGeneralPreClose = cortePreCierre ? cortePreCierre.totalCobrado : pagosDelTurno.total
   const aperturaSesion = Number(activeSession?.saldoInicial ?? 0)
   const cambioDevuelto = Number(preCloseCambioDevuelto) || 0
   const ingresoNetoTurno = totalCobradoGeneralPreClose - cambioDevuelto
   const efectivoEsperadoPreCierre = aperturaSesion + ingresoNetoTurno
   const efectivoContadoPreCierre = Number(preCloseCounted) || 0
   const diferenciaPreCierre = efectivoContadoPreCierre - efectivoEsperadoPreCierre
+
+  const pagosDelTurnoTaller = cortePreCierre ? cortePreCierre.desglose.talleres.cobrado : pagosDelTurno.taller
+  const pagosDelTurnoMatricula = cortePreCierre ? cortePreCierre.desglose.matriculas.cobrado : pagosDelTurno.matricula
+  const pagosDelTurnoMensualidad = cortePreCierre ? cortePreCierre.desglose.mensualidades.cobrado : pagosDelTurno.mensualidad
+  const totalAnulacionesTurno = cortePreCierre ? cortePreCierre.cantidadAnulaciones : anulacionesTurno
 
   const pagosTallerSource = useMemo(() => {
     if (periodFilter !== 'mi_caja') {
@@ -1846,29 +1918,20 @@ export function CajaDashboardPanel() {
   }
 
   const handleCloseSession = async () => {
-    let currentTotals = pagosDelTurno.total
-    if (!generalHistorialData) {
-      const toastId = toast.loading('Calculando totales del turno...')
-      try {
-        const payload = await getCajaHistorialGeneral(token)
-        setGeneralHistorialData(payload)
-        const aperturaTime = activeSession ? new Date(activeSession.fechaApertura as string).getTime() : 0
-        const filterAndSum = (items: Array<{ fechaPago?: string | null; monto?: number | null; anulado?: boolean }>) => {
-          return items.reduce((acc, item) => {
-            if (item.anulado) return acc
-            const time = item.fechaPago ? new Date(item.fechaPago as string).getTime() : 0
-            return time >= aperturaTime ? acc + (item.monto ?? 0) : acc
-          }, 0)
-        }
-        currentTotals = filterAndSum(payload.pagosTaller) + filterAndSum(payload.pagosMatricula) + filterAndSum(payload.mensualidades)
-      } finally {
-        toast.dismiss(toastId)
-      }
+    if (!activeSession) return
+    const toastId = toast.loading('Calculando totales del turno...')
+    try {
+      const corte = await getCorteSession(token, activeSession.id)
+      setCortePreCierre(corte)
+      const esperado = (Number(activeSession.saldoInicial ?? 0)) + corte.totalCobrado
+      setPreCloseCambioDevuelto('0')
+      setPreCloseCounted(String(esperado > 0 ? esperado : 0))
+      setShowPreCloseModal(true)
+    } catch (err: any) {
+      toast.error('No se pudieron obtener los totales para el pre-cierre.')
+    } finally {
+      toast.dismiss(toastId)
     }
-    const esperado = (Number(activeSession?.saldoInicial ?? 0)) + currentTotals
-    setPreCloseCambioDevuelto('0')
-    setPreCloseCounted(String(esperado > 0 ? esperado : 0))
-    setShowPreCloseModal(true)
   }
 
   const confirmCloseSession = async () => {
@@ -1876,12 +1939,14 @@ export function CajaDashboardPanel() {
     await runAction('close-session', () => closeCajaSession(token, { saldoCierre: readNumber(preCloseCounted), observacion: closeObservacion }))
   }
 
-  const handlePayTaller = async (cupoId: number, monto: number) => {
+  const handlePayTaller = async (cupoId: number, monto: number, montoRecibido: number, cambioDevuelto: number) => {
     const result = await runAction(`pay-taller-${cupoId}`, () => payTaller(token, {
       cupoId,
       monto,
       metodoPagoId: Number(tallerMetodoPagoId),
       detalle: 'Cobro desde caja',
+      montoRecibido,
+      cambioDevuelto,
     }))
 
     if (result.success && result.newData && result.oldData) {
@@ -1895,12 +1960,14 @@ export function CajaDashboardPanel() {
     }
   }
 
-  const handlePayMatricula = async (payload: { matriculaId: number; monto: number; metodoPagoId: number; detalle: string }) => {
+  const handlePayMatricula = async (payload: { matriculaId: number; monto: number; metodoPagoId: number; detalle: string; montoRecibido: number; cambioDevuelto: number }) => {
     const result = await runAction('pay-matricula', () => payMatricula(token, {
       matriculaId: payload.matriculaId,
       monto: payload.monto,
       metodoPagoId: payload.metodoPagoId,
       detalle: payload.detalle,
+      montoRecibido: payload.montoRecibido,
+      cambioDevuelto: payload.cambioDevuelto,
     }))
 
     if (result.success && result.newData && result.oldData) {
@@ -1929,7 +1996,7 @@ export function CajaDashboardPanel() {
     }
   }
 
-  const handlePayMensualidad = async () => {
+  const handlePayMensualidad = async (montoRecibido: number, cambioDevuelto: number) => {
     const result = await runAction('pay-mensualidad', () => payMensualidad(token, {
       estudianteId: Number(mensualidadEstudianteId),
       mesDePago: Number(mensualidadMes),
@@ -1937,6 +2004,8 @@ export function CajaDashboardPanel() {
       montoMora: Number.isFinite(moraAplicadaFormulario) ? moraAplicadaFormulario : 0,
       metodoPagoId: Number(mensualidadMetodoPagoId),
       detalle: 'Cobro desde caja',
+      montoRecibido,
+      cambioDevuelto,
     }))
 
     if (result.success) {
@@ -2030,44 +2099,84 @@ export function CajaDashboardPanel() {
   const openHistorialModal = () => setHistorialModalOpen(true)
   const closeHistorialModal = () => setHistorialModalOpen(false)
 
-  function buildReceiptHtml(item: CajaHistorialItem) {
-    const anuladoBadge = item.anulado ? `<div style="color: #b91c1c; font-weight:700; text-align: center; margin-top: 10px; border: 2px dashed #b91c1c; padding: 10px; border-radius: 8px;">RECIBO ANULADO<br><span style="font-size: 12px; font-weight: normal;">Motivo: ${item.motivoAnulacion || 'Sin motivo'}</span></div>` : ''
+  const buildReceiptHtml = (item: CajaHistorialItem) => {
+    const anuladoBadge = item.anulado ? `<div style="color: #b91c1c; font-weight:700; text-align: center; margin-top: 10px; border: 2px dashed #b91c1c; padding: 10px; border-radius: 8px;">RECIBO ANULADO<br><span style="font-size: 12px; font-weight: normal;">Motivo: ${item.motivoAnulacion || 'Sin motivo'}</span><br><span style="font-size: 13px; font-weight: 600;">Monto devuelto al cliente: ${formatMoney(item.cambioDevuelto)}</span></div>` : ''
     const cashierName = user?.nombre ? `${user.nombre} ${user.apellido || ''}`.trim() : 'Caja Principal'
+    const logoHtml = `<div style="width: 100px; height: auto;">${logoSvg}</div>`
+
+    let tableBodyHtml = ''
+    const itemDescription = item.detalle || '-'
+
+    if (item.tipo === 'Mensualidad') {
+      const monthName = item.mes ? getMonthName(item.mes) : getMonthName(itemDescription)
+      tableBodyHtml = `
+        <tr>
+          <td><span class="item-desc">Pago de Mensualidad</span><span class="item-meta">Correspondiente al mes de ${monthName}</span></td>
+          <td class="text-right">1</td>
+          <td class="text-right">${formatMoney(item.monto)}</td>
+          <td class="text-right total-col">${formatMoney(item.monto)}</td>
+        </tr>
+      `
+    } else if (item.tipo === 'Matrícula') {
+      const anioText = item.anioLectivo ? ` · Año lectivo ${item.anioLectivo}` : ''
+      tableBodyHtml = `
+        <tr>
+          <td><span class="item-desc">Pago de Matrícula</span><span class="item-meta">${itemDescription}${anioText}</span></td>
+          <td class="text-right">1</td>
+          <td class="text-right">${formatMoney(item.monto)}</td>
+          <td class="text-right total-col">${formatMoney(item.monto)}</td>
+        </tr>
+      `
+    } else { // Taller
+      tableBodyHtml = `
+        <tr>
+          <td><span class="item-desc">Inscripción a Taller: ${item.titulo}</span><span class="item-meta">Participante: ${itemDescription}</span></td>
+          <td class="text-right">1</td>
+          <td class="text-right">${formatMoney(item.monto)}</td>
+          <td class="text-right total-col">${formatMoney(item.monto)}</td>
+        </tr>
+      `
+    }
 
     return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <title>Recibo ${item.numeroRecibo || 'Pendiente'}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 0; margin: 0; color: #333; background-color: #f9f9f9; }
-    .receipt-container { max-width: 600px; margin: 40px auto; background: #fff; padding: 40px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #eaeaea; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f766e; padding-bottom: 20px; margin-bottom: 30px; }
-    .header-left { display: flex; flex-direction: column; }
-    .logo-placeholder { font-size: 24px; font-weight: 800; color: #0f766e; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; }
-    .school-info { font-size: 12px; color: #666; margin-top: 5px; line-height: 1.4; }
+    @page { size: A4; margin: 15mm; }
+    body { font-family: 'Inter', system-ui, sans-serif; padding: 0; margin: 0; color: #0f172a; background-color: #f8fafc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .receipt-container { max-width: 800px; margin: 40px auto; background: #fff; padding: 50px; border-radius: 20px; box-shadow: 0 10px 30px rgba(15,23,42,0.04); border: 1px solid #e2e8f0; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0f766e; padding-bottom: 25px; margin-bottom: 30px; }
+    .header-left { display: flex; flex-direction: column; gap: 8px; }
+    .school-info { font-size: 12px; color: #64748b; margin-top: 5px; line-height: 1.5; font-weight: 500; }
     .header-right { text-align: right; }
-    .receipt-title { font-size: 28px; font-weight: bold; color: #111; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 2px; }
-    .receipt-number { font-size: 16px; color: #0f766e; font-weight: bold; }
-    .date-info { font-size: 13px; color: #555; margin-top: 8px; }
-    .customer-section { margin-bottom: 30px; padding: 15px 20px; background-color: #f8fafc; border-radius: 8px; border-left: 4px solid #0ea5e9; }
-    .customer-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: bold; letter-spacing: 1px; margin-bottom: 5px; }
-    .customer-name { font-size: 18px; font-weight: bold; color: #0f172a; margin: 0; }
+    .receipt-title { font-size: 26px; font-weight: 800; color: #0f766e; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1.5px; }
+    .receipt-number { font-size: 15px; color: #475569; font-weight: 700; }
+    .date-info { font-size: 13px; color: #64748b; margin-top: 6px; font-weight: 500; }
+    .customer-section { margin-bottom: 30px; padding: 18px 22px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; border-left: 4px solid #0f766e; }
+    .customer-label { font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+    .customer-name { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; }
     .details-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-    .details-table th { text-align: left; padding: 12px 15px; background-color: #f1f5f9; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #cbd5e1; }
-    .details-table td { padding: 15px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 14px; }
-    .item-desc { font-weight: bold; color: #0f172a; display: block; margin-bottom: 4px; }
-    .item-meta { font-size: 12px; color: #64748b; }
+    .details-table th { padding: 12px 16px; background-color: #0f172a; color: #ffffff; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+    .details-table th:first-child { text-align: left; border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+    .details-table th:last-child { text-align: right; border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+    .details-table td { padding: 16px; border-bottom: 1px solid #e2e8f0; color: #334155; font-size: 13px; }
+    .text-right { text-align: right; }
+    .item-desc { font-weight: 600; color: #0f172a; display: block; margin-bottom: 4px; font-size: 14px; }
+    .item-meta { font-size: 12px; color: #64748b; font-weight: 400; }
+    .total-col { font-weight: 600; color: #0f172a; }
     .totals-section { display: flex; justify-content: flex-end; margin-bottom: 40px; }
-    .totals-box { width: 300px; }
-    .total-line { display: flex; justify-content: space-between; padding: 10px 15px; font-size: 14px; color: #475569; }
-    .total-line.grand-total { background-color: #0f766e; color: white; font-weight: bold; font-size: 18px; border-radius: 8px; margin-top: 10px; }
-    .payment-info { display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px dashed #cbd5e1; font-size: 13px; color: #64748b; }
+    .totals-box { width: 320px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 8px 0; background-color: #f8fafc; }
+    .total-line { display: flex; justify-content: space-between; padding: 8px 16px; font-size: 13px; color: #475569; font-weight: 500; }
+    .total-line.grand-total { background-color: #0f766e; color: white; font-weight: 700; font-size: 16px; border-radius: 8px; margin: 4px 8px 0 8px; padding: 12px 14px; }
+    .payment-info { display: flex; justify-content: space-between; padding-top: 20px; border-top: 1px dashed #cbd5e1; font-size: 12px; color: #64748b; line-height: 1.5; font-weight: 500; }
     .payment-info div { flex: 1; }
-    .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eaeaea; font-size: 12px; color: #94a3b8; }
+    .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; line-height: 1.5; }
     @media print {
-      body { background-color: #fff; }
-      .receipt-container { box-shadow: none; border: none; margin: 0; padding: 20px; max-width: 100%; }
+      body { background-color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .receipt-container { box-shadow: none; border: none; margin: 0; padding: 0; max-width: 100%; }
     }
   </style>
 </head>
@@ -2075,8 +2184,8 @@ export function CajaDashboardPanel() {
   <div class="receipt-container">
     <div class="header">
       <div class="header-left">
-        <div class="logo-placeholder">🏫 MI CASITA</div>
-        <div class="school-info">Centro Integral de Estimulación Temprana<br>Managua, Nicaragua<br>Tel: +505 1234 5678</div>
+        ${logoHtml}
+        <div class="school-info">Centro Integral de Estimulación Temprana<br>Managua, Nicaragua</div>
       </div>
       <div class="header-right">
         <h1 class="receipt-title">RECIBO</h1>
@@ -2091,23 +2200,28 @@ export function CajaDashboardPanel() {
     </div>
     <table class="details-table">
       <thead>
-        <tr><th>Concepto</th><th style="text-align: right;">Importe</th></tr>
+        <tr>
+          <th>Descripción</th>
+          <th class="text-right">Cantidad</th>
+          <th class="text-right">Precio Unit.</th>
+          <th class="text-right">Total</th>
+        </tr>
       </thead>
       <tbody>
-        <tr>
-          <td><span class="item-desc">Pago de ${item.tipo}</span><span class="item-meta">${item.detalle || '-'}</span></td>
-          <td style="text-align: right; font-weight: bold;">${formatMoney(item.monto)}</td>
-        </tr>
+        ${tableBodyHtml}
       </tbody>
     </table>
     <div class="totals-section">
       <div class="totals-box">
         <div class="total-line"><span>Subtotal:</span><span>${formatMoney(item.monto)}</span></div>
+        <div class="total-line"><span>Impuestos:</span><span>${formatMoney(0)}</span></div>
         <div class="total-line grand-total"><span>TOTAL:</span><span>${formatMoney(item.monto)}</span></div>
       </div>
     </div>
     <div class="payment-info">
       <div><strong>Método de pago:</strong><br>${item.metodoPago || 'No especificado'}</div>
+      <div><strong>Recibido:</strong><br>${formatMoney(item.montoRecibido)}</div>
+      <div><strong>Cambio devuelto:</strong><br>${formatMoney(item.cambioDevuelto)}</div>
       <div><strong>Estado:</strong><br>${item.estado || 'Procesado'}</div>
       <div style="text-align: right;"><strong>Atendido por:</strong><br>${cashierName}</div>
     </div>
@@ -2157,6 +2271,10 @@ export function CajaDashboardPanel() {
 
   const printHistorialGeneral = () => {
     const filterLabel = periodFilter === 'mi_caja' ? 'Mi caja (Hoy)' : periodFilter === 'hoy_todos' ? 'General (Hoy todas las cajas)' : 'Histórico completo'
+    const logoHtml = `<div style="width: 150px; margin: 0 auto 10px;">${logoSvg}</div>`
+
+    const totalCobrado = historialFiltrado.filter(h => !h.anulado).reduce((acc, curr) => acc + (curr.monto || 0), 0)
+    const totalAnulado = historialFiltrado.filter(h => h.anulado).reduce((acc, curr) => acc + (curr.monto || 0), 0)
 
     const html = `
       <!doctype html>
@@ -2164,29 +2282,72 @@ export function CajaDashboardPanel() {
       <head>
         <meta charset="utf-8">
         <title>Historial General de Caja</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
         <style>
-          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 30px; color: #333; }
-          .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
-          h1 { color: #0f766e; margin: 0 0 10px 0; font-size: 24px; text-transform: uppercase; }
-          .meta { font-size: 14px; color: #555; margin: 5px 0; }
-          table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-          th, td { border: 1px solid #cbd5e1; padding: 10px 12px; text-align: left; }
-          th { background-color: #f8fafc; color: #334155; font-weight: bold; text-transform: uppercase; font-size: 12px; }
+          @page { size: A4 landscape; margin: 15mm 10mm; }
+          body { font-family: 'Inter', system-ui, sans-serif; color: #0f172a; background-color: #fff; margin: 0; padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .header-container { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f766e; padding-bottom: 20px; margin-bottom: 25px; }
+          .logo-wrapper { max-width: 140px; }
+          .header-info { text-align: right; }
+          h1 { color: #0f766e; font-size: 20px; font-weight: 700; text-transform: uppercase; margin: 0 0 8px 0; letter-spacing: 0.5px; }
+          .meta-label { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 600; letter-spacing: 1px; }
+          .meta-value { font-size: 14px; font-weight: 500; color: #1e293b; margin: 2px 0 10px 0; }
+          
+          .summary-cards { display: grid; grid-template-cols: 1fr 1fr 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+          .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 16px; font-size: 12px; }
+          .card-title { color: #64748b; font-weight: 500; text-transform: uppercase; font-size: 10px; letter-spacing: 0.5px; }
+          .card-value { font-size: 16px; font-weight: 700; color: #0f172a; margin-top: 4px; }
+          .card-value.highlight { color: #0f766e; }
+          .card-value.danger { color: #b91c1c; }
+
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+          th { background-color: #0f172a; color: #ffffff; text-transform: uppercase; font-size: 9px; font-weight: 600; letter-spacing: 1px; padding: 10px 12px; text-align: left; }
+          td { border-bottom: 1px solid #e2e8f0; padding: 10px 12px; color: #334155; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          tr.anulado-row { background-color: #fef2f2 !important; color: #991b1b; }
+          tr.anulado-row td { color: #991b1b; }
           .text-right { text-align: right; }
-          .anulado { color: #b91c1c; font-weight: bold; }
+          .anulado-text { font-weight: 700; color: #b91c1c; text-transform: uppercase; font-size: 9px; }
+          .footer { text-align: center; font-size: 10px; color: #94a3b8; margin-top: 35px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+          tr { page-break-inside: avoid; }
+          @media print {
+            body { background-color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>Historial General de Caja</h1>
-          <p class="meta"><strong>Periodo:</strong> ${filterLabel}</p>
-          <p class="meta"><strong>Generado el:</strong> ${new Date().toLocaleString('es-NI')}</p>
-          <p class="meta"><strong>Usuario:</strong> ${user?.nombre || ''} ${user?.apellido || ''}</p>
+        <div class="header-container">
+          <div class="logo-wrapper">${logoHtml}</div>
+          <div class="header-info">
+            <h1>Historial General de Caja</h1>
+            <div class="meta-label">Fecha de Reporte</div>
+            <div class="meta-value">${new Date().toLocaleString('es-NI')}</div>
+          </div>
         </div>
+
+        <div class="summary-cards">
+          <div class="card">
+            <div class="card-title">Período Seleccionado</div>
+            <div class="card-value">${filterLabel}</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Ingreso Neto (Cobrado)</div>
+            <div class="card-value highlight">${formatMoney(totalCobrado)}</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Monto Anulado</div>
+            <div class="card-value danger">${formatMoney(totalAnulado)}</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Responsable</div>
+            <div class="card-value">${user?.nombre || ''} ${user?.apellido || ''}</div>
+          </div>
+        </div>
+
         <table>
           <thead>
             <tr>
-              <th>Fecha</th>
+              <th style="border-top-left-radius: 6px; border-bottom-left-radius: 6px;">Fecha</th>
               <th>Recibo</th>
               <th>Tipo</th>
               <th>Título / Estudiante</th>
@@ -2194,26 +2355,30 @@ export function CajaDashboardPanel() {
               <th>Cajero</th>
               <th>Método</th>
               <th>Estado</th>
-              <th class="text-right">Monto</th>
+              <th class="text-right" style="border-top-right-radius: 6px; border-bottom-right-radius: 6px;">Monto</th>
             </tr>
           </thead>
           <tbody>
             ${historialFiltrado.map(item => `
-              <tr class="${item.anulado ? 'anulado' : ''}">
+              <tr class="${item.anulado ? 'anulado-row' : ''}">
                 <td>${formatDate(item.fecha)}</td>
-                <td>${item.numeroRecibo || '-'}</td>
-                <td>${item.tipo}</td>
-                <td>${item.titulo}</td>
-                <td>${item.detalle}</td>
+                <td style="font-weight: 600;">${item.numeroRecibo || '-'}</td>
+                <td><span style="font-weight: 500;">${item.tipo}</span></td>
+                <td style="font-weight: 500;">${item.titulo}</td>
+                <td style="color: #64748b;">${item.detalle}</td>
                 <td>${item.cajero || '-'}</td>
                 <td>${item.metodoPago || '-'}</td>
-                <td>${item.anulado ? 'Anulado' : (item.estado || '-')}</td>
-                <td class="text-right">${formatMoney(item.monto)}</td>
+                <td>${item.anulado ? '<span class="anulado-text">Anulado</span>' : (item.estado || '-')}</td>
+                <td class="text-right" style="font-weight: 600;">${formatMoney(item.monto)}</td>
               </tr>
             `).join('')}
-            ${historialFiltrado.length === 0 ? '<tr><td colspan="8" style="text-align:center;">No hay registros</td></tr>' : ''}
+            ${historialFiltrado.length === 0 ? '<tr><td colspan="9" style="text-align:center; padding: 20px;">No hay registros</td></tr>' : ''}
           </tbody>
         </table>
+
+        <div class="footer">
+          Centro Integral de Estimulación Temprana "Mi Casita" · Reporte Oficial
+        </div>
       </body>
       </html>
     `
@@ -2251,6 +2416,12 @@ export function CajaDashboardPanel() {
               <div>
                 <p className="font-semibold text-slate-900">{activeSession ? `Caja Abierta (${activeSession.codigo})` : 'Caja Cerrada'}</p>
                 <p className="text-xs text-slate-500">{activeSession ? `Abierta por ${user?.nombre}` : 'Inicia sesión para cobrar.'}</p>
+                {activeSession ? (
+                  <p className="mt-1 text-[10px] text-slate-400">Apertura: {formatDateTime(activeSession.fechaApertura)}</p>
+                ) : null}
+                {activeSession?.fechaCierre ? (
+                  <p className="text-[10px] text-slate-400">Cierre: {formatDateTime(activeSession.fechaCierre)}</p>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-col gap-2">
@@ -2628,25 +2799,28 @@ export function CajaDashboardPanel() {
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
                       <p className="text-sm text-slate-600">Arqueo sugerido</p>
                       <p className="mt-1 font-semibold text-slate-900">Efectivo esperado: {formatMoney(efectivoEsperadoPreCierre)}</p>
+                      {activeSession ? (
+                        <p className="mt-1 text-xs text-slate-500">Apertura: {formatDateTime(activeSession.fechaApertura)}</p>
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
                         <p className="text-xs text-slate-500">Talleres</p>
-                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurno.taller)}</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurnoTaller)}</p>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
                         <p className="text-xs text-slate-500">Matrícula</p>
-                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurno.matricula)}</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurnoMatricula)}</p>
                       </div>
                       <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
                         <p className="text-xs text-slate-500">Mensualidad</p>
-                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurno.mensualidad)}</p>
+                        <p className="font-semibold text-slate-900">{formatMoney(pagosDelTurnoMensualidad)}</p>
                       </div>
                     </div>
 
                     <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm">
                       <p className="text-xs text-rose-700">Anulaciones en turno</p>
-                      <p className="font-semibold text-rose-800">{anulacionesTurno}</p>
+                      <p className="font-semibold text-rose-800">{totalAnulacionesTurno}</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">

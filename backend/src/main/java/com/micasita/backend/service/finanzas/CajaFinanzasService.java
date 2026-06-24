@@ -11,13 +11,17 @@ import com.micasita.backend.entities.finanzas.Mensualidad;
 import com.micasita.backend.entities.finanzas.MetodoPago;
 import com.micasita.backend.entities.finanzas.PagoCupo;
 import com.micasita.backend.entities.finanzas.PagoMatricula;
+import com.micasita.backend.entities.finanzas.CorteCaja;
 import com.micasita.backend.entities.finanzas.SecuenciaRecibo;
 import com.micasita.backend.entities.finanzas.TipoRecibo;
 import com.micasita.backend.entities.talleres.CupoTaller;
 import com.micasita.backend.repositories.academico.EstudianteRepository;
 import com.micasita.backend.repositories.core.UsuarioRepository;
 import com.micasita.backend.repositories.finanzas.CajaSesionRepository;
+import com.micasita.backend.repositories.finanzas.CorteCajaRepository;
 import com.micasita.backend.repositories.finanzas.EstadoCajaRepository;
+import com.micasita.backend.dto.finanzas.CorteSessionResponse;
+import java.util.Optional;
 import com.micasita.backend.repositories.finanzas.EstadoMatriculaRepository;
 import com.micasita.backend.repositories.finanzas.EstadoPagoRepository;
 import com.micasita.backend.repositories.finanzas.MatriculaRepository;
@@ -45,6 +49,7 @@ import java.util.UUID;
 
 @Service
 @Transactional
+@SuppressWarnings("null")
 public class CajaFinanzasService {
 
     private static final String ESTADO_ABIERTA = "ABIERTA";
@@ -69,6 +74,7 @@ public class CajaFinanzasService {
     private final EstadoMatriculaRepository estadoMatriculaRepository;
     private final ConfiguracionFinanzasService configuracionFinanzasService;
     private final PasswordEncoder passwordEncoder;
+    private final CorteCajaRepository corteCajaRepository;
 
     public CajaFinanzasService(
             CajaSesionRepository cajaSesionRepository,
@@ -84,9 +90,10 @@ public class CajaFinanzasService {
             PagoMatriculaRepository pagoMatriculaRepository,
             EstudianteRepository estudianteRepository,
             MensualidadRepository mensualidadRepository,
-                EstadoMatriculaRepository estadoMatriculaRepository,
+            EstadoMatriculaRepository estadoMatriculaRepository,
             ConfiguracionFinanzasService configuracionFinanzasService,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            CorteCajaRepository corteCajaRepository
     ) {
         this.cajaSesionRepository = cajaSesionRepository;
         this.estadoCajaRepository = estadoCajaRepository;
@@ -104,6 +111,7 @@ public class CajaFinanzasService {
         this.estadoMatriculaRepository = estadoMatriculaRepository;
         this.configuracionFinanzasService = configuracionFinanzasService;
         this.passwordEncoder = passwordEncoder;
+        this.corteCajaRepository = corteCajaRepository;
     }
 
     public CajaSesion getActiveSession(String email) {
@@ -148,8 +156,24 @@ public class CajaFinanzasService {
         session.setSaldoCierre(safeMoney(saldoCierre));
         session.setObservacionCierre(trimToNull(observacion));
         session.setFechaCierre(LocalDateTime.now());
-        cajaSesionRepository.save(session);
-        return new CajaOperacionResult(session.getId(), session.getCodigo(), ESTADO_CERRADA, "Caja cerrada");
+        CajaSesion savedSession = cajaSesionRepository.save(session);
+
+        // Calcular y guardar CorteCaja
+        CorteSessionResponse corteDto = calculateCorte(savedSession, savedSession.getSaldoCierre());
+        CorteCaja corte = CorteCaja.builder()
+                .cajaSesion(savedSession)
+                .totalCobrado(corteDto.totalCobrado())
+                .totalAnulado(corteDto.totalAnulado())
+                .totalMatriculas(corteDto.desglose().matriculas().cobrado())
+                .totalTalleres(corteDto.desglose().talleres().cobrado())
+                .totalMensualidades(corteDto.desglose().mensualidades().cobrado())
+                .cantidadAnulaciones(corteDto.cantidadAnulaciones())
+                .diferencia(corteDto.diferencia())
+                .fechaCorte(LocalDateTime.now())
+                .build();
+        corteCajaRepository.save(corte);
+
+        return new CajaOperacionResult(savedSession.getId(), savedSession.getCodigo(), ESTADO_CERRADA, "Caja cerrada");
     }
 
     @Transactional
@@ -161,11 +185,135 @@ public class CajaFinanzasService {
             caja.setEstadoCaja(estadoCerrada);
             caja.setFechaCierre(LocalDateTime.now());
             caja.setObservacionCierre("Cierre automático por el sistema.");
-            cajaSesionRepository.save(caja);
+            
+            // Para cierres automáticos del sistema, asumimos que el saldo final es el esperado
+            BigDecimal totalCobradoMat = safeMoney(pagoMatriculaRepository.sumCobradoBySessionId(caja.getId()));
+            BigDecimal totalCobradoCupo = safeMoney(pagoCupoRepository.sumCobradoBySessionId(caja.getId()));
+            BigDecimal totalCobradoMens = safeMoney(mensualidadRepository.sumCobradoBySessionId(caja.getId()));
+            BigDecimal totalCobrado = totalCobradoMat.add(totalCobradoCupo).add(totalCobradoMens);
+            
+            BigDecimal saldoInicial = caja.getSaldoInicial() != null ? caja.getSaldoInicial() : BigDecimal.ZERO;
+            BigDecimal saldoCierreEsperado = saldoInicial.add(totalCobrado);
+            caja.setSaldoCierre(saldoCierreEsperado);
+
+            CajaSesion savedCaja = cajaSesionRepository.save(caja);
+
+            CorteSessionResponse corteDto = calculateCorte(savedCaja, saldoCierreEsperado);
+            CorteCaja corte = CorteCaja.builder()
+                    .cajaSesion(savedCaja)
+                    .totalCobrado(corteDto.totalCobrado())
+                    .totalAnulado(corteDto.totalAnulado())
+                    .totalMatriculas(corteDto.desglose().matriculas().cobrado())
+                    .totalTalleres(corteDto.desglose().talleres().cobrado())
+                    .totalMensualidades(corteDto.desglose().mensualidades().cobrado())
+                    .cantidadAnulaciones(corteDto.cantidadAnulaciones())
+                    .diferencia(BigDecimal.ZERO)
+                    .fechaCorte(LocalDateTime.now())
+                    .build();
+            corteCajaRepository.save(corte);
         }
     }
 
-    public CajaOperacionResult payMatricula(String email, Long matriculaId, BigDecimal monto, Long metodoPagoId, String detalle) {
+    private String getUsuarioNombre(Usuario usuario) {
+        if (usuario == null) {
+            return null;
+        }
+        if (usuario.getPersona() != null) {
+            String name = usuario.getPersona().getNombre() != null ? usuario.getPersona().getNombre() : "";
+            String lastName = usuario.getPersona().getApellido() != null ? usuario.getPersona().getApellido() : "";
+            String fullName = (name + " " + lastName).trim();
+            if (!fullName.isEmpty()) {
+                return fullName;
+            }
+        }
+        return usuario.getEmail();
+    }
+
+    public List<CorteSessionResponse> getHistoricalCortes() {
+        List<CajaSesion> sessions = cajaSesionRepository.findAllByOrderByFechaAperturaDesc();
+        return sessions.stream()
+                .map(session -> getCorteSession(session.getId()))
+                .toList();
+    }
+
+    public CorteSessionResponse getCorteSession(Long sessionId) {
+        CajaSesion session = cajaSesionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "SESSION_NOT_FOUND"));
+
+        Optional<CorteCaja> persistedCorte = corteCajaRepository.findByCajaSesionId(sessionId);
+        if (persistedCorte.isPresent()) {
+            CorteCaja c = persistedCorte.get();
+            return new CorteSessionResponse(
+                    session.getId(),
+                    session.getCodigo(),
+                    session.getFechaApertura(),
+                    session.getFechaCierre(),
+                    session.getSaldoInicial(),
+                    session.getSaldoCierre(),
+                    c.getTotalCobrado(),
+                    c.getTotalAnulado(),
+                    new CorteSessionResponse.DesgloseCorte(
+                            new CorteSessionResponse.CategoriaCorte(c.getTotalMatriculas(), BigDecimal.ZERO),
+                            new CorteSessionResponse.CategoriaCorte(c.getTotalTalleres(), BigDecimal.ZERO),
+                            new CorteSessionResponse.CategoriaCorte(c.getTotalMensualidades(), BigDecimal.ZERO)
+                    ),
+                    c.getCantidadAnulaciones(),
+                    c.getDiferencia(),
+                    session.getObservacionCierre(),
+                    getUsuarioNombre(session.getUsuarioApertura()),
+                    getUsuarioNombre(session.getUsuarioCierre())
+            );
+        }
+
+        return calculateCorte(session, session.getSaldoCierre());
+    }
+
+    private CorteSessionResponse calculateCorte(CajaSesion session, BigDecimal saldoCierre) {
+        BigDecimal saldoInicial = session.getSaldoInicial() != null ? session.getSaldoInicial() : BigDecimal.ZERO;
+        
+        BigDecimal matriculaCobrado = safeMoney(pagoMatriculaRepository.sumCobradoBySessionId(session.getId()));
+        BigDecimal matriculaAnulado = safeMoney(pagoMatriculaRepository.sumAnuladoBySessionId(session.getId()));
+        long matriculaAnulacionesCount = pagoMatriculaRepository.countAnuladoBySessionId(session.getId());
+
+        BigDecimal tallerCobrado = safeMoney(pagoCupoRepository.sumCobradoBySessionId(session.getId()));
+        BigDecimal tallerAnulado = safeMoney(pagoCupoRepository.sumAnuladoBySessionId(session.getId()));
+        long tallerAnulacionesCount = pagoCupoRepository.countAnuladoBySessionId(session.getId());
+
+        BigDecimal mensualidadCobrado = safeMoney(mensualidadRepository.sumCobradoBySessionId(session.getId()));
+        BigDecimal mensualidadAnulado = safeMoney(mensualidadRepository.sumAnuladoBySessionId(session.getId()));
+        long mensualidadAnulacionesCount = mensualidadRepository.countAnuladoBySessionId(session.getId());
+
+        BigDecimal totalCobrado = matriculaCobrado.add(tallerCobrado).add(mensualidadCobrado);
+        BigDecimal totalAnulado = matriculaAnulado.add(tallerAnulado).add(mensualidadAnulado);
+        int cantidadAnulaciones = (int) (matriculaAnulacionesCount + tallerAnulacionesCount + mensualidadAnulacionesCount);
+
+        BigDecimal saldoEsperado = saldoInicial.add(totalCobrado);
+        BigDecimal realCierre = saldoCierre != null ? saldoCierre : BigDecimal.ZERO;
+        BigDecimal diferencia = realCierre.subtract(saldoEsperado);
+
+        return new CorteSessionResponse(
+                session.getId(),
+                session.getCodigo(),
+                session.getFechaApertura(),
+                session.getFechaCierre(),
+                saldoInicial,
+                saldoCierre,
+                totalCobrado,
+                totalAnulado,
+                new CorteSessionResponse.DesgloseCorte(
+                        new CorteSessionResponse.CategoriaCorte(matriculaCobrado, matriculaAnulado),
+                        new CorteSessionResponse.CategoriaCorte(tallerCobrado, tallerAnulado),
+                        new CorteSessionResponse.CategoriaCorte(mensualidadCobrado, mensualidadAnulado)
+                ),
+                cantidadAnulaciones,
+                diferencia,
+                session.getObservacionCierre(),
+                getUsuarioNombre(session.getUsuarioApertura()),
+                getUsuarioNombre(session.getUsuarioCierre())
+        );
+    }
+
+    public CajaOperacionResult payMatricula(String email, Long matriculaId, BigDecimal monto, Long metodoPagoId, String detalle, BigDecimal montoRecibido, BigDecimal cambioDevuelto) {
         CajaSesion session = getRequiredActiveSession(email);
         Matricula matricula = matriculaRepository.findById(matriculaId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "MATRICULA_NOT_FOUND"));
@@ -188,6 +336,8 @@ public class CajaFinanzasService {
                 .motivoAnulacion(null)
                 .cajaSesion(session)
                 .detalle(trimToNull(detalle))
+                .montoRecibido(montoRecibido)
+                .cambioDevuelto(cambioDevuelto)
                 .build();
 
         PagoMatricula saved = pagoMatriculaRepository.save(pago);
@@ -196,7 +346,7 @@ public class CajaFinanzasService {
         return new CajaOperacionResult(saved.getId(), receipt, ESTADO_PAGADO, "Pago de matricula registrado");
     }
 
-    public CajaOperacionResult payTaller(String email, Long cupoId, BigDecimal monto, Long metodoPagoId, String detalle) {
+    public CajaOperacionResult payTaller(String email, Long cupoId, BigDecimal monto, Long metodoPagoId, String detalle, BigDecimal montoRecibido, BigDecimal cambioDevuelto) {
         CajaSesion session = getRequiredActiveSession(email);
         CupoTaller cupo = cupoTallerRepository.findById(cupoId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "CUPO_NOT_FOUND"));
@@ -213,6 +363,8 @@ public class CajaFinanzasService {
                 .esAnulado(false)
                 .motivoAnulacion(null)
                 .cajaSesion(session)
+                .montoRecibido(montoRecibido)
+                .cambioDevuelto(cambioDevuelto)
                 .build();
 
         pagoCupoRepository.save(pago);
@@ -226,7 +378,9 @@ public class CajaFinanzasService {
             BigDecimal montoBase,
             BigDecimal montoMora,
             Long metodoPagoId,
-            String detalle
+            String detalle,
+            BigDecimal montoRecibido,
+            BigDecimal cambioDevuelto
     ) {
         CajaSesion session = getRequiredActiveSession(email);
         Estudiante estudiante = estudianteRepository.findById(estudianteId)
@@ -250,6 +404,8 @@ public class CajaFinanzasService {
                 .motivoAnulacion(null)
                 .cajaSesion(session)
                 .detalle(trimToNull(detalle))
+                .montoRecibido(montoRecibido)
+                .cambioDevuelto(cambioDevuelto)
                 .build();
 
         Mensualidad saved = mensualidadRepository.save(mensualidad);

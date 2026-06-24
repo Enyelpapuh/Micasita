@@ -1,7 +1,6 @@
 package com.micasita.backend.controller;
 
 import com.micasita.backend.service.BackupService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -14,20 +13,27 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/admin/backup")
-@CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173", "http://localhost:4000"})
+@CrossOrigin(origins = { "http://localhost:5127", "http://localhost:5173", "http://localhost:4000" })
 public class BackupController {
 
-    @Autowired
-    private BackupService backupService;
+    private final BackupService backupService;
+
+    BackupController(BackupService backupService) {
+        this.backupService = backupService;
+    }
 
     @PostMapping("/generar")
     @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
     public ResponseEntity<?> generarBackup() {
         try {
             String backupPath = backupService.generarBackupManual();
-            return ResponseEntity.ok(Map.of("mensaje", "Copia de seguridad generada con éxito.", "ruta", backupPath, "fecha", LocalDateTime.now()));
+            return ResponseEntity.ok(Map.of("mensaje", "Copia de seguridad generada con éxito.", "ruta", backupPath,
+                    "fecha", LocalDateTime.now()));
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Error al generar backup. Verifica que SQL Server tiene permisos en C:\\Backups. Detalle: " + e.getMessage()));
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error",
+                            "Error al generar backup. Verifica que SQL Server tiene permisos en C:\\Backups. Detalle: "
+                                    + e.getMessage()));
         }
     }
 

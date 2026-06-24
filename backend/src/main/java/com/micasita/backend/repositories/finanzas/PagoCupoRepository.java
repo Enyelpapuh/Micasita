@@ -4,6 +4,8 @@ import com.micasita.backend.entities.finanzas.PagoCupo;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import org.springframework.data.repository.query.Param;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,11 +29,36 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
         BigDecimal sumCobradoCaja();
 
     @Query("""
+            select coalesce(sum(pc.monto), 0)
+            from PagoCupo pc
+            where pc.cajaSesion.id = :sessionId
+              and upper(pc.estadoPago.nombre) = 'PAGADO'
+              and (pc.esAnulado is null or pc.esAnulado = false)
+            """)
+    BigDecimal sumCobradoBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
+            select coalesce(sum(pc.monto), 0)
+            from PagoCupo pc
+            where pc.cajaSesion.id = :sessionId
+              and (pc.esAnulado = true or upper(pc.estadoPago.nombre) = 'ANULADO')
+            """)
+    BigDecimal sumAnuladoBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
+            select count(pc)
+            from PagoCupo pc
+            where pc.cajaSesion.id = :sessionId
+              and (pc.esAnulado = true or upper(pc.estadoPago.nombre) = 'ANULADO')
+            """)
+    long countAnuladoBySessionId(@Param("sessionId") Long sessionId);
+
+    @Query("""
             select
                 pc.id as pagoCupoId,
                 pc.cupo.id as cupoId,
                 pc.cupo.taller.nombre as taller,
-                concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''), coalesce(part.nombreTmp, '')) as participante,
+                coalesce(trim(concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''))), part.nombreTmp, '') as participante,
                 pc.numeroRecibo as numeroRecibo,
                 pc.monto as monto,
                 pc.fechaDePago as fechaPago,
@@ -39,7 +66,9 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.metodoPago.nombre as metodoPago,
                 coalesce(pc.esAnulado, false) as anulado,
                 pc.motivoAnulacion as motivoAnulacion,
-                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero,
+                pc.montoRecibido as montoRecibido,
+                pc.cambioDevuelto as cambioDevuelto
             from PagoCupo pc
             join pc.cupo c
             join c.participante part
@@ -55,7 +84,7 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.id as pagoCupoId,
                 pc.cupo.id as cupoId,
                 pc.cupo.taller.nombre as taller,
-                concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''), coalesce(part.nombreTmp, '')) as participante,
+                coalesce(trim(concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''))), part.nombreTmp, '') as participante,
                 pc.numeroRecibo as numeroRecibo,
                 pc.monto as monto,
                 pc.fechaDePago as fechaPago,
@@ -63,7 +92,9 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.metodoPago.nombre as metodoPago,
                 coalesce(pc.esAnulado, false) as anulado,
                 pc.motivoAnulacion as motivoAnulacion,
-                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero,
+                pc.montoRecibido as montoRecibido,
+                pc.cambioDevuelto as cambioDevuelto
             from PagoCupo pc
             join pc.cupo c
             join c.participante part
@@ -78,7 +109,7 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.id as pagoCupoId,
                 pc.cupo.id as cupoId,
                 pc.cupo.taller.nombre as taller,
-                concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''), coalesce(part.nombreTmp, '')) as participante,
+                coalesce(trim(concat(coalesce(per.nombre, ''), ' ', coalesce(per.apellido, ''))), part.nombreTmp, '') as participante,
                 pc.numeroRecibo as numeroRecibo,
                 pc.monto as monto,
                 pc.fechaDePago as fechaPago,
@@ -86,7 +117,9 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
                 pc.metodoPago.nombre as metodoPago,
                 coalesce(pc.esAnulado, false) as anulado,
                 pc.motivoAnulacion as motivoAnulacion,
-                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero
+                coalesce(nullif(trim(concat(coalesce(userPer.nombre, ''), ' ', coalesce(userPer.apellido, ''))), ''), pc.usuario.email) as cajero,
+                pc.montoRecibido as montoRecibido,
+                pc.cambioDevuelto as cambioDevuelto
             from PagoCupo pc
             join pc.cupo c
             join c.participante part
@@ -110,5 +143,7 @@ public interface PagoCupoRepository extends JpaRepository<PagoCupo, Long> {
         Boolean getAnulado();
         String getMotivoAnulacion();
         String getCajero();
+        BigDecimal getMontoRecibido();
+        BigDecimal getCambioDevuelto();
     }
 }

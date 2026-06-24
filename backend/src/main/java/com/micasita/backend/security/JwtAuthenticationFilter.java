@@ -35,20 +35,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.usuarioRepository = usuarioRepository;
     }
 
+    @SuppressWarnings("null")
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         String authorizationHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
 
-        log.info("[JWT] {} {} authHeaderPresent={}", request.getMethod(), request.getRequestURI(), authorizationHeader != null);
+        log.info("[JWT] {} {} authHeaderPresent={}", request.getMethod(), request.getRequestURI(),
+                authorizationHeader != null);
 
-        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ") && SecurityContextHolder.getContext().getAuthentication() == null) {
+        if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")
+                && SecurityContextHolder.getContext().getAuthentication() == null) {
             String token = authorizationHeader.substring(7);
-            log.info("[JWT] bearer token detected path={} tokenPrefix={}", request.getRequestURI(), safeTokenPrefix(token));
+            log.info("[JWT] bearer token detected path={} tokenPrefix={}", request.getRequestURI(),
+                    safeTokenPrefix(token));
 
             Optional<JwtPayload> payloadOpt = jwtService.parseAndValidate(token);
             if (payloadOpt.isPresent()) {
                 JwtPayload payload = payloadOpt.get();
-                log.info("[JWT] token valid user={} roles={} path={}", payload.email(), payload.roles(), request.getRequestURI());
+                log.info("[JWT] token valid user={} roles={} path={}", payload.email(), payload.roles(),
+                        request.getRequestURI());
 
                 Usuario usuario = usuarioRepository.findByEmail(payload.email()).orElse(null);
                 Long tokenVersionFromJwt = jwtService.extractTokenVersion(token);
@@ -64,12 +70,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
                 setAuthentication(request, payload);
             } else {
-                log.warn("[JWT] token invalid or expired path={} tokenPrefix={}", request.getRequestURI(), safeTokenPrefix(token));
+                log.warn("[JWT] token invalid or expired path={} tokenPrefix={}", request.getRequestURI(),
+                        safeTokenPrefix(token));
             }
         } else if (authorizationHeader == null) {
             log.info("[JWT] no Authorization header for path={}", request.getRequestURI());
         } else if (!authorizationHeader.startsWith("Bearer ")) {
-            log.warn("[JWT] Authorization header without Bearer prefix path={} valuePrefix={}", request.getRequestURI(), safeTokenPrefix(authorizationHeader));
+            log.warn("[JWT] Authorization header without Bearer prefix path={} valuePrefix={}", request.getRequestURI(),
+                    safeTokenPrefix(authorizationHeader));
         } else if (SecurityContextHolder.getContext().getAuthentication() != null) {
             log.info("[JWT] authentication already present path={}", request.getRequestURI());
         }
@@ -79,12 +87,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private void setAuthentication(HttpServletRequest request, JwtPayload payload) {
         List<SimpleGrantedAuthority> roleAuthorities = payload.roles().stream()
-            .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-            .toList();
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                .toList();
 
         List<SimpleGrantedAuthority> permissionAuthorities = payload.permisos().stream()
-            .map(perm -> new SimpleGrantedAuthority(perm))
-            .toList();
+                .map(perm -> new SimpleGrantedAuthority(perm))
+                .toList();
 
         List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
         authorities.addAll(roleAuthorities);
@@ -95,8 +103,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                 payload.email(),
                 null,
-                authorities
-        );
+                authorities);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }

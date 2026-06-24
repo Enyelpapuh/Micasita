@@ -46,6 +46,21 @@ public class AcademicoAsistenciaController {
         return ResponseEntity.ok(academicoService.listAsistenciaHistorial(grupoId, asignaturaId, limit));
     }
 
+    @GetMapping("/metrics")
+    public ResponseEntity<List<AcademicoService.AsistenciaEstudianteMetricaItem>> getAsistenciaMetrics(
+            @RequestParam Long grupoId,
+            @RequestParam Long asignaturaId,
+            @RequestParam String fechaInicio,
+            @RequestParam String fechaFin
+    ) {
+        return ResponseEntity.ok(academicoService.getAsistenciaMetrics(
+                grupoId,
+                asignaturaId,
+                LocalDate.parse(fechaInicio),
+                LocalDate.parse(fechaFin)
+        ));
+    }
+
     @PostMapping("/sheet")
     public ResponseEntity<Void> registrarAsistenciaLote(Authentication authentication, @RequestBody AcademicoController.AsistenciaSheetRegistroRequest request) {
         List<AcademicoService.AsistenciaRegistroInput> registros = request.registros() == null

@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -28,7 +27,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/noticias")
-@CrossOrigin(origins = {"http://localhost:5127", "http://localhost:5173"})
+@CrossOrigin(origins = { "http://localhost:5127", "http://localhost:5173" })
 public class AnuncioController {
 
     private final AnuncioService anuncioService;
@@ -49,11 +48,10 @@ public class AnuncioController {
     }
 
     @PreAuthorize("hasAnyAuthority('ADMIN', 'DIRECCION', 'ROLE_ADMIN', 'ROLE_DIRECCION')")
-        @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<AnuncioResponse> create(
             Authentication authentication,
-            @RequestBody CreateAnuncioRequest request
-    ) {
+            @RequestBody CreateAnuncioRequest request) {
         System.out.println("[AnuncioController] POST /noticias - user: " + authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(anuncioService.create(authentication.getName(), request));
     }
@@ -63,8 +61,7 @@ public class AnuncioController {
     public ResponseEntity<AnuncioResponse> update(
             Authentication authentication,
             @PathVariable Long id,
-            @RequestBody UpdateAnuncioRequest request
-    ) {
+            @RequestBody UpdateAnuncioRequest request) {
         System.out.println("[AnuncioController] PUT /noticias/" + id + " - user: " + authentication.getName());
         return ResponseEntity.ok(anuncioService.update(authentication.getName(), id, request));
     }
@@ -74,8 +71,7 @@ public class AnuncioController {
     public ResponseEntity<AnuncioResponse> uploadImage(
             Authentication authentication,
             @PathVariable Long id,
-            @RequestParam("file") MultipartFile file
-    ) {
+            @RequestParam("file") MultipartFile file) {
         System.out.println("[AnuncioController] POST /noticias/" + id + "/imagen - user: " + authentication.getName());
         return ResponseEntity.ok(anuncioService.uploadImage(id, file));
     }

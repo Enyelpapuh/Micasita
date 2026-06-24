@@ -66,6 +66,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.stream.Collectors;
 
 @Service
+@SuppressWarnings("null")
 public class AcademicoService {
 
     private final GrupoRepository grupoRepository;
@@ -659,6 +660,32 @@ public class AcademicoService {
                     estudiante.getObservacionMedicaCorta()));
         }
 
+        String registradoPor = null;
+        if (!asistenciaPorEstudianteAsignatura.isEmpty()) {
+            AsistenciaEstudiante first = asistenciaPorEstudianteAsignatura.values().stream()
+                    .filter(a -> a.getUsuario() != null)
+                    .findFirst()
+                    .orElse(null);
+            if (first != null) {
+                Usuario u = first.getUsuario();
+                if (u.getPersona() != null) {
+                    registradoPor = (u.getPersona().getNombre() + " " + (u.getPersona().getApellido() != null ? u.getPersona().getApellido() : "")).trim();
+                } else {
+                    registradoPor = u.getEmail();
+                }
+            }
+        }
+        
+        if (registradoPor == null) {
+            ProfesorGrupo pg = profesorGrupoRepository.findAll().stream()
+                    .filter(item -> item.getGrupo() != null && Objects.equals(item.getGrupo().getId(), grupoId) && item.getProfesor() != null)
+                    .reduce((firstVal, secondVal) -> secondVal)
+                    .orElse(null);
+            if (pg != null && pg.getProfesor() != null && pg.getProfesor().getPersona() != null) {
+                registradoPor = (pg.getProfesor().getPersona().getNombre() + " " + (pg.getProfesor().getPersona().getApellido() != null ? pg.getProfesor().getPersona().getApellido() : "")).trim();
+            }
+        }
+
         return new AsistenciaSheetResponse(
                 grupo.getId(),
                 grupo.getNombre(),
@@ -666,7 +693,8 @@ public class AcademicoService {
                 asignatura.getNombre(),
                 fecha,
                 listEstadosAsistencia(),
-                rows
+                rows,
+                registradoPor
         );
     }
 
@@ -846,12 +874,86 @@ public class AcademicoService {
                                         ausentes,
                                         justificados,
                                         (long) sheet.rows().size(),
-                                        ultimaObservacion
+                                        ultimaObservacion,
+                                        sheet.docenteNombre()
                         ));
                 }
 
                 return historial;
         }
+
+    @Transactional(readOnly = true)
+    public List<AsistenciaEstudianteMetricaItem> getAsistenciaMetrics(Long grupoId, Long asignaturaId, LocalDate startDate, LocalDate endDate) {
+        if (grupoId == null || asignaturaId == null || startDate == null || endDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ACADEMICO_METRICS_PARAMETROS_REQUERIDOS");
+        }
+
+        List<EstudianteGrupo> miembrosGrupo = estudianteGrupoRepository.findByGrupoIdOrderByIdAsc(grupoId);
+        List<Long> estudianteIds = miembrosGrupo.stream()
+                .map(item -> item.getEstudiante() != null ? item.getEstudiante().getId() : null)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Map<Long, EstudianteAsignatura> materiaPorEstudiante = new HashMap<>();
+        if (!estudianteIds.isEmpty()) {
+            estudianteAsignaturaRepository.findByAsignaturaIdAndEstudianteIdIn(asignaturaId, estudianteIds)
+                    .forEach(item -> materiaPorEstudiante.put(item.getEstudiante().getId(), item));
+        }
+
+        List<Long> estudianteAsignaturaIds = materiaPorEstudiante.values().stream().map(EstudianteAsignatura::getId).toList();
+        Map<Long, List<AsistenciaEstudiante>> asistenciaPorMateria = new HashMap<>();
+        if (!estudianteAsignaturaIds.isEmpty()) {
+            asistenciaEstudianteRepository.findByEstudianteAsignaturaIdInAndFechaBetween(estudianteAsignaturaIds, startDate, endDate)
+                    .forEach(a -> asistenciaPorMateria.computeIfAbsent(a.getEstudianteAsignatura().getId(), k -> new ArrayList<>()).add(a));
+        }
+
+        List<EstadoAsistenciaItem> estados = listEstadosAsistencia();
+
+        List<AsistenciaEstudianteMetricaItem> metrics = new ArrayList<>();
+        for (EstudianteGrupo miembro : miembrosGrupo) {
+            Estudiante estudiante = miembro.getEstudiante();
+            if (estudiante == null || estudiante.getId() == null) {
+                continue;
+            }
+
+            EstudianteAsignatura estudianteAsignatura = materiaPorEstudiante.get(estudiante.getId());
+            List<AsistenciaEstudiante> asistencias = estudianteAsignatura == null
+                    ? List.of()
+                    : asistenciaPorMateria.getOrDefault(estudianteAsignatura.getId(), List.of());
+
+            long presentes = 0;
+            long ausentes = 0;
+            long justificados = 0;
+
+            for (AsistenciaEstudiante a : asistencias) {
+                if (a.getEstadoAsistencia() != null) {
+                    String name = a.getEstadoAsistencia().getNombre();
+                    if (name != null) {
+                        String normalized = name.trim().toUpperCase();
+                        if ("PRESENTE".equals(normalized)) {
+                            presentes++;
+                        } else if ("AUSENTE".equals(normalized) || "INASISTENCIA".equals(normalized)) {
+                            ausentes++;
+                        } else if ("JUSTIFICADO".equals(normalized)) {
+                            justificados++;
+                        }
+                    }
+                }
+            }
+
+            metrics.add(new AsistenciaEstudianteMetricaItem(
+                    estudiante.getId(),
+                    estudiante.getPersona() != null ? estudiante.getPersona().getNombre() : null,
+                    estudiante.getPersona() != null ? estudiante.getPersona().getApellido() : null,
+                    presentes,
+                    ausentes,
+                    justificados,
+                    (long) asistencias.size()
+            ));
+        }
+
+        return metrics;
+    }
 
     @Transactional
     public DocumentoEstudianteItem uploadDocumentoEstudiante(Long estudianteId, Long tipoDocumentoId, MultipartFile file) {
@@ -1022,7 +1124,8 @@ public class AcademicoService {
             String asignaturaNombre,
             LocalDate fecha,
             List<EstadoAsistenciaItem> estados,
-            List<AsistenciaRowItem> rows
+            List<AsistenciaRowItem> rows,
+            String docenteNombre
     ) {}
 
     public record AsistenciaHistorialItem(
@@ -1035,7 +1138,18 @@ public class AcademicoService {
             Long ausentes,
             Long justificados,
             Long total,
-            String ultimaObservacion
+            String ultimaObservacion,
+            String docenteNombre
+    ) {}
+
+    public record AsistenciaEstudianteMetricaItem(
+            Long estudianteId,
+            String nombre,
+            String apellido,
+            Long presentes,
+            Long ausentes,
+            Long justificados,
+            Long total
     ) {}
 
     public record ClaseProfesorItem(

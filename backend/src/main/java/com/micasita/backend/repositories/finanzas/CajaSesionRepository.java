@@ -17,6 +17,8 @@ public interface CajaSesionRepository extends JpaRepository<CajaSesion, Long> {
 
     List<CajaSesion> findAllByEstadoCajaNombre(String estado);
 
+    List<CajaSesion> findAllByOrderByFechaAperturaDesc();
+
     @Query("""
                         select c
                         from CajaSesion c

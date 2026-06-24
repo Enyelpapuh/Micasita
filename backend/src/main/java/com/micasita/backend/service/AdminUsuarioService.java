@@ -41,6 +41,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 @Service
+@SuppressWarnings("null")
 public class AdminUsuarioService {
 
     private final UsuarioRepository usuarioRepository;

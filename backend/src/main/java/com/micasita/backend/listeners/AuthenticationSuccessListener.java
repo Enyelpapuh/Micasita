@@ -17,6 +17,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
+@SuppressWarnings("null")
 public class AuthenticationSuccessListener implements ApplicationListener<AuthenticationSuccessEvent> {
 
     private static final Logger log = LoggerFactory.getLogger(AuthenticationSuccessListener.class);

@@ -2,7 +2,6 @@ package com.micasita.backend.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -24,8 +23,11 @@ public class BackupService {
 
     private static final Logger logger = LoggerFactory.getLogger(BackupService.class);
 
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate jdbcTemplate;
+
+    BackupService(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
     public String generarBackupManual() {
         return ejecutarBackup();
@@ -55,8 +57,8 @@ public class BackupService {
                     list.add(Map.of(
                             "fileName", file.getName(),
                             "size", file.length(),
-                            "lastModified", LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(file.lastModified()), java.time.ZoneId.systemDefault())
-                    ));
+                            "lastModified", LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(file.lastModified()),
+                                    java.time.ZoneId.systemDefault())));
                 }
             }
         }
@@ -65,9 +67,11 @@ public class BackupService {
 
     public Resource descargarBackup(String fileName) {
         try {
-            if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de archivo inválido");
+            if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\"))
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de archivo inválido");
             Path target = Paths.get("C:\\Backups").resolve(fileName).normalize();
-            if (!target.startsWith(Paths.get("C:\\Backups")) || !Files.exists(target)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Archivo no encontrado");
+            if (!target.startsWith(Paths.get("C:\\Backups")) || !Files.exists(target))
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Archivo no encontrado");
             return new UrlResource(target.toUri());
         } catch (Exception ex) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error al leer el archivo", ex);
@@ -78,15 +82,16 @@ public class BackupService {
         String dbName = "micasita";
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String backupPath = "C:\\Backups\\" + dbName + "_" + timestamp + ".bak";
-        
+
         File directory = new File("C:\\Backups");
         if (!directory.exists()) {
             directory.mkdirs();
         }
 
-        String sql = "BACKUP DATABASE [" + dbName + "] TO DISK = '" + backupPath + "' WITH FORMAT, MEDIANAME = 'Z_SQLServerBackups', NAME = 'Full Backup of " + dbName + "'";
+        String sql = "BACKUP DATABASE [" + dbName + "] TO DISK = '" + backupPath
+                + "' WITH FORMAT, MEDIANAME = 'Z_SQLServerBackups', NAME = 'Full Backup of " + dbName + "'";
         jdbcTemplate.execute(sql);
-        
+
         return backupPath;
     }
 
@@ -98,7 +103,8 @@ public class BackupService {
                 long threshold = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000);
                 for (File file : files) {
                     if (file.lastModified() < threshold && file.delete()) {
-                        logger.info("Backup antiguo eliminado por política de retención de 30 días: {}", file.getName());
+                        logger.info("Backup antiguo eliminado por política de retención de 30 días: {}",
+                                file.getName());
                     }
                 }
             }

@@ -1,4 +1,5 @@
-require('dotenv').config({ path: '/home/vegebalto/Micasita/mail-service/.env' })
+//require('dotenv').config({ path: '/home/vegebalto/Micasita/mail-service/.env' }) //for linux
+require('dotenv').config() //for windows
 
 const express = require('express')
 const cors = require('cors')
@@ -12,7 +13,7 @@ const {
 
 const app = express()
 const port = Number(process.env.PORT || 4000)
-const corsOrigin = process.env.CORS_ORIGIN || 'http://34.45.135.19/mail/api'
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173'
 
 app.use(cors({ origin: corsOrigin }))
 app.use(express.json({ limit: '1mb' }))
