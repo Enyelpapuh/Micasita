@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { LogOut } from 'lucide-react'
+import { LogOut, Menu } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 import {
   DashboardSidebar,
@@ -82,12 +82,22 @@ export function DashboardPage() {
       <div className="min-w-0 flex-1 px-4 py-6 pl-4 pr-4 sm:px-6 lg:px-8 lg:pl-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">
-                {currentCategoryMeta?.label ?? 'General'}
-              </p>
-              <h1 className="text-3xl font-semibold text-slate-900">{currentCategoryMeta?.description}</h1>
-              <p className="mt-1 text-sm text-slate-500">Navegación enfocada en tareas diarias según tu rol.</p>
+            <div className="flex items-start gap-3">
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(true)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300 md:hidden mt-1 shadow-sm border border-slate-200"
+                aria-label="Abrir panel de navegación"
+              >
+                <Menu className="h-5 w-5" />
+              </button>
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-widest text-teal-600">
+                  {currentCategoryMeta?.label ?? 'General'}
+                </p>
+                <h1 className="text-3xl font-semibold text-slate-900 leading-none">{currentCategoryMeta?.description}</h1>
+                <p className="mt-1 text-sm text-slate-500">Navegación enfocada en tareas diarias según tu rol.</p>
+              </div>
             </div>
             <button
               onClick={logout}

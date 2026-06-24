@@ -1,4 +1,5 @@
 import FAQItem from './faq-items';
+import { useNavigate } from 'react-router-dom';
 import image1 from '@/assets/elements/image1.jpg';
 import image2 from '@/assets/elements/image2.jpg';
 import image3 from '@/assets/elements/image3.jpg';
@@ -12,6 +13,8 @@ type FaqEntry = {
 };
 
 export default function FAQSection() {
+  const navigate = useNavigate();
+
   const faqs: FaqEntry[] = [
     {
       id: 1,
@@ -40,36 +43,47 @@ export default function FAQSection() {
   ];
 
   return (
-    <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <section className="py-16 md:py-24 px-4 sm:px-6 lg:px-8 bg-slate-50/30 relative">
+      {/* Decorative Blob */}
+      <div className="absolute right-0 top-1/3 h-72 w-72 rounded-full bg-teal-100/10 blur-3xl" />
+
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Section Title */}
-        <div className="mb-16">
-          <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4 text-balance">
-            Preguntas Frecuentes
+        <div className="mb-16 text-center max-w-3xl mx-auto">
+          <span className="text-xs uppercase tracking-[0.2em] font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full">Preguntas Frecuentes</span>
+          <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+            Resolver tus Dudas
           </h2>
-          <p className="text-lg text-slate-600 max-w-2xl">
-            Todo lo que necesitas saber sobre nuestro centro de estimulación temprana
+          <div className="mt-4 h-1.5 w-16 bg-teal-600 rounded-full mx-auto" />
+          <p className="mt-4 text-base md:text-lg text-slate-600">
+            Todo lo que necesitas saber sobre nuestro centro de estimulación temprana, metodologías de cuidado y actividades.
           </p>
         </div>
 
         {/* FAQ Items */}
-        <div className="space-y-12">
+        <div className="space-y-20">
           {faqs.map((faq, index) => (
             <FAQItem key={faq.id} faq={faq} index={index} />
           ))}
         </div>
 
-        {/* CTA Section */}
-        <div className="mt-20 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-8 md:p-12">
-          <div className="text-center">
-            <h3 className="mb-4 text-2xl font-bold text-slate-900 md:text-3xl">
-              ¿Listo para conocernos?
+        {/* CTA Section - Rebranded as a friendly soft card */}
+        <div className="mt-24 rounded-[2.5rem] border border-teal-100 bg-gradient-to-br from-teal-50/70 via-white to-amber-50/40 p-8 md:p-14 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 h-32 w-32 rounded-full bg-teal-100/20 -mr-10 -mt-10" />
+          <div className="absolute bottom-0 left-0 h-24 w-24 rounded-full bg-amber-100/20 -ml-10 -mb-10" />
+          
+          <div className="text-center relative z-10">
+            <h3 className="mb-4 text-2xl font-extrabold text-slate-900 md:text-3xl tracking-tight">
+              ¿Listo para conocernos en persona? 🏫
             </h3>
-            <p className="mx-auto mb-8 max-w-2xl text-lg text-slate-600">
-              Agenda una visita y descubre por qué las familias confían en Mi casita para el desarrollo de sus hijos
+            <p className="mx-auto mb-8 max-w-2xl text-sm md:text-base text-slate-600 leading-relaxed">
+              Agenda una visita guiada a nuestras instalaciones y descubre por qué tantas familias confían en Mi casita para el sano desarrollo de sus pequeños.
             </p>
-            <button className="rounded-lg bg-teal-700 px-8 py-3 font-semibold text-white transition hover:scale-105 hover:bg-teal-600">
-              Agendar Visita
+            <button 
+              onClick={() => navigate('/contacto')}
+              className="rounded-2xl bg-teal-700 px-8 py-3.5 font-bold uppercase tracking-wider text-xs text-white shadow-md shadow-teal-700/10 hover:shadow-lg hover:scale-105 hover:bg-teal-600 transition-all duration-200"
+            >
+              Agendar Visita Guiada
             </button>
           </div>
         </div>

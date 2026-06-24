@@ -1,8 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import toast from 'react-hot-toast'
 import Carousel from './carousel'
-// import NewsCarousel from './news-carousel'
 import TalleresSection from './talleres-section'
 import MatriculasCallToAction from './matriculas-call-to-action'
 import FAQSection from './faq-section'
@@ -11,12 +9,6 @@ import Footer from './footer'
 export function LandingPage() {
   const location = useLocation()
   const navigate = useNavigate()
-
-  useEffect(() => {
-    toast.success('Bienvenido a Micasita', {
-      id: 'landing-welcome',
-    })
-  }, [])
 
   useEffect(() => {
     const state = (location.state as any)?.scrollTo as string | undefined

@@ -8,7 +8,7 @@ import { appPermissions, useAuthorization } from '../../auth/authorization'
 import { createTaller, getTalleres, resolveTallerImageUrl, updateTaller, uploadTallerImage, inscribirEnTaller, desinscribirDeTaller, } from '../talleres-view.api'
 import { emptyTallerForm, initialTalleres } from '../talleres-view.data'
 import type { InscripcionTallerPayload, SaveTallerPayload, Taller, TallerFormValues } from '../talleres-view.types'
-import { listEstudiantes, getEstudianteDetail, type EstudianteItem } from '../../dashboard/components/academico.api'
+import { listEstudiantes, getEstudianteDetail, normalizeDate, type EstudianteItem } from '../../dashboard/components/academico.api'
 
 type EditingState = {
   mode: 'create' | 'edit'
@@ -305,10 +305,13 @@ export function TalleresView() {
   const handleSelectStudentForInscripcion = async (student: EstudianteItem) => {
     try {
       const detail = await getEstudianteDetail(token, student.id)
+      const rawDate = normalizeDate(detail.fechaNacimiento)
+      const formattedDate = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate
+
       setInscripcionForm({
         nombre: detail.nombre || '',
         apellido: detail.apellido || '',
-        fechaNacimiento: detail.fechaNacimiento ? detail.fechaNacimiento.split('T')[0] : '',
+        fechaNacimiento: formattedDate,
         telefono: detail.telefono || '',
         correo: detail.correo || '',
         identificador: detail.identificador || ''

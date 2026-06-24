@@ -21,6 +21,16 @@ ALTER TABLE Pago_cupo ADD Monto_Reembolsado DECIMAL(10,2) NOT NULL DEFAULT 0.00;
 ALTER TABLE Mensualidad ADD Monto_Reembolsado DECIMAL(10,2) NOT NULL DEFAULT 0.00;
 GO
 
+-- Pago_matricula
+ALTER TABLE Pago_matricula ADD Monto_Recibido DECIMAL(10,2) NULL;
+ALTER TABLE Pago_matricula ADD Cambio_Devuelto DECIMAL(10,2) NULL;
+-- Mensualidad
+ALTER TABLE Mensualidad ADD Monto_Recibido DECIMAL(10,2) NULL;
+ALTER TABLE Mensualidad ADD Cambio_Devuelto DECIMAL(10,2) NULL;
+-- Pago_cupo
+ALTER TABLE Pago_cupo ADD Monto_Recibido DECIMAL(10,2) NULL;
+ALTER TABLE Pago_cupo ADD Cambio_Devuelto DECIMAL(10,2) NULL;
+
 -- 3. Crear trigger de auditoría para Corte_Caja
 CREATE TRIGGER TR_Auditoria_Corte_Caja
 ON Corte_Caja

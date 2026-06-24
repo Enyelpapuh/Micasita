@@ -839,7 +839,7 @@ export function OverviewPanel({ user }: { user?: AuthUser | null }) {
             </div>
             
             <div className="mt-4 flex-1 overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <div className="max-h-[320px] overflow-y-auto">
+              <div className="max-h-[320px] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 border-b border-slate-200 bg-slate-50 text-slate-600 shadow-sm z-10">
                     <tr>
@@ -907,7 +907,7 @@ export function OverviewPanel({ user }: { user?: AuthUser | null }) {
               </div>
             )}
 
-            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+            <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
               <table className="w-full text-sm">
                 <thead className="border-b border-slate-200 bg-white text-slate-600">
                   <tr>

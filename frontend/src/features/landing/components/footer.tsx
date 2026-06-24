@@ -72,7 +72,7 @@ export default function Footer() {
     return (
       <button
         onClick={() => navigate('/contacto')}
-        className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600"
+        className="rounded-xl bg-teal-600 hover:bg-teal-500 px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:shadow-lg transition-all duration-200"
       >
         Enviar consulta
       </button>
@@ -80,32 +80,39 @@ export default function Footer() {
   }
 
   return (
-    <footer className="bg-slate-900 text-slate-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-        <div className="grid md:grid-cols-4 gap-8 mb-12">
+    <footer className="relative bg-slate-900 text-slate-100 pt-16 mt-12">
+      {/* Wave Transition Top */}
+      <div className="absolute top-0 left-0 right-0 w-full overflow-hidden leading-[0] transform -translate-y-[99%]">
+        <svg viewBox="0 0 1200 120" preserveAspectRatio="none" className="relative block w-full h-[30px] md:h-[50px] fill-slate-900">
+          <path d="M321.39,56.44c58-10.79,114.16-30.13,172-41.86,82.39-16.72,168.19-17.73,250.45-.39C823.78,31,906.67,72,985.66,92.83c70.05,18.48,146.53,10.89,214.34-12.2V120H0V0C26.9,2.83,61.94,22.18,97,37.38,154.26,62.2,217.2,66.1,280,61.16,294,60,307.82,58.07,321.39,56.44Z"></path>
+        </svg>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10 mb-12">
           {/* Brand */}
-          <div>
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-                <span className="text-slate-900 font-bold text-lg">🏠</span>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-xl shadow-md">
+                🏠
               </div>
-              <span className="font-bold text-xl">Mi casita</span>
+              <span className="font-extrabold text-xl tracking-tight">Mi casita</span>
             </div>
-            <p className="text-sm opacity-80">
-              Centro integral de estimulación temprana para el desarrollo de tus hijos
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Centro integral de estimulación temprana. Un espacio de amor, cuidado y aprendizaje diseñado para la felicidad y desarrollo de tus hijos.
             </p>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-bold mb-4 text-lg">Enlaces</h4>
-            <ul className="space-y-2 text-sm opacity-80">
+            <h4 className="font-extrabold mb-4 text-base uppercase tracking-wider text-teal-400">Enlaces</h4>
+            <ul className="space-y-2.5 text-sm text-slate-300">
               {quickLinks.map(link => (
                 <li key={link}>
                   <a
                     href="#"
                     onClick={(e) => handleQuickLinkClick(e, link)}
-                    className="hover:opacity-100 transition block"
+                    className="hover:text-white transition duration-200 block hover:translate-x-1 transform"
                   >
                     {link}
                   </a>
@@ -114,10 +121,10 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Contact CTA (navega a la vista de contacto) */}
+          {/* Contact CTA */}
           <div>
-            <h4 className="font-bold mb-4 text-lg">Contacto</h4>
-            <p className="text-sm opacity-80 mb-4">¿Tienes una pregunta? Envíanos una consulta rápida.</p>
+            <h4 className="font-extrabold mb-4 text-base uppercase tracking-wider text-teal-400">Contacto</h4>
+            <p className="text-sm text-slate-300 mb-4 leading-relaxed">¿Tienes alguna duda o quieres agendar una visita? Envíanos tu consulta.</p>
             <div>
               <ContactButton />
             </div>
@@ -125,55 +132,56 @@ export default function Footer() {
 
           {/* Social Media */}
           <div>
-            <h4 className="font-bold mb-4 text-lg">Síguenos</h4>
-            <div className="flex gap-4">
+            <h4 className="font-extrabold mb-4 text-base uppercase tracking-wider text-teal-400">Síguenos</h4>
+            <p className="text-sm text-slate-300 mb-4 leading-relaxed">Mantente al día con nuestras actividades diarias en redes sociales.</p>
+            <div className="flex gap-3">
               <a
                 href="https://www.facebook.com/profile.php?id=61554162104938"
                 target="_blank"
                 rel="noreferrer noopener"
-                className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition"
+                className="bg-white/10 hover:bg-white/20 text-white p-3 rounded-full transition-all duration-200"
+                aria-label="Facebook"
               >
-                <FiFacebook size={20} />
+                <FiFacebook size={18} />
               </a>
               <a
                 href="https://www.instagram.com/micasita.aj/"
                 target="_blank"
                 rel="noreferrer noopener"
-                className="bg-white/20 hover:bg-white/30 p-2 rounded-full transition"
+                className="bg-white/10 hover:bg-white/20 text-white p-3 rounded-full transition-all duration-200"
+                aria-label="Instagram"
               >
-                <FiInstagram size={20} />
+                <FiInstagram size={18} />
               </a>
             </div>
           </div>
         </div>
 
         {/* Divider */}
-        <div className="border-t border-white/20 pt-8">
-            <div className="flex flex-col md:flex-row justify-between items-center text-sm opacity-80">
-              <p>&copy; 2024 Mi casita. Todos los derechos reservados.</p>
+        <div className="border-t border-slate-800 pt-8 mt-12">
+          <div className="flex flex-col md:flex-row justify-between items-center text-xs text-slate-400">
+            <p>&copy; {new Date().getFullYear()} Mi casita. Todos los derechos reservados.</p>
 
-              <div className="flex items-center gap-6 mt-4 md:mt-0">
-                {/* Duplicate Quick Links (same as in the column) */}
-                <div className="hidden md:flex gap-4">
-                  {quickLinks.map(link => (
-                    <a
-                      key={link}
-                      href="#"
-                      onClick={(e) => handleQuickLinkClick(e as unknown as MouseEvent, link)}
-                      className="hover:opacity-100 transition"
-                    >
-                      {link}
-                    </a>
-                  ))}
-                </div>
+            <div className="flex items-center gap-6 mt-4 md:mt-0">
+              <div className="hidden md:flex gap-4">
+                {quickLinks.map(link => (
+                  <a
+                    key={link}
+                    href="#"
+                    onClick={(e) => handleQuickLinkClick(e as unknown as MouseEvent, link)}
+                    className="hover:text-white transition duration-200"
+                  >
+                    {link}
+                  </a>
+                ))}
+              </div>
 
-                {/* Policy links remain */}
-                <div className="flex gap-6 md:gap-4">
-                  <a href="#" onClick={(e) => { e.preventDefault(); scrollToMatchingText('Política de privacidad'); }} className="hover:opacity-100 transition">Política de privacidad</a>
-                  <a href="#" onClick={(e) => { e.preventDefault(); scrollToMatchingText('Términos de servicio'); }} className="hover:opacity-100 transition">Términos de servicio</a>
-                </div>
+              <div className="flex gap-4">
+                <a href="#" onClick={(e) => { e.preventDefault(); scrollToMatchingText('Política de privacidad'); }} className="hover:text-white transition duration-200">Política de privacidad</a>
+                <a href="#" onClick={(e) => { e.preventDefault(); scrollToMatchingText('Términos de servicio'); }} className="hover:text-white transition duration-200">Términos de servicio</a>
               </div>
             </div>
+          </div>
         </div>
       </div>
     </footer>

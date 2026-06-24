@@ -1499,7 +1499,6 @@ export function CajaDashboardPanel() {
   const [isResumenModalOpen, setIsResumenModalOpen] = useState(false)
   const [showPendingAnnulmentsModal, setShowPendingAnnulmentsModal] = useState(false)
   const [preCloseCounted, setPreCloseCounted] = useState('')
-  const [preCloseCambioDevuelto, setPreCloseCambioDevuelto] = useState('0')
   const [showOpenSessionModal, setShowOpenSessionModal] = useState(false)
   const [openPassword, setOpenPassword] = useState('')
   const [showOpenPassword, setShowOpenPassword] = useState(false)
@@ -1655,9 +1654,7 @@ export function CajaDashboardPanel() {
 
   const totalCobradoGeneralPreClose = cortePreCierre ? cortePreCierre.totalCobrado : pagosDelTurno.total
   const aperturaSesion = Number(activeSession?.saldoInicial ?? 0)
-  const cambioDevuelto = Number(preCloseCambioDevuelto) || 0
-  const ingresoNetoTurno = totalCobradoGeneralPreClose - cambioDevuelto
-  const efectivoEsperadoPreCierre = aperturaSesion + ingresoNetoTurno
+  const efectivoEsperadoPreCierre = aperturaSesion + totalCobradoGeneralPreClose
   const efectivoContadoPreCierre = Number(preCloseCounted) || 0
   const diferenciaPreCierre = efectivoContadoPreCierre - efectivoEsperadoPreCierre
 
@@ -1924,7 +1921,6 @@ export function CajaDashboardPanel() {
       const corte = await getCorteSession(token, activeSession.id)
       setCortePreCierre(corte)
       const esperado = (Number(activeSession.saldoInicial ?? 0)) + corte.totalCobrado
-      setPreCloseCambioDevuelto('0')
       setPreCloseCounted(String(esperado > 0 ? esperado : 0))
       setShowPreCloseModal(true)
     } catch (err: any) {
@@ -2837,34 +2833,46 @@ export function CajaDashboardPanel() {
 
                   <div className="space-y-4">
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Sencillo devuelto estimado</label>
-                      <input
-                        value={preCloseCambioDevuelto}
-                        onChange={(e) => setPreCloseCambioDevuelto(e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500"
-                        placeholder="Ingrese sencillo devuelto"
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">Efectivo físico contado en caja</label>
+                      <input 
+                        value={preCloseCounted} 
+                        onChange={(e) => setPreCloseCounted(e.target.value)} 
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500 font-medium" 
+                        placeholder="Ingrese monto contado" 
                       />
-                      <p className="mt-1 text-xs text-slate-500">Se restará del ingreso para estimar el efectivo neto antes de confirmar cierre.</p>
+                      <p className="mt-1 text-xs text-slate-500">Monto total de billetes y monedas contados en el cajón.</p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                      <p className="text-slate-700">Ingreso neto estimado: <span className="font-semibold">{formatMoney(ingresoNetoTurno)}</span></p>
-                      {diferenciaPreCierre > 0 ? (
-                        <p className="text-emerald-700">Sobrante estimado: <span className="font-semibold">{formatMoney(diferenciaPreCierre)}</span></p>
-                      ) : diferenciaPreCierre < 0 ? (
-                        <p className="text-rose-700">Faltante estimado: <span className="font-semibold">{formatMoney(Math.abs(diferenciaPreCierre))}</span></p>
-                      ) : (
-                        <p className="text-slate-700">Sin diferencia estimada.</p>
-                      )}
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2 text-sm">
+                      <div className="flex justify-between text-slate-650">
+                        <span>Efectivo esperado (Apertura + Cobros):</span>
+                        <span className="font-semibold text-slate-900">{formatMoney(efectivoEsperadoPreCierre)}</span>
+                      </div>
+                      <div className="flex justify-between text-slate-650">
+                        <span>Efectivo contado ingresado:</span>
+                        <span className="font-semibold text-slate-900">{formatMoney(efectivoContadoPreCierre)}</span>
+                      </div>
+                      <hr className="border-slate-200 my-1" />
+                      <div className="flex justify-between items-center pt-1 font-semibold text-sm">
+                        <span>Resultado de Arqueo:</span>
+                        {diferenciaPreCierre > 0 ? (
+                          <span className="inline-flex rounded-lg bg-emerald-50 px-2.5 py-1 text-emerald-800 font-bold border border-emerald-200">
+                            Sobrante de {formatMoney(diferenciaPreCierre)}
+                          </span>
+                        ) : diferenciaPreCierre < 0 ? (
+                          <span className="inline-flex rounded-lg bg-rose-50 px-2.5 py-1 text-rose-800 font-bold border border-rose-200">
+                            Faltante de {formatMoney(Math.abs(diferenciaPreCierre))}
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-slate-700 font-bold border border-slate-200">
+                            Cuadrado (Sin diferencia)
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Cantidad física contada</label>
-                      <input value={preCloseCounted} onChange={(e) => setPreCloseCounted(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500" placeholder="Ingrese monto contado" />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Descripción/observación de cierre</label>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">Descripción / Observación de cierre</label>
                       <input
                         value={closeObservacion}
                         onChange={(e) => setCloseObservacion(e.target.value)}

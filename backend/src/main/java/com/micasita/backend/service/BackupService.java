@@ -9,6 +9,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -25,8 +27,36 @@ public class BackupService {
 
     private final JdbcTemplate jdbcTemplate;
 
+    @Value("${app.backup.dir:}")
+    private String configuredBackupDir;
+
+    private String backupDir;
+
     BackupService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @PostConstruct
+    public void init() {
+        if (configuredBackupDir != null && !configuredBackupDir.trim().isEmpty()) {
+            this.backupDir = configuredBackupDir;
+        } else {
+            String osName = System.getProperty("os.name").toLowerCase();
+            if (osName.contains("win")) {
+                this.backupDir = "C:\\Backups";
+            } else {
+                this.backupDir = System.getProperty("user.home") + File.separator + "backups" + File.separator + "micasita";
+            }
+        }
+        try {
+            File dir = new File(this.backupDir);
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+        } catch (Exception e) {
+            logger.error("No se pudo crear el directorio de backups: {}", e.getMessage());
+        }
+        logger.info("BackupService inicializado con directorio: {}", this.backupDir);
     }
 
     public String generarBackupManual() {
@@ -47,7 +77,7 @@ public class BackupService {
     }
 
     public List<Map<String, Object>> listarBackups() {
-        File dir = new File("C:\\Backups");
+        File dir = new File(this.backupDir);
         List<Map<String, Object>> list = new ArrayList<>();
         if (dir.exists() && dir.isDirectory()) {
             File[] files = dir.listFiles((d, name) -> name.endsWith(".bak"));
@@ -69,8 +99,9 @@ public class BackupService {
         try {
             if (fileName.contains("..") || fileName.contains("/") || fileName.contains("\\"))
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nombre de archivo inválido");
-            Path target = Paths.get("C:\\Backups").resolve(fileName).normalize();
-            if (!target.startsWith(Paths.get("C:\\Backups")) || !Files.exists(target))
+            Path base = Paths.get(this.backupDir).toAbsolutePath().normalize();
+            Path target = base.resolve(fileName).normalize();
+            if (!target.startsWith(base) || !Files.exists(target))
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Archivo no encontrado");
             return new UrlResource(target.toUri());
         } catch (Exception ex) {
@@ -81,22 +112,24 @@ public class BackupService {
     private String ejecutarBackup() {
         String dbName = "micasita";
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String backupPath = "C:\\Backups\\" + dbName + "_" + timestamp + ".bak";
-
-        File directory = new File("C:\\Backups");
+        
+        File directory = new File(this.backupDir);
         if (!directory.exists()) {
             directory.mkdirs();
         }
 
-        String sql = "BACKUP DATABASE [" + dbName + "] TO DISK = '" + backupPath
+        String backupPath = this.backupDir + File.separator + dbName + "_" + timestamp + ".bak";
+        String absoluteBackupPath = new File(backupPath).getAbsolutePath();
+
+        String sql = "BACKUP DATABASE [" + dbName + "] TO DISK = '" + absoluteBackupPath
                 + "' WITH FORMAT, MEDIANAME = 'Z_SQLServerBackups', NAME = 'Full Backup of " + dbName + "'";
         jdbcTemplate.execute(sql);
 
-        return backupPath;
+        return absoluteBackupPath;
     }
 
     private void limpiarBackupsAntiguos() {
-        File dir = new File("C:\\Backups");
+        File dir = new File(this.backupDir);
         if (dir.exists() && dir.isDirectory()) {
             File[] files = dir.listFiles((d, name) -> name.endsWith(".bak"));
             if (files != null) {

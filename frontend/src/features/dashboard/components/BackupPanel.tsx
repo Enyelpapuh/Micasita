@@ -119,7 +119,7 @@ export function BackupPanel() {
           </button>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">
+        <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-white text-slate-600">
               <tr>

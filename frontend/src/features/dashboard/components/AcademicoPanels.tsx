@@ -197,7 +197,7 @@ function AsistenciaHistorialModal({
     }
   }, [item, token])
 
-  const getEstadoBadge = (estadoId: number | null) => {
+  const getEstadoBadge = (estadoId: number | null | undefined) => {
     const estado = estados.find((e) => e.id === estadoId)
     const name = estado?.nombre?.trim().toUpperCase() || 'NO MARCADO'
     if (name === 'PRESENTE') {
@@ -377,17 +377,29 @@ function AcademicoAsistenciaSegment({
           </p>
           <p className="text-xs text-teal-800">Marca el estado por estudiante y guarda toda la asistencia del día.</p>
         </div>
-        <button
-          type="button"
-          onClick={onPrint}
-          className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50"
-        >
-          <Printer className="mr-2 h-4 w-4" />
-          Imprimir hoja de asistencia
-        </button>
+        <div className="flex flex-wrap gap-2 items-center">
+          {rows.length > 0 ? (
+            <button
+              type="button"
+              onClick={onMarkAllPresent}
+              className="md:hidden inline-flex items-center justify-center rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50"
+            >
+              Marcar todos P
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onPrint}
+            className="inline-flex items-center justify-center rounded-xl border border-teal-200 bg-white px-3 py-2 text-xs font-semibold text-teal-700 shadow-sm transition hover:bg-teal-50"
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            Imprimir hoja de asistencia
+          </button>
+        </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+      {/* Desktop view (table format) */}
+      <div className="hidden md:block mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <table className="min-w-full divide-y divide-slate-200 text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-[0.08em] text-slate-600">
             <tr>
@@ -507,6 +519,111 @@ function AcademicoAsistenciaSegment({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile view (card format) */}
+      <div className="block md:hidden mt-4 space-y-4">
+        {rows.length > 0 ? (
+          rows.map((row) => {
+            const estadoMeta = getEstadoMeta(row.selectedEstadoId)
+
+            return (
+              <div 
+                key={`mob-row-${row.estudianteId}`} 
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 transition-colors hover:bg-slate-50/30"
+              >
+                {/* Header: Student Info */}
+                <div className="flex items-center gap-3">
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border text-sm font-bold transition-all ${estadoMeta.button}`}>
+                    {initials(row.estudianteNombre, row.estudianteApellido)}
+                  </div>
+                  <div className="min-w-0 flex-grow">
+                    <button 
+                      type="button"
+                      onClick={() => onViewProfile(row.estudianteId)}
+                      className="truncate text-sm font-semibold text-slate-900 hover:text-teal-600 hover:underline text-left block"
+                    >
+                      {row.estudianteNombre} {row.estudianteApellido}
+                    </button>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">ID {row.estudianteId}</p>
+                  </div>
+                  {row.estudianteAlergiasGraves || row.estudianteObservacionMedicaCorta ? (
+                    <span 
+                      className="inline-flex cursor-help items-center rounded-md bg-rose-50 px-2 py-0.5 text-[9px] font-medium text-rose-700 ring-1 ring-inset ring-rose-600/20 shrink-0" 
+                      title={`${row.estudianteAlergiasGraves ? 'Alergia: ' + row.estudianteAlergiasGraves + '\n' : ''}${row.estudianteObservacionMedicaCorta ? 'Nota: ' + row.estudianteObservacionMedicaCorta : ''}`.trim()}
+                    >
+                      Alerta médica
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* State selectors: large buttons */}
+                <div className="pt-1">
+                  <p className="text-xs font-semibold text-slate-500 mb-2">Asistencia:</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {estados.map((estado) => {
+                      const normalized = estado.nombre.trim().toUpperCase()
+                      const isSelected = row.selectedEstadoId === estado.id
+                      
+                      const buttonClass = isSelected
+                        ? normalized === 'PRESENTE'
+                          ? 'bg-teal-600 border-teal-600 text-white shadow-sm font-bold py-2 rounded-xl scale-105'
+                          : normalized === 'AUSENTE' || normalized === 'INASISTENCIA'
+                            ? 'bg-rose-600 border-rose-600 text-white shadow-sm font-bold py-2 rounded-xl scale-105'
+                            : normalized === 'JUSTIFICADO'
+                              ? 'bg-amber-500 border-amber-500 text-white shadow-sm font-bold py-2 rounded-xl scale-105'
+                              : 'bg-slate-600 border-slate-600 text-white shadow-sm font-bold py-2 rounded-xl scale-105'
+                        : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-300 py-2 rounded-xl'
+
+                      const label = normalized === 'PRESENTE' ? 'Presente' : normalized === 'AUSENTE' || normalized === 'INASISTENCIA' ? 'Ausente' : normalized === 'JUSTIFICADO' ? 'Justificado' : estado.nombre
+
+                      return (
+                        <button
+                          key={`mob-btn-${row.estudianteId}-${estado.id}`}
+                          type="button"
+                          onClick={() => onEstadoChange(row.estudianteId, estado.id)}
+                          className={`inline-flex items-center justify-center text-xs border transition-all ${buttonClass}`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Observations */}
+                <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onToggleObservation(row.estudianteId)}
+                    className={`inline-flex items-center self-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${row.observacionesOpen || row.observaciones ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {row.observaciones ? 'Ver / Editar nota' : 'Agregar nota'}
+                  </button>
+
+                  {row.observacionesOpen ? (
+                    <textarea
+                      value={row.observaciones ?? ''}
+                      onChange={(e) => onObservacionChange(row.estudianteId, e.target.value)}
+                      rows={2}
+                      placeholder="Motivo de tardanza, salud o aviso..."
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-teal-500"
+                    />
+                  ) : row.observaciones ? (
+                    <p className="line-clamp-2 rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                      {row.observaciones}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
+            Carga una hoja para comenzar a tomar asistencia.
+          </div>
+        )}
       </div>
 
       <div className="mt-4 flex justify-end">

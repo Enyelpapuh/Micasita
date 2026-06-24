@@ -517,7 +517,7 @@ export function IdentityAccessPanel() {
         </article>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.25fr]">
+      <div className="mt-6 max-w-4xl">
         <div className="rounded-2xl border border-slate-200 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-slate-900">
             <div className="flex items-center gap-2">
@@ -530,25 +530,25 @@ export function IdentityAccessPanel() {
                 <Users className="mr-2 h-3.5 w-3.5 text-slate-400" />
                 {filteredUsuarios.length} de {usuarios.length}
               </div>
-                <div className="inline-flex items-center rounded-xl border border-slate-200 bg-white/5 px-2 py-1 text-xs text-slate-300">
+                <div className="inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1 text-xs">
                   <button
                     type="button"
                     onClick={() => setFilterActivo('all')}
-                    className={`px-2 ${filterActivo === 'all' ? 'font-semibold text-teal-300' : 'text-slate-400'}`}
+                    className={`px-2.5 py-1 rounded-lg transition text-xs font-semibold ${filterActivo === 'all' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     Todos
                   </button>
                   <button
                     type="button"
                     onClick={() => setFilterActivo('active')}
-                    className={`px-2 ${filterActivo === 'active' ? 'font-semibold text-teal-300' : 'text-slate-400'}`}
+                    className={`px-2.5 py-1 rounded-lg transition text-xs font-semibold ${filterActivo === 'active' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     Activos
                   </button>
                   <button
                     type="button"
                     onClick={() => setFilterActivo('inactive')}
-                    className={`px-2 ${filterActivo === 'inactive' ? 'font-semibold text-teal-300' : 'text-slate-400'}`}
+                    className={`px-2.5 py-1 rounded-lg transition text-xs font-semibold ${filterActivo === 'inactive' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                   >
                     Inactivos
                   </button>

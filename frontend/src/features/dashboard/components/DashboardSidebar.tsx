@@ -15,7 +15,6 @@ import {
   type LucideIcon,
   X,
 } from 'lucide-react'
-import { FiMenu } from 'react-icons/fi'
 import logo from '../../../assets/MiCASITALOGO-cropped.svg'
 import type { AuthUser } from '../../auth/auth.types'
 
@@ -251,15 +250,6 @@ export function DashboardSidebar({
           </button>
         </div>
       </aside>
-
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="fixed left-4 top-4 z-40 inline-flex items-center justify-center rounded-xl bg-slate-950 p-3 text-white shadow-lg shadow-black/20 md:hidden"
-        aria-label="Abrir sidebar"
-      >
-        <FiMenu size={20} />
-      </button>
     </>
   )
 }
