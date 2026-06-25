@@ -134,7 +134,12 @@ export default function ContactForm() {
                   <Phone className="h-5 w-5 text-teal-600 mt-0.5" />
                   <div>
                     <div className="font-medium">Teléfono</div>
-                    <div className="text-slate-600">+505 1234 5678</div>
+                    <a
+                      href="tel:+50588887043"
+                      className="text-slate-600 hover:text-teal-800 hover:underline transition-colors block mt-0.5"
+                    >
+                      8888 7043
+                    </a>
                   </div>
                 </li>
 
@@ -142,7 +147,12 @@ export default function ContactForm() {
                   <Mail className="h-5 w-5 text-teal-600 mt-0.5" />
                   <div>
                     <div className="font-medium">Correo</div>
-                    <div className="text-slate-600">info@micasita.example</div>
+                    <a
+                      href="mailto:contacto@micasita.edu.ni"
+                      className="text-slate-600 hover:text-teal-800 hover:underline transition-colors block mt-0.5"
+                    >
+                      contacto@micasita.edu.ni
+                    </a>
                   </div>
                 </li>
 
@@ -150,7 +160,14 @@ export default function ContactForm() {
                   <MapPin className="h-5 w-5 text-teal-600 mt-0.5" />
                   <div>
                     <div className="font-medium">Dirección</div>
-                    <div className="text-slate-600">C. Principal 123, Managua</div>
+                    <a
+                      href="https://maps.app.goo.gl/F5FDQNSmzigt4rWdA"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-slate-600 hover:text-teal-800 hover:underline transition-colors block mt-0.5 leading-relaxed"
+                    >
+                      De la Gasolinera UNO 1 cuadra al sur, 2 cuadras al este. Diriamba, Carazo, Diriamba, Nicaragua
+                    </a>
                   </div>
                 </li>
               </ul>

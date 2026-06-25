@@ -8,8 +8,8 @@ import logo from '../../assets/MiCASITALOGO-cropped.svg'
 export function LoginPage() {
   const navigate = useNavigate()
   const { login, isAuthenticated, isReady } = useAuth()
-  const [email, setEmail] = useState('foo@gmail.com')
-  const [password, setPassword] = useState('123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')

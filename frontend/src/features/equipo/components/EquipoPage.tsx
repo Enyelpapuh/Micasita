@@ -1,4 +1,6 @@
-import heroImage from '../../../assets/hero.png'
+import oscarImage from '../../../assets/elements/oscar.jpeg'
+import eliImage from '../../../assets/elements/eli.jpeg'
+import gemaImage from '../../../assets/elements/gema.jpeg'
 
 type ProfileCardProps = {
   imageSrc?: string
@@ -6,7 +8,6 @@ type ProfileCardProps = {
   name: string
   title: string
   description: string
-  email: string
 }
 
 function ProfileImage({ imageSrc, initials, name }: Pick<ProfileCardProps, 'imageSrc' | 'initials' | 'name'>) {
@@ -27,7 +28,7 @@ function ProfileImage({ imageSrc, initials, name }: Pick<ProfileCardProps, 'imag
   )
 }
 
-function ProfileCard({ imageSrc, initials, name, title, description, email }: ProfileCardProps) {
+function ProfileCard({ imageSrc, initials, name, title, description }: ProfileCardProps) {
   return (
     <section className="mx-auto my-8 max-w-4xl rounded-2xl bg-white p-6 shadow-2xl transition-shadow duration-300 hover:shadow-xl md:p-8">
       <div className="flex flex-col items-center gap-6 md:flex-row md:items-start">
@@ -39,9 +40,6 @@ function ProfileCard({ imageSrc, initials, name, title, description, email }: Pr
           <h2 className="text-3xl font-extrabold text-slate-800 md:text-4xl">{name}</h2>
           <h3 className="mb-3 text-lg font-semibold text-teal-700 md:text-xl">{title}</h3>
           <p className="mb-4 italic leading-relaxed text-slate-600">"{description}"</p>
-          <p className="text-sm font-medium text-slate-500">
-            Correo: <span className="text-teal-600">{email}</span>
-          </p>
         </div>
       </div>
     </section>
@@ -65,31 +63,30 @@ type TeamMember = ProfileCardProps & {
 const teamMembers: TeamMember[] = [
   {
     sectionTitle: 'Director Administrativo',
-    imageSrc: heroImage,
+    imageSrc: oscarImage,
     initials: 'OR',
     name: 'Oscar Rodríguez',
     title: 'Lic. en Matemáticas',
     description:
       'Mi pasión por la enseñanza comenzó desde que estaba en la secundaria. Después de 44 años sigo impartiendo clases con la misma ilusión, promoviendo una metodología fácil y divertida. Mi misión se cumple al ver el gozo en la cara de mis alumnos.',
-    email: 'algo.....@gmail.com',
   },
   {
     sectionTitle: 'Educadora y CEO',
+    imageSrc: eliImage,
     initials: 'ER',
     name: 'Eliett Rodríguez',
     title: 'Lic. en Sociología',
     description:
       'Mi prioridad es fomentar y visualizar la importancia de la atención y estimulación en la primera infancia, porque allí podemos potenciar el desarrollo máximo de capacidades de cada bebé sin obviar las características únicas que poseen.',
-    email: 'algo.....@gmail.com',
   },
   {
     sectionTitle: 'Educadora y Psicóloga',
+    imageSrc: gemaImage,
     initials: 'GR',
     name: 'Gema Rodríguez',
     title: 'Lic. en Sociología',
     description:
       'Para mí educar sin amor y empatía es imposible. Cuando respetamos, nos informamos y comprendemos las diversidades de aprendizaje, facilitamos el desarrollo y la autoestima de cada niño y niña que llega a nosotros.',
-    email: 'algo.....@gmail.com',
   },
 ]
 
